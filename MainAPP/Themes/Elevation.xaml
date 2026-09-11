@@ -1,0 +1,86 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <!--
+        ============================================================
+        Elevation 阴影系统（对标 Material 3 五级 z-depth）
+        ============================================================
+        通过 DropShadowEffect 表达 UI 层级关系：
+        - Elevation1: 卡片基础态（z-depth 1dp, BlurRadius 8）
+        - Elevation2: 卡片 hover / 浮动按钮（z-depth 3dp, BlurRadius 16）
+        - Elevation3: 对话框 / 弹层（z-depth 6dp, BlurRadius 24）
+        - Elevation4: 覆盖层 / 抽屉（z-depth 8dp, BlurRadius 32）
+        - Elevation5: 全屏遮罩上方（z-depth 12dp, BlurRadius 48）
+        ShadowDepth = 0 表示无偏移，仅做模糊扩散阴影
+        Color #AA000000 表示 opacity ≈ 67%
+        ============================================================
+    -->
+
+    <DropShadowEffect
+        x:Key="Elevation1"
+        BlurRadius="8"
+        Direction="270"
+        Opacity="0.25"
+        ShadowDepth="0"
+        Color="#000000" />
+
+    <DropShadowEffect
+        x:Key="Elevation2"
+        BlurRadius="16"
+        Direction="270"
+        Opacity="0.35"
+        ShadowDepth="2"
+        Color="#000000" />
+
+    <DropShadowEffect
+        x:Key="Elevation3"
+        BlurRadius="24"
+        Direction="270"
+        Opacity="0.45"
+        ShadowDepth="6"
+        Color="#000000" />
+
+    <DropShadowEffect
+        x:Key="Elevation4"
+        BlurRadius="32"
+        Direction="270"
+        Opacity="0.55"
+        ShadowDepth="8"
+        Color="#000000" />
+
+    <DropShadowEffect
+        x:Key="Elevation5"
+        BlurRadius="48"
+        Direction="270"
+        Opacity="0.65"
+        ShadowDepth="12"
+        Color="#000000" />
+
+    <!--  霓虹发光效果（用于强调元素如 Logo / 关键徽章）  -->
+    <DropShadowEffect
+        x:Key="GlowCyan"
+        BlurRadius="18"
+        Direction="0"
+        Opacity="0.7"
+        ShadowDepth="0"
+        Color="{StaticResource ColorCyan400}" />
+
+    <DropShadowEffect
+        x:Key="GlowSuccess"
+        BlurRadius="18"
+        Direction="0"
+        Opacity="0.7"
+        ShadowDepth="0"
+        Color="{StaticResource ColorSuccess500}" />
+
+    <DropShadowEffect
+        x:Key="GlowError"
+        BlurRadius="18"
+        Direction="0"
+        Opacity="0.7"
+        ShadowDepth="0"
+        Color="{StaticResource ColorError500}" />
+
+</ResourceDictionary>

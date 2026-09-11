@@ -1,0 +1,51 @@
+<Window x:Class="DemoApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="LicenseCore 客户端集成 Demo" Height="460" Width="640"
+        WindowStartupLocation="CenterScreen" FontSize="13">
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="120"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="Auto"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="本机机器码:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBox Grid.Row="0" Grid.Column="1" x:Name="MachineBox" Margin="4" IsReadOnly="True"
+                 FontFamily="Consolas" Background="#F5F6FA"/>
+        <Button Grid.Row="0" Grid.Column="2" Content="刷新" Margin="4" Padding="10,4" Click="OnRefresh"/>
+
+        <TextBlock Grid.Row="1" Grid.Column="0" Text="内置公钥:" VerticalAlignment="Top" Margin="4,8,4,4"/>
+        <TextBox Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" x:Name="PublicKeyBox" Margin="4" IsReadOnly="True"
+                 TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="80" FontFamily="Consolas"
+                 ToolTip="演示从程序目录 keys/license_public.pem 加载；真实场景应编译期内置，防止被替换"/>
+
+        <TextBlock Grid.Row="2" Grid.Column="0" Text="激活码:" VerticalAlignment="Center" FontWeight="SemiBold"/>
+        <TextBox Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="2" x:Name="CodeBox" Margin="4" TextWrapping="Wrap"
+                 FontFamily="Consolas" Height="64" VerticalScrollBarVisibility="Auto"
+                 ToolTip="粘贴厂商生成的激活码"/>
+
+        <StackPanel Grid.Row="3" Grid.Column="1" Grid.ColumnSpan="2" Orientation="Horizontal" Margin="4,8,4,8">
+            <Button Content="校验激活" Padding="16,6" FontWeight="SemiBold" Click="OnValidate"/>
+            <Button Content="模拟伪造码" Padding="16,6" Margin="10,0,0,0" Click="OnSimulateForgery"/>
+        </StackPanel>
+
+        <Border Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="3" x:Name="ResultCard" Margin="4" Padding="10,8"
+                BorderThickness="2" CornerRadius="4" BorderBrush="#BDC3C7" Background="#F8F9FA">
+            <TextBlock x:Name="ResultText" TextWrapping="Wrap" FontSize="13"/>
+        </Border>
+
+        <TextBlock Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="3" Margin="4,10,4,4" TextWrapping="Wrap"
+                   Foreground="#7F8C8D" FontSize="11"
+                   Text="集成方式（被保护软件启动时）: LicenseValidator.Validate(激活码, HardwareFingerprint.ComputeFingerprintBytes(), 内置公钥, 产品ID) → Status != Valid 即拒绝运行。校验纯离线、无网络依赖。"/>
+    </Grid>
+</Window>

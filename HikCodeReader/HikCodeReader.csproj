@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <Title>MvCodeReaderSDK Class Library</Title>
+    <Description>A class library wrapping MvCodeReaderSDK functionality for .NET 10.</Description>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="DLLS\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- REVIEW-FIX: 原 HintPath 指向 MVIDCodeReader.Net.dll（旧版，无 MvCodeReaderSDKNet 命名空间），
+         代码实际使用 MvCodeReaderSDK.Net.dll 中的 MvCodeReaderSDKNet 命名空间，修正引用避免编译失败。 -->
+    <Reference Include="MvCodeReaderSDK.Net">
+      <HintPath>DLLS\MvCodeReaderSDK.Net.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

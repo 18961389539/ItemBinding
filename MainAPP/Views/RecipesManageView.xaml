@@ -1,0 +1,530 @@
+<UserControl
+    x:Class="MainAPP.Views.RecipesManageView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:icons="http://metro.mahapps.com/winfx/xaml/iconpacks"
+    xmlns:local="clr-namespace:MainAPP.Views"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:vm="clr-namespace:MainAPP.ViewModels"
+    d:DesignHeight="600"
+    d:DesignWidth="900"
+    mc:Ignorable="d">
+    <UserControl.DataContext>
+        <vm:RecipeManageViewModel />
+    </UserControl.DataContext>
+
+    <!--  ===== 深色科技风：整页深色背景 + 网格装饰 + 霓虹高光 =====  -->
+    <Grid Margin="16" Background="{StaticResource TechPageBackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="300" MinWidth="250" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!--  装饰性网格背景（铺满所有列，置于最底层）  -->
+        <Rectangle Grid.ColumnSpan="3" Opacity="0.4">
+            <Rectangle.Fill>
+                <StaticResource ResourceKey="TechGridBrush" />
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <!--  ===== 左侧配方列表卡片 =====  -->
+        <Border
+            Grid.Column="0"
+            Padding="12"
+            Background="{StaticResource TechCardBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="6">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!--  标题和刷新按钮：青色图标 + TechCardTitleText  -->
+                <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                    <StackPanel Orientation="Horizontal">
+                        <icons:PackIconPhosphorIcons
+                            Width="14"
+                            Height="14"
+                            Margin="0,0,6,0"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource NeonCyanBrush}"
+                            Kind="ArrowsClockwise" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            Style="{StaticResource TechCardTitleText}"
+                            Text="配方列表" />
+                    </StackPanel>
+                    <Button
+                        Padding="8,4"
+                        HorizontalAlignment="Right"
+                        Command="{Binding RefreshRecipesCommand}"
+                        DockPanel.Dock="Right"
+                        Style="{StaticResource NeonButtonStyle}"
+                        ToolTip="刷新列表">
+                        <icons:PackIconPhosphorIcons Kind="ArrowsClockwise" />
+                    </Button>
+                </DockPanel>
+
+                <!--  搜索框：深色内嵌 + 青色边框  -->
+                <TextBox
+                    Grid.Row="1"
+                    Margin="0,0,0,12"
+                    Background="{StaticResource TechInnerBgBrush}"
+                    BorderBrush="{StaticResource TechCardBorderBrush}"
+                    CaretBrush="{StaticResource AccentPrimaryBrush}"
+                    Foreground="{StaticResource TechTextPrimaryBrush}"
+                    hc:InfoElement.Placeholder="搜索配方..."
+                    Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                <!--  配方列表 + 空状态  -->
+                <Grid Grid.Row="2">
+                    <ListBox
+                        Background="Transparent"
+                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                        Foreground="{StaticResource TechTextPrimaryBrush}"
+                        ItemsSource="{Binding FilteredRecipes}"
+                        ItemContainerStyle="{StaticResource DarkListBoxItemStyle}"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                        SelectedItem="{Binding SelectedRecipe}">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <!--  当前配方高亮：青色深色半透明  -->
+                                <Border Margin="2" Padding="8" CornerRadius="4">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                    <!-- REVIEW-FIX(亮色主题): 当前配方徽章改实色深青（半透明青在浅底上白字看不清） -->
+                                                    <Setter Property="Background" Value="#00838F" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid Grid.Row="0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <!--  配方名：TechMetricValue 白色亮字  -->
+                                            <TextBlock
+                                                Grid.Column="0"
+                                                VerticalAlignment="Center"
+                                                Style="{StaticResource TechMetricValue}"
+                                                Text="{Binding Name}" />
+                                            <!--  "当前"徽章：青色深色背景  -->
+                                            <Border
+                                                Grid.Column="1"
+                                                Margin="6,0,0,0"
+                                                Padding="6,2"
+                                                Background="{StaticResource NeonCyanDeepBrush}"
+                                                CornerRadius="3">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBlock
+                                                    FontSize="{StaticResource FontSizeCaption}"
+                                                    FontWeight="Bold"
+                                                    Foreground="White"
+                                                    Text="当前" />
+                                            </Border>
+                                        </Grid>
+                                        <!--  描述：TertiaryText 灰色  -->
+                                        <TextBlock
+                                            Grid.Row="1"
+                                            MaxWidth="250"
+                                            Margin="0,4,0,0"
+                                            Foreground="{StaticResource TechTextTertiaryBrush}"
+                                            Text="{Binding Description}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <!--  修改时间：Label 灰色小字  -->
+                                        <TextBlock
+                                            Grid.Row="2"
+                                            Margin="0,4,0,0"
+                                            FontSize="{StaticResource FontSizeMicro}"
+                                            Foreground="{StaticResource TechTextLabelBrush}"
+                                            Text="{Binding ModifiedTime, StringFormat='修改于: {0:yyyy-MM-dd HH:mm}'}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!--  R4: 空状态提示（无配方或搜索无结果）  -->
+                    <StackPanel
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Orientation="Vertical">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding FilteredRecipes.Count}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <!--  空状态图标：Label 灰色  -->
+                        <icons:PackIconPhosphorIcons
+                            Width="40"
+                            Height="40"
+                            Margin="0,0,0,8"
+                            HorizontalAlignment="Center"
+                            Foreground="{StaticResource TechTextLabelBrush}"
+                            Kind="FolderOpen" />
+                        <!--  主文案：使用 EmptyState 共享样式 + 深色覆盖  -->
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            Text="未匹配到配方">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyStatePrimaryText}">
+                                    <Setter Property="Foreground" Value="{StaticResource TechTextSecondaryBrush}" />
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                        <!--  副文案：使用 EmptyState 共享样式 + 深色覆盖  -->
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            HorizontalAlignment="Center"
+                            Text="尝试修改搜索条件，或在上方展开“新建配方”创建一个"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock" BasedOn="{StaticResource EmptyStateSecondaryText}">
+                                    <Setter Property="Foreground" Value="{StaticResource TechTextTertiaryBrush}" />
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+
+                <!--  操作按钮：与选中状态联动（R6）  -->
+                <StackPanel Grid.Row="3" Margin="0,12,0,0">
+                    <Button
+                        Margin="0,0,0,8"
+                        HorizontalAlignment="Stretch"
+                        Command="{Binding DuplicateRecipeCommand}"
+                        Content="复制配方"
+                        IsEnabled="{Binding SelectedRecipe, Converter={StaticResource NullToBoolConverter}}"
+                        Style="{StaticResource NeonButtonStyle}" />
+                    <Button
+                        HorizontalAlignment="Stretch"
+                        Command="{Binding DeleteRecipeCommand}"
+                        Content="删除配方"
+                        IsEnabled="{Binding SelectedRecipe, Converter={StaticResource NullToBoolConverter}}"
+                        Style="{StaticResource ButtonDanger}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!--  分隔线：青色细线  -->
+        <GridSplitter
+            Grid.Column="1"
+            Width="5"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Stretch"
+            Background="{StaticResource TechCardBorderBrush}"
+            ShowsPreview="True" />
+
+        <!--  ===== 右侧详情和新建 =====  -->
+        <Grid Grid.Column="2" Margin="16,0,0,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!--  R1: 新建配方改为可折叠 Expander，默认收起  -->
+            <Expander
+                Grid.Row="0"
+                Margin="0,0,0,16"
+                Padding="16,8"
+                Background="{StaticResource TechCardBgBrush}"
+                BorderBrush="{StaticResource TechCardBorderBrush}"
+                BorderThickness="1"
+                Foreground="{StaticResource NeonCyanBrush}"
+                Header="新建配方"
+                IsExpanded="False">
+                <Expander.HeaderTemplate>
+                    <DataTemplate>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource NeonCyanBrush}"
+                                Kind="PlusCircle" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource FontSizeStat}"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource NeonCyanBrush}"
+                                Text="新建配方" />
+                        </StackPanel>
+                    </DataTemplate>
+                </Expander.HeaderTemplate>
+                <!--  展开后内容：深色内嵌背景  -->
+                <Grid Margin="0,8,0,0" Background="{StaticResource TechInnerBgBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="80" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Margin="0,0,0,8"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="名称:" />
+                    <TextBox
+                        Grid.Row="0"
+                        Grid.Column="1"
+                        Margin="0,0,0,8"
+                        Background="{StaticResource TechInnerBgBrush}"
+                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                        CaretBrush="{StaticResource AccentPrimaryBrush}"
+                        Foreground="{StaticResource TechTextPrimaryBrush}"
+                        hc:InfoElement.Placeholder="输入配方名称"
+                        Text="{Binding NewRecipeName, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <TextBlock
+                        Grid.Row="1"
+                        Grid.Column="0"
+                        Margin="0,0,0,8"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="描述:" />
+                    <TextBox
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Margin="0,0,0,8"
+                        Background="{StaticResource TechInnerBgBrush}"
+                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                        CaretBrush="{StaticResource AccentPrimaryBrush}"
+                        Foreground="{StaticResource TechTextPrimaryBrush}"
+                        hc:InfoElement.Placeholder="输入配方描述（可选）"
+                        Text="{Binding NewRecipeDescription, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button
+                        Grid.Row="2"
+                        Grid.Column="1"
+                        Padding="24,3"
+                        HorizontalAlignment="Left"
+                        Command="{Binding CreateRecipeCommand}"
+                        Content="创建配方"
+                        Style="{StaticResource ButtonPrimary}" />
+                </Grid>
+            </Expander>
+
+            <!--  ===== 配方详情卡片 =====  -->
+            <Border
+                Grid.Row="1"
+                Padding="16"
+                Background="{StaticResource TechCardBgBrush}"
+                BorderBrush="{StaticResource TechCardBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <Grid DataContext="{Binding SelectedRecipe}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!--  无选中时显示提示  -->
+                    <StackPanel
+                        Grid.RowSpan="3"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Orientation="Vertical">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Converter={StaticResource NullToBoolConverter}}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <!--  空状态图标：Label 灰色  -->
+                        <icons:PackIconPhosphorIcons
+                            Width="48"
+                            Height="48"
+                            Margin="0,0,0,12"
+                            HorizontalAlignment="Center"
+                            Foreground="{StaticResource TechTextLabelBrush}"
+                            Kind="CookingPot" />
+                        <!--  主文案：Secondary 浅青  -->
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            FontSize="{StaticResource FontSizeStat}"
+                            Foreground="{StaticResource TechTextSecondaryBrush}"
+                            Text="请选择一个配方查看详情" />
+                        <!--  副文案：Tertiary 灰  -->
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            HorizontalAlignment="Center"
+                            FontSize="{StaticResource FontSizeSmall}"
+                            Foreground="{StaticResource TechTextTertiaryBrush}"
+                            Text="从左侧列表选择，或展开“新建配方”创建"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <!--  配方详情  -->
+                    <StackPanel Grid.Row="0" Visibility="{Binding Converter={StaticResource NullToVisibilityConverter}}">
+                        <!--  详情标题：青色图标 + TechCardTitleText  -->
+                        <StackPanel
+                            Margin="0,0,0,16"
+                            Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,6,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource NeonCyanBrush}"
+                                Kind="CookingPot" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechCardTitleText}"
+                                Text="配方详情" />
+                        </StackPanel>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <TextBlock
+                                Grid.Row="0"
+                                Grid.Column="0"
+                                Margin="0,0,0,8"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="名称:" />
+                            <TextBox
+                                Grid.Row="0"
+                                Grid.Column="1"
+                                Margin="0,0,0,8"
+                                Background="{StaticResource TechInnerBgBrush}"
+                                BorderBrush="{StaticResource TechCardBorderBrush}"
+                                CaretBrush="{StaticResource AccentPrimaryBrush}"
+                                Foreground="{StaticResource TechTextPrimaryBrush}"
+                                Text="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+
+                            <TextBlock
+                                Grid.Row="1"
+                                Grid.Column="0"
+                                Margin="0,0,0,8"
+                                VerticalAlignment="Top"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="描述:" />
+                            <TextBox
+                                Grid.Row="1"
+                                Grid.Column="1"
+                                MinHeight="60"
+                                MaxHeight="100"
+                                Margin="0,0,0,8"
+                                AcceptsReturn="True"
+                                Background="{StaticResource TechInnerBgBrush}"
+                                BorderBrush="{StaticResource TechCardBorderBrush}"
+                                CaretBrush="{StaticResource AccentPrimaryBrush}"
+                                Foreground="{StaticResource TechTextPrimaryBrush}"
+                                Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"
+                                TextWrapping="Wrap"
+                                VerticalScrollBarVisibility="Auto" />
+
+                            <TextBlock
+                                Grid.Row="2"
+                                Grid.Column="0"
+                                Margin="0,0,0,8"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="创建时间:" />
+                            <TextBlock
+                                Grid.Row="2"
+                                Grid.Column="1"
+                                Margin="0,0,0,8"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricValue}"
+                                Text="{Binding CreatedTime, StringFormat='yyyy-MM-dd HH:mm:ss'}" />
+
+                            <TextBlock
+                                Grid.Row="3"
+                                Grid.Column="0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="修改时间:" />
+                            <TextBlock
+                                Grid.Row="3"
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricValue}"
+                                Text="{Binding ModifiedTime, StringFormat='yyyy-MM-dd HH:mm:ss'}" />
+                        </Grid>
+                    </StackPanel>
+
+                    <!--  操作按钮：与选中状态联动（R6）  -->
+                    <DockPanel
+                        Grid.Row="2"
+                        HorizontalAlignment="Right"
+                        IsEnabled="{Binding Converter={StaticResource NullToBoolConverter}}">
+                        <Button
+                            Margin="5"
+                            Padding="24,3"
+                            Command="{Binding DataContext.ManageRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            Content="配方管理"
+                            Style="{StaticResource ButtonSuccess}" />
+                        <Button
+                            Margin="5"
+                            Padding="24,3"
+                            Command="{Binding DataContext.SetAsCurrentRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            Content="设为当前"
+                            Style="{StaticResource ButtonPrimary}" />
+                        <Button
+                            Margin="5"
+                            Padding="24,3"
+                            Command="{Binding DataContext.SaveRecipeCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                            Content="保存配方"
+                            Style="{StaticResource ButtonWarning}" />
+                    </DockPanel>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>

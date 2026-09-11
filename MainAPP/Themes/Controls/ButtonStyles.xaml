@@ -1,0 +1,239 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+    xmlns:interactivity="clr-namespace:MainAPP.Interactivity">
+
+    <!--
+        ============================================================
+        Button Style System（4 变体 + 三态 + Easing 过渡）
+        ============================================================
+        变体：
+        - NeonButtonStyle      — 描边幽灵按钮（默认变体）
+        - PrimaryButtonStyle   — 主操作（青色填充）
+        - OutlineButtonStyle   — 描边按钮（次强调，灰色描边）
+        - IconButtonStyle      — 仅图标按钮（无文字）
+
+        三态：
+        - Normal  — Elevation1 阴影 + 默认背景
+        - Hover   — 背景加深 + 文字提亮 + Scale 1.02 + Elevation2
+        - Pressed — Scale 0.97（Spring 回弹）
+        - Focused — NeonCyan 焦点环（2px）
+        ============================================================
+    -->
+
+    <!--  ===== 默认按钮模板（带 RenderTransform 支持 Scale） =====  -->
+    <ControlTemplate x:Key="NeonButtonTemplate" TargetType="Button">
+        <Border
+            x:Name="ButtonBorder"
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}"
+            CornerRadius="4"
+            RenderTransformOrigin="0.5,0.5">
+            <!--  水波纹点击效果：嵌入 ControlTemplate 而非 Style.Setter，
+                  避免 BehaviorCollection 在多个按钮实例间共享导致只生效一次  -->
+            <i:Interaction.Behaviors>
+                <interactivity:RippleBehavior />
+            </i:Interaction.Behaviors>
+            <Border.RenderTransform>
+                <ScaleTransform ScaleX="1" ScaleY="1" />
+            </Border.RenderTransform>
+            <Border.Effect>
+                <DropShadowEffect
+                    BlurRadius="8"
+                    Opacity="0.25"
+                    ShadowDepth="0"
+                    Color="#000000" />
+            </Border.Effect>
+            <ContentPresenter
+                Margin="{TemplateBinding Padding}"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Content="{TemplateBinding Content}"
+                ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </Border>
+        <ControlTemplate.Triggers>
+            <!--  Hover 态：背景加深 + Elevation2 阴影  -->
+            <Trigger Property="IsMouseOver" Value="True">
+                <Trigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                To="1.02"
+                                Duration="0:0:0.15"
+                                EasingFunction="{StaticResource EaseOut}" />
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                To="1.02"
+                                Duration="0:0:0.15"
+                                EasingFunction="{StaticResource EaseOut}" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                To="1"
+                                Duration="0:0:0.15"
+                                EasingFunction="{StaticResource EaseOut}" />
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                To="1"
+                                Duration="0:0:0.15"
+                                EasingFunction="{StaticResource EaseOut}" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.ExitActions>
+                <Setter TargetName="ButtonBorder" Property="Background" Value="#DCEFF3" />
+                <Setter TargetName="ButtonBorder" Property="Effect">
+                    <Setter.Value>
+                        <DropShadowEffect
+                            BlurRadius="16"
+                            Opacity="0.35"
+                            ShadowDepth="2"
+                            Color="#000000" />
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <!--  Pressed 态：Scale 0.97（弹性回弹感）  -->
+            <Trigger Property="IsPressed" Value="True">
+                <Trigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                To="0.97"
+                                Duration="0:0:0.1"
+                                EasingFunction="{StaticResource EaseIn}" />
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                To="0.97"
+                                Duration="0:0:0.1"
+                                EasingFunction="{StaticResource EaseIn}" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                To="1"
+                                Duration="0:0:0.2"
+                                EasingFunction="{StaticResource EaseSpring}" />
+                            <DoubleAnimation
+                                Storyboard.TargetName="ButtonBorder"
+                                Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                To="1"
+                                Duration="0:0:0.2"
+                                EasingFunction="{StaticResource EaseSpring}" />
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.ExitActions>
+            </Trigger>
+            <!--  Focused 态：NeonCyan 焦点环  -->
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+                <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2" />
+            </Trigger>
+            <!--  Disabled 态  -->
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5" />
+                <Setter Property="Cursor" Value="Arrow" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+
+    <!--  ===== NeonButtonStyle（描边幽灵按钮，默认变体） =====  -->
+    <Style x:Key="NeonButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource SurfaceCardBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="{StaticResource PaddingButtonDefault}" />
+        <Setter Property="Margin" Value="6,0" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeightSemiBold}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template" Value="{StaticResource NeonButtonTemplate}" />
+    </Style>
+
+    <!--  ===== PrimaryButtonStyle（主操作，青色填充，白字） =====  -->
+    <Style x:Key="PrimaryButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+        <!-- REVIEW-FIX(亮色主题): 主按钮青底白字，保证对比度（深青 #00838F 上白字 ≈ 4.6:1） -->
+        <Setter Property="Foreground" Value="White" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryDeepBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="{StaticResource PaddingButtonDefault}" />
+        <Setter Property="Margin" Value="6,0" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeightSemiBold}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template" Value="{StaticResource NeonButtonTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{StaticResource AccentPrimaryLightBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--  ===== OutlineButtonStyle（次强调，灰色描边） =====  -->
+    <Style x:Key="OutlineButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="{StaticResource PaddingButtonDefault}" />
+        <Setter Property="Margin" Value="6,0" />
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}" />
+        <Setter Property="FontWeight" Value="{StaticResource FontWeightMedium}" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template" Value="{StaticResource NeonButtonTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--  ===== IconButtonStyle（仅图标按钮） =====  -->
+    <Style x:Key="IconButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextTertiaryBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="{StaticResource PaddingButtonIcon}" />
+        <Setter Property="Margin" Value="2,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template" Value="{StaticResource NeonButtonTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+                <Setter Property="Background" Value="#E3EDF1" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+
+    <!--  ===== 霓虹徽章样式 =====  -->
+    <Style x:Key="NeonBadge" TargetType="Border">
+        <Setter Property="Padding" Value="{StaticResource PaddingBadgeDefault}" />
+        <Setter Property="CornerRadius" Value="3" />
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryDeepBrush}" />
+    </Style>
+
+</ResourceDictionary>

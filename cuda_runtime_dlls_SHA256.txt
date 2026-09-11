@@ -1,0 +1,26 @@
+# cuda_runtime_dlls SHA256 校验清单 (2026-09-05 升级 CUDA 13 + cuDNN 9.25.1 后)
+# 配套 ORT 1.28.0（GPU 包默认 CUDA 13.0 构建，含 sm_120 Blackwell kernel）
+# CUDA runtime: cudart/cublas/cublasLt/nvblas 13.x, cufft 12.x, curand 10.x, nvJitLink/nvrtc 130_0
+# cuDNN 9.25.1.1（nvidia-cudnn-cu13==9.25.1.1）：10 文件（含 tensor_ir + ext）
+# 用途: 与目标机 D:/Programs/0905/publish/cuda_runtime_dlls 逐文件比对
+
+8c6bac24474af29627ec96500025a5d410a1b7e8ffa00e1fe13b1781fc6b3ddc  cublas64_13.dll
+e323abd89e0f03c1db91a09d7aeb1928de08e1f86192cc713b335fefe3e368a9  cublasLt64_13.dll
+b00ca6f53699120da815bf3e06e2e4285fae2f201235b883dcbb50eec51e2a2a  cudart64_13.dll
+3b7072cb45c736a28f7ace12a5ab350676f0603c5519ea665a6c6be4e27f8f21  cudnn64_9.dll
+956c188db28c6545ac5ff8d350f837b9a928fcc5dd5a87a2c36fb5968b0647b7  cudnn_adv64_9.dll
+b3a6890e7f19a6a4d048ab8a0f07eba9293dacdc271b1aa0a21395b34fde909f  cudnn_cnn64_9.dll
+9d3390709c429bcf248ae3832d40bf300ba265b8d4e60aeec18c89d496dc4755  cudnn_engines_precompiled64_9.dll
+dcd1008fd7131dff202fdfd9bc8ab681e12f68dc08f36bb1ce57293ef9e2c03b  cudnn_engines_runtime_compiled64_9.dll
+15d83feaf478ec7edc80aa2d8f06fadb3c0fe7f5b43772573dc2bd4d5e7e25e6  cudnn_engines_tensor_ir64_9.dll
+6841bf1fb9ab6fe5d7059eca51e2ab1410dc3ba0ddd0ab04332abf2707c699e4  cudnn_ext64_9.dll
+d61cfdc30a4899a7e30143af2021200ddf2d92562a3bf8834cc8798295f6a18a  cudnn_graph64_9.dll
+c98bc3d1420b186f1d9adb7da49f7b3430a11bcd2d66e35fd226c6c9ecd9c1ba  cudnn_heuristic64_9.dll
+d37d39f6b1b0e9db685a23e02dec0dc1ff0ef39ad56254b1a4b3b4fcb4e9d430  cudnn_ops64_9.dll
+35e531c8b4796b1a073948447dba618069fc839ded3da625416dfc7de496c1a1  cufft64_12.dll
+25e1fcd9441a863be65b6e71289b8f5d3e34b8106fa2db793917ebe67923afce  cufftw64_12.dll
+7c3d7dc8e21dc8563b72ab9f91a53f2b9439bf434bacf75254a87c38e3ce4aa8  curand64_10.dll
+727a0acfc4495b229143b53843004eef36e0a3463fb2e1c7c4215468607fd613  nvJitLink_130_0.dll
+f05b9d81730ddf967b1b74aeff74a56ae6f74db11947d2aea57fe94dd52e4c98  nvblas64_13.dll
+82c703802846329d3bab3d8df06f8c956516a0eeec568033092d6c0a69b2733a  nvrtc-builtins64_133.dll
+c7af6b5dbd001852d1b4a18effc6fbcfc94787eddadffea629a8333cb25b05fe  nvrtc64_130_0.dll

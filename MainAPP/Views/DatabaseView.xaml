@@ -1,0 +1,1131 @@
+<UserControl
+    x:Class="MainAPP.Views.DatabaseView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="clr-namespace:MainAPP.Controls"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:dgx="urn:tom-englert.de/DataGridExtensions"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:icons="http://metro.mahapps.com/winfx/xaml/iconpacks"
+    xmlns:local="clr-namespace:MainAPP.Views"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+    xmlns:vm="clr-namespace:MainAPP.ViewModels"
+    d:DesignHeight="600"
+    d:DesignWidth="1000"
+    mc:Ignorable="d">
+    <UserControl.DataContext>
+        <vm:DatabaseViewModel />
+    </UserControl.DataContext>
+    <UserControl.Resources>
+        <!--  D5: 状态徽章初始背景色（亮色主题：灰蓝标签色）  -->
+        <SolidColorBrush x:Key="StatusBadgeInitialBrush" Color="#64788A" />
+
+        <!--  ===== 亮色科技风：输入控件隐式样式 =====  -->
+        <!--  TextBox：深色字 + 浅色内框 + 青色光标  -->
+        <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+            <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+            <Setter Property="CaretBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        </Style>
+        <!--  ComboBox：深色字 + 浅色内框  -->
+        <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+            <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+        </Style>
+        <!--  ComboBoxItem：深色字  -->
+        <Style TargetType="ComboBoxItem" BasedOn="{StaticResource {x:Type ComboBoxItem}}">
+            <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        </Style>
+        <!--  CheckBox：深色字（用于列显隐弹出层）  -->
+        <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+            <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        </Style>
+
+        <!--  ===== DataGrid 深色科技风样式 =====  -->
+        <!--  列头：深色内框背景 + 浅青色字 + 右下分隔线  -->
+        <Style x:Key="TechDataGridColumnHeader" TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+            <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+            <Setter Property="Foreground" Value="{StaticResource TechTextSecondaryBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+        </Style>
+        <!--  行：悬停=浅灰，选中=半透明青色（深色文字）  -->
+        <Style x:Key="TechDataGridRow" TargetType="DataGridRow" BasedOn="{StaticResource {x:Type DataGridRow}}">
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#EFF4F8" />
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#3D00838F" />
+                    <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <!--  单元格：去除边框，避免聚焦框干扰  -->
+        <Style x:Key="TechDataGridCell" TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}">
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        </Style>
+    </UserControl.Resources>
+
+    <!--  ===== 深色科技风：整页深色渐变背景 =====  -->
+    <Grid Background="{StaticResource TechPageBackgroundBrush}" Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  装饰性网格背景层（横跨所有行，作为底层装饰）  -->
+        <Rectangle Grid.RowSpan="4" Opacity="0.4">
+            <Rectangle.Fill>
+                <StaticResource ResourceKey="TechGridBrush" />
+            </Rectangle.Fill>
+        </Rectangle>
+
+        <!--  搜索工具栏  -->
+        <Border
+            Grid.Row="0"
+            Margin="0,0,0,10"
+            Padding="10"
+            Background="{StaticResource TechCardBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="5">
+            <StackPanel Orientation="Vertical">
+                <!--  常用筛选：条码 + 时间范围（含时分秒）+ 时间预设，始终可见  -->
+                <WrapPanel Margin="0,0,0,5">
+                    <TextBlock
+                        Margin="0,0,5,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="搜索:" />
+                    <TextBox
+                        Width="200"
+                        Margin="0,0,10,0"
+                        Text="{Binding SearchBarcode, UpdateSourceTrigger=PropertyChanged}"
+                        ToolTip="输入二维码内容" />
+                    <TextBlock
+                        Margin="10,0,5,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="起始时间:" />
+                    <hc:DateTimePicker
+                        Width="160"
+                        Margin="0,0,2,0"
+                        Background="{StaticResource TechInnerBgBrush}"
+                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                        Foreground="{StaticResource TechTextPrimaryBrush}"
+                        SelectedDateTime="{Binding StartDate}"
+                        Style="{StaticResource DateTimePickerExtend}"
+                        ToolTip="选择起始时间（含时分秒）" />
+                    <Button
+                        Margin="0,0,10,0"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        Click="ClearStartDate_Click"
+                        Content="清除"
+                        FontSize="{StaticResource FontSizeMicro}"
+                        Style="{StaticResource NeonButtonStyle}"
+                        ToolTip="清除起始时间" />
+                    <TextBlock
+                        Margin="0,0,5,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="结束时间:" />
+                    <hc:DateTimePicker
+                        Width="160"
+                        Margin="0,0,2,0"
+                        Background="{StaticResource TechInnerBgBrush}"
+                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                        Foreground="{StaticResource TechTextPrimaryBrush}"
+                        SelectedDateTime="{Binding EndDate}"
+                        Style="{StaticResource DateTimePickerExtend}"
+                        ToolTip="选择结束时间（含时分秒）" />
+                    <Button
+                        Margin="0,0,10,0"
+                        Padding="6,2"
+                        VerticalAlignment="Center"
+                        Click="ClearEndDate_Click"
+                        Content="清除"
+                        FontSize="{StaticResource FontSizeMicro}"
+                        Style="{StaticResource NeonButtonStyle}"
+                        ToolTip="清除结束时间" />
+                    <!--  P2-22: 时间筛选预设下拉框  -->
+                    <ComboBox
+                        Width="90"
+                        Margin="0,0,10,0"
+                        ItemsSource="{Binding AvailableTimePresets}"
+                        SelectedItem="{Binding TimePreset}"
+                        ToolTip="选择常用时间范围" />
+                </WrapPanel>
+                <!--  高级筛选：编码器值范围 + 分数范围，默认折叠  -->
+                <Expander
+                    Margin="0,0,0,5"
+                    IsExpanded="False">
+                    <Expander.Header>
+                        <TextBlock
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource NeonCyanBrush}"
+                            Text="高级筛选" />
+                    </Expander.Header>
+                    <!--  展开内容：深色内框背景  -->
+                    <Border
+                        Padding="8"
+                        Background="{StaticResource TechInnerBgBrush}"
+                        CornerRadius="4">
+                        <WrapPanel Margin="0,5,0,0">
+                            <TextBlock
+                                Margin="10,0,5,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="编码器值范围:" />
+                            <TextBox
+                                Width="100"
+                                Margin="0,0,5,0"
+                                Text="{Binding MinEncode, TargetNullValue=''}"
+                                ToolTip="最小编码器值" />
+                            <TextBlock
+                                Margin="5,0,5,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="-" />
+                            <TextBox
+                                Width="100"
+                                Margin="0,0,5,0"
+                                Text="{Binding MaxEncode, TargetNullValue=''}"
+                                ToolTip="最大编码器值" />
+                            <TextBlock
+                                Margin="10,0,5,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="分数范围:" />
+                            <TextBox
+                                Width="100"
+                                Margin="0,0,5,0"
+                                Text="{Binding MinScore, TargetNullValue=''}"
+                                ToolTip="最小分数" />
+                            <TextBlock
+                                Margin="5,0,5,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource TechMetricLabel}"
+                                Text="-" />
+                            <TextBox
+                                Width="100"
+                                Margin="0,0,10,0"
+                                Text="{Binding MaxScore, TargetNullValue=''}"
+                                ToolTip="最大分数" />
+                        </WrapPanel>
+                    </Border>
+                </Expander>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!--  数据操作组  -->
+                    <hc:ButtonGroup Grid.Column="0" Margin="0,0,10,0">
+                        <Button
+                            Command="{Binding LoadDataCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonPrimary}"
+                            ToolTip="加载所有数据">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="Database" />
+                                <TextBlock Text="加载数据" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            Command="{Binding SearchCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonPrimary}"
+                            ToolTip="应用筛选条件搜索">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="MagnifyingGlass" />
+                                <TextBlock Text="搜索" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            Command="{Binding RefreshCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonPrimary}"
+                            ToolTip="刷新当前页">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="ArrowsClockwise" />
+                                <TextBlock Text="刷新" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            Click="ResetFilters_Click"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonPrimary}"
+                            ToolTip="清除所有筛选条件">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="Eraser" />
+                                <TextBlock Text="重置筛选" />
+                            </StackPanel>
+                        </Button>
+                    </hc:ButtonGroup>
+
+                    <!--  文件操作组  -->
+                    <hc:ButtonGroup Grid.Column="1" Margin="0,0,10,0">
+                        <Button
+                            Command="{Binding ExportCsvCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonSuccess}"
+                            ToolTip="导出数据到CSV文件">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="Upload" />
+                                <TextBlock Text="导出CSV" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            Command="{Binding ImportCsvCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonWarning}"
+                            ToolTip="从CSV文件导入数据">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="Download" />
+                                <TextBlock Text="导入CSV" />
+                            </StackPanel>
+                        </Button>
+                    </hc:ButtonGroup>
+
+                    <!--  分析操作组  -->
+                    <hc:ButtonGroup Grid.Column="2" Margin="0,0,10,0">
+                        <Button
+                            Command="{Binding OpenChartCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonSuccess}"
+                            ToolTip="Open chart analysis window">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="ChartLine" />
+                                <TextBlock Text="Chart Analysis" />
+                            </StackPanel>
+                        </Button>
+                    </hc:ButtonGroup>
+
+                    <!--  数据管理组（含 D14 清空全部）  -->
+                    <hc:ButtonGroup Grid.Column="3" Margin="0,0,10,0">
+                        <Button
+                            Command="{Binding DeleteSelectedCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonDanger}"
+                            ToolTip="删除选中的记录">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="Trash" />
+                                <TextBlock Text="{Binding SelectedCount, StringFormat='删除选中({0})'}" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            Command="{Binding SaveBufferCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonDanger}"
+                            ToolTip="将缓存保存到数据库">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="Broom" />
+                                <TextBlock Text="保存缓存" />
+                            </StackPanel>
+                        </Button>
+                        <Button
+                            Command="{Binding ClearAllCommand}"
+                            IsEnabled="{Binding !IsBusy}"
+                            Style="{StaticResource ButtonDanger}"
+                            ToolTip="清空所有数据（不可恢复）">
+                            <StackPanel Orientation="Horizontal">
+                                <icons:PackIconPhosphorIcons
+                                    Width="16"
+                                    Height="16"
+                                    Margin="0,0,4,0"
+                                    Kind="TrashSimple" />
+                                <TextBlock Text="清空全部" />
+                            </StackPanel>
+                        </Button>
+                    </hc:ButtonGroup>
+
+                    <!--  D1: 列显隐控制  -->
+                    <ToggleButton
+                        x:Name="ColumnSettingsToggle"
+                        Grid.Column="4"
+                        Padding="8,4"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource TechTextPrimaryBrush}"
+                        ToolTip="显示/隐藏列">
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="16"
+                                Height="16"
+                                Margin="0,0,4,0"
+                                Kind="Columns" />
+                            <TextBlock Text="列设置" />
+                        </StackPanel>
+                    </ToggleButton>
+                    <Popup
+                        AllowsTransparency="True"
+                        IsOpen="{Binding IsChecked, ElementName=ColumnSettingsToggle, Mode=TwoWay}"
+                        Placement="Bottom"
+                        PlacementTarget="{Binding ElementName=ColumnSettingsToggle}"
+                        StaysOpen="False">
+                        <Border
+                            MinWidth="160"
+                            Padding="8"
+                            Background="{StaticResource TechCardBgBrush}"
+                            BorderBrush="{StaticResource TechCardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="4">
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock
+                                    Margin="0,0,0,6"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource NeonCyanBrush}"
+                                    Text="显示列" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="ID"
+                                    IsChecked="True"
+                                    Tag="ColId"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="二维码"
+                                    IsChecked="True"
+                                    Tag="ColBarcode"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="编码器值"
+                                    IsChecked="True"
+                                    Tag="ColEncode"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="世界X"
+                                    Tag="ColWorldX"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="世界Y"
+                                    Tag="ColWorldY"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="图像X"
+                                    Tag="ColImageX"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="图像Y"
+                                    Tag="ColImageY"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="角度"
+                                    IsChecked="True"
+                                    Tag="ColAngle"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <!-- 2026-09-08: 灰度判向统计列显隐（默认开启，现场标定死区/头端明暗用） -->
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="亮灰度"
+                                    IsChecked="True"
+                                    Tag="ColBrightMean"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="暗灰度"
+                                    IsChecked="True"
+                                    Tag="ColDarkMean"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="亮差"
+                                    IsChecked="True"
+                                    Tag="ColBrightnessDiff"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="面积"
+                                    IsChecked="True"
+                                    Tag="ColArea"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="宽度"
+                                    IsChecked="True"
+                                    Tag="ColWidth"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="高度"
+                                    IsChecked="True"
+                                    Tag="ColHeight"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="耗时(ms)"
+                                    IsChecked="True"
+                                    Tag="ColCostTime"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="检测时间"
+                                    IsChecked="True"
+                                    Tag="ColDetectTime"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="图像二维码X"
+                                    Tag="ColImageBarcodeX"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="图像二维码Y"
+                                    Tag="ColImageBarcodeY"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="二维码分数"
+                                    IsChecked="True"
+                                    Tag="ColBarcodeScore"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="分数"
+                                    IsChecked="True"
+                                    Tag="ColScore"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="速度"
+                                    IsChecked="True"
+                                    Tag="ColSpeed"
+                                    Unchecked="ColumnToggle_Changed" />
+                                <CheckBox
+                                    Margin="0,2"
+                                    Checked="ColumnToggle_Changed"
+                                    Content="图片"
+                                    IsChecked="True"
+                                    Tag="ColImage"
+                                    Unchecked="ColumnToggle_Changed" />
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <!--  数据网格（含空状态/错误状态覆盖层）  -->
+        <Grid Grid.Row="1" Margin="0,0,0,10">
+            <!--  DataGrid：深色行/列头 + 水平网格线；dge 启用 Excel 式列过滤  -->
+            <DataGrid
+                x:Name="DataGrid"
+                AutoGenerateColumns="False"
+                Background="{StaticResource TechCardBgBrush}"
+                BorderBrush="{StaticResource TechCardBorderBrush}"
+                CanUserAddRows="False"
+                CanUserDeleteRows="False"
+                CellStyle="{StaticResource TechDataGridCell}"
+                ColumnHeaderStyle="{StaticResource TechDataGridColumnHeader}"
+                Foreground="{StaticResource TechTextPrimaryBrush}"
+                GridLinesVisibility="Horizontal"
+                HeadersVisibility="Column"
+                HorizontalGridLinesBrush="{StaticResource TechCardBorderBrush}"
+                IsReadOnly="True"
+                ItemsSource="{Binding Items}"
+                RowBackground="{StaticResource TechCardBgBrush}"
+                AlternatingRowBackground="#F5F8FA"
+                RowDetailsVisibilityMode="Collapsed"
+                RowHeight="50"
+                RowStyle="{StaticResource TechDataGridRow}"
+                SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                SelectionChanged="DataGrid_SelectionChanged"
+                SelectionMode="Extended"
+                SelectionUnit="FullRow"
+                dgx:DataGridFilter.IsAutoFilterEnabled="True">
+                <DataGrid.Columns>
+                    <DataGridTextColumn
+                        x:Name="ColId"
+                        Width="40"
+                        Binding="{Binding Id}"
+                        Header="ID" />
+                    <DataGridTextColumn
+                        x:Name="ColBarcode"
+                        Width="120"
+                        Binding="{Binding Barcode}"
+                        Header="二维码" />
+                    <DataGridTextColumn
+                        x:Name="ColEncode"
+                        Width="80"
+                        Binding="{Binding Encode}"
+                        Header="编码器值" />
+                    <DataGridTextColumn
+                        x:Name="ColWorldX"
+                        Width="60"
+                        Binding="{Binding WorldX, StringFormat='F2'}"
+                        Header="世界X"
+                        Visibility="Collapsed" />
+                    <DataGridTextColumn
+                        x:Name="ColWorldY"
+                        Width="60"
+                        Binding="{Binding WorldY, StringFormat='F2'}"
+                        Header="世界Y"
+                        Visibility="Collapsed" />
+                    <DataGridTextColumn
+                        x:Name="ColImageX"
+                        Width="70"
+                        Binding="{Binding ImageX, StringFormat='F2'}"
+                        Header="图像X"
+                        Visibility="Collapsed" />
+                    <DataGridTextColumn
+                        x:Name="ColImageY"
+                        Width="70"
+                        Binding="{Binding ImageY, StringFormat='F2'}"
+                        Header="图像Y"
+                        Visibility="Collapsed" />
+                    <DataGridTextColumn
+                        x:Name="ColAngle"
+                        Width="60"
+                        Binding="{Binding Angle, StringFormat='F2'}"
+                        Header="角度" />
+                    <!-- 2026-09-08: 灰度判向统计列（无角度模型回退+判向时有值，null 显示为空）——
+                         用于现场核对头端明暗假设（亮半区>暗半区=头端偏亮方向）与死区标定 -->
+                    <DataGridTextColumn
+                        x:Name="ColBrightMean"
+                        Width="60"
+                        Binding="{Binding BrightMean, StringFormat='F0', TargetNullValue=''}"
+                        Header="亮灰度" />
+                    <DataGridTextColumn
+                        x:Name="ColDarkMean"
+                        Width="60"
+                        Binding="{Binding DarkMean, StringFormat='F0', TargetNullValue=''}"
+                        Header="暗灰度" />
+                    <DataGridTextColumn
+                        x:Name="ColBrightnessDiff"
+                        Width="70"
+                        Binding="{Binding BrightnessDiff, StringFormat='F1', TargetNullValue=''}"
+                        Header="亮差" />
+                    <DataGridTextColumn
+                        x:Name="ColArea"
+                        Width="70"
+                        Binding="{Binding Area, StringFormat='F2'}"
+                        Header="面积" />
+                    <DataGridTextColumn
+                        x:Name="ColWidth"
+                        Width="70"
+                        Binding="{Binding Width, StringFormat='F2'}"
+                        Header="宽度" />
+                    <DataGridTextColumn
+                        x:Name="ColHeight"
+                        Width="70"
+                        Binding="{Binding Height, StringFormat='F2'}"
+                        Header="高度" />
+                    <DataGridTextColumn
+                        x:Name="ColCostTime"
+                        Width="80"
+                        Binding="{Binding CostTime}"
+                        Header="耗时(ms)" />
+                    <DataGridTextColumn
+                        x:Name="ColDetectTime"
+                        Width="120"
+                        Binding="{Binding DetectTime, StringFormat='yyyy-MM-dd HH:mm:ss'}"
+                        Header="检测时间" />
+                    <DataGridTextColumn
+                        x:Name="ColImageBarcodeX"
+                        Width="90"
+                        Binding="{Binding ImageBarcodeX, StringFormat='F2'}"
+                        Header="图像二维码X"
+                        Visibility="Collapsed" />
+                    <DataGridTextColumn
+                        x:Name="ColImageBarcodeY"
+                        Width="90"
+                        Binding="{Binding ImageBarcodeY, StringFormat='F2'}"
+                        Header="图像二维码Y"
+                        Visibility="Collapsed" />
+                    <DataGridTextColumn
+                        x:Name="ColBarcodeScore"
+                        Width="80"
+                        Binding="{Binding BarcodeScore, StringFormat='F2'}"
+                        Header="二维码分数" />
+                    <DataGridTextColumn
+                        x:Name="ColScore"
+                        Width="70"
+                        Binding="{Binding Score, StringFormat='F2'}"
+                        Header="分数" />
+                    <DataGridTextColumn
+                        x:Name="ColSpeed"
+                        Width="70"
+                        Binding="{Binding Speed, StringFormat='F2'}"
+                        Header="速度" />
+                    <DataGridTemplateColumn
+                        x:Name="ColImage"
+                        Width="88"
+                        Header="图片">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <Button
+                                    Width="80"
+                                    Height="40"
+                                    Margin="0"
+                                    Padding="5"
+                                    VerticalAlignment="Center"
+                                    Command="{Binding DataContext.OpenImageCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                    CommandParameter="{Binding}"
+                                    Content="查看图片"
+                                    FontSize="{StaticResource FontSizeMicro}"
+                                    Style="{StaticResource ButtonSuccess}"
+                                    ToolTip="使用默认程序打开图片" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!--  D5: 错误状态覆盖层（使用 StateView 控件，LoadState == Error 时显示）  -->
+            <Border
+                Background="{StaticResource TechCardBgBrush}"
+                Visibility="{Binding LoadState, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Error}">
+                <controls:StateView
+                    State="Error"
+                    Title="加载失败"
+                    Message="{Binding ErrorMessage}"
+                    RetryCommand="{Binding RefreshCommand}" />
+            </Border>
+
+            <!--  D5/D6: 空状态覆盖层（LoadState == Empty）。区分"无数据"与"搜索无结果"  -->
+            <Border>
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="{StaticResource TechCardBgBrush}" />
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding LoadState}" Value="Empty">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Orientation="Vertical">
+                    <icons:PackIconPhosphorIcons
+                        Width="48"
+                        Height="48"
+                        HorizontalAlignment="Center"
+                        Foreground="{StaticResource TechTextLabelBrush}"
+                        Kind="Database" />
+                    <!--  D6: 有筛选条件时显示"未找到匹配记录"，无筛选时显示"暂无数据"  -->
+                    <TextBlock
+                        Margin="0,12,0,0"
+                        HorizontalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style BasedOn="{StaticResource EmptyStatePrimaryText}" TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TechTextSecondaryBrush}" />
+                                <Setter Property="Text" Value="暂无数据" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasActiveFilters}" Value="True">
+                                        <Setter Property="Text" Value="未找到匹配的记录" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                    <TextBlock
+                        MaxWidth="300"
+                        Margin="0,4,0,0"
+                        HorizontalAlignment="Center">
+                        <TextBlock.Style>
+                            <Style BasedOn="{StaticResource EmptyStateSecondaryText}" TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource TechTextTertiaryBrush}" />
+                                <Setter Property="Text" Value="点击上方 '加载数据' 或设置筛选条件后搜索" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasActiveFilters}" Value="True">
+                                        <Setter Property="Text" Value="尝试调整或重置筛选条件" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!--  分页栏  -->
+        <Border
+            Grid.Row="2"
+            Margin="0,0,0,10"
+            Padding="10"
+            Background="{StaticResource TechCardBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="5">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!--  导航按钮组  -->
+                <hc:ButtonGroup Grid.Column="0" Margin="0,0,10,0">
+                    <Button
+                        Command="{Binding GoToFirstPageCommand}"
+                        IsEnabled="{Binding CanGoToPreviousPage}"
+                        Style="{StaticResource ButtonPrimary}"
+                        ToolTip="跳转到第一页">
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,4,0"
+                                Kind="ArrowLineLeft" />
+                            <TextBlock Text="第一页" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Command="{Binding GoToPreviousPageCommand}"
+                        IsEnabled="{Binding CanGoToPreviousPage}"
+                        Style="{StaticResource ButtonPrimary}"
+                        ToolTip="跳转到上一页">
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,4,0"
+                                Kind="ArrowLeft" />
+                            <TextBlock Text="上一页" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Command="{Binding GoToNextPageCommand}"
+                        IsEnabled="{Binding CanGoToNextPage}"
+                        Style="{StaticResource ButtonPrimary}"
+                        ToolTip="跳转到下一页">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="下一页" />
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="4,0,0,0"
+                                Kind="ArrowRight" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Command="{Binding GoToLastPageCommand}"
+                        IsEnabled="{Binding CanGoToNextPage}"
+                        Style="{StaticResource ButtonPrimary}"
+                        ToolTip="跳转到最后一页">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="最后一页" />
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="4,0,0,0"
+                                Kind="ArrowLineRight" />
+                        </StackPanel>
+                    </Button>
+                </hc:ButtonGroup>
+
+                <!--  跳转功能  -->
+                <StackPanel
+                    Grid.Column="1"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal">
+                    <TextBlock
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="跳转:" />
+                    <TextBox
+                        Width="50"
+                        Margin="0,0,4,0"
+                        hc:InfoElement.Placeholder="页码"
+                        Text="{Binding TargetPageNumber, UpdateSourceTrigger=PropertyChanged}"
+                        ToolTip="输入页码" />
+                    <Button
+                        Padding="8,4"
+                        Command="{Binding GoToPageCommand}"
+                        Content="跳转"
+                        IsEnabled="{Binding !IsBusy}"
+                        Style="{StaticResource ButtonPrimary}"
+                        ToolTip="跳转到指定页码" />
+                </StackPanel>
+
+                <!--  页面大小设置  -->
+                <StackPanel
+                    Grid.Column="2"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal">
+                    <TextBlock
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="每页:" />
+                    <ComboBox
+                        Width="70"
+                        Margin="0,0,4,0"
+                        SelectedValue="{Binding PageSize, Mode=TwoWay}"
+                        SelectedValuePath="Content"
+                        ToolTip="选择每页显示条数">
+                        <ComboBoxItem Content="10" />
+                        <ComboBoxItem Content="20" />
+                        <ComboBoxItem Content="50" />
+                        <ComboBoxItem Content="100" />
+                        <ComboBoxItem Content="200" />
+                    </ComboBox>
+                    <Button
+                        Padding="8,4"
+                        Command="{Binding ChangePageSizeCommand}"
+                        Content="应用"
+                        IsEnabled="{Binding !IsBusy}"
+                        Style="{StaticResource ButtonSuccess}"
+                        ToolTip="应用新的每页显示条数" />
+                </StackPanel>
+
+                <!--  页码信息  -->
+                <StackPanel
+                    Grid.Column="3"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal"
+                    FlowDirection="RightToLeft">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="{Binding TotalPages, StringFormat='/ 共 {0} 页'}" />
+                    <TextBlock
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding PageNumber, StringFormat='第 {0} 页'}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!--  D2: 独立状态栏（总数/选中/页码/状态）  -->
+        <Border
+            Grid.Row="3"
+            Padding="10,6"
+            Background="{StaticResource TechInnerBgBrush}"
+            CornerRadius="4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!--  总数  -->
+                <StackPanel
+                    Grid.Column="0"
+                    Margin="0,0,16,0"
+                    Orientation="Horizontal">
+                    <icons:PackIconPhosphorIcons
+                        Width="14"
+                        Height="14"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource NeonCyanBrush}"
+                        Kind="Database" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="总数" />
+                    <TextBlock
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding TotalCount}" />
+                </StackPanel>
+
+                <!--  选中数  -->
+                <StackPanel
+                    Grid.Column="1"
+                    Margin="0,0,16,0"
+                    Orientation="Horizontal">
+                    <icons:PackIconPhosphorIcons
+                        Width="14"
+                        Height="14"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource NeonOrangeBrush}"
+                        Kind="CheckSquare" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="选中" />
+                    <TextBlock
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding SelectedCount}" />
+                </StackPanel>
+
+                <!--  当前页条数  -->
+                <StackPanel
+                    Grid.Column="2"
+                    Margin="0,0,16,0"
+                    Orientation="Horizontal">
+                    <icons:PackIconPhosphorIcons
+                        Width="14"
+                        Height="14"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource NeonGreenBrush}"
+                        Kind="List" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="本页" />
+                    <TextBlock
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding Items.Count}" />
+                </StackPanel>
+
+                <!--  页码  -->
+                <StackPanel
+                    Grid.Column="3"
+                    Margin="0,0,16,0"
+                    Orientation="Horizontal">
+                    <icons:PackIconPhosphorIcons
+                        Width="14"
+                        Height="14"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource NeonBlueBrush}"
+                        Kind="BookOpen" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="页码" />
+                    <TextBlock
+                        Margin="4,0,0,0"
+                        VerticalAlignment="Center"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding PageNumber}" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource TechTextTertiaryBrush}"
+                        Text="{Binding TotalPages, StringFormat=' / {0}'}" />
+                </StackPanel>
+
+                <!--  占位  -->
+                <TextBlock Grid.Column="4" />
+
+                <!--  状态徽章（基于 LoadState，深色科技风调色）  -->
+                <Border
+                    Grid.Column="5"
+                    Padding="8,2"
+                    CornerRadius="3">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource StatusBadgeInitialBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LoadState}" Value="Loaded">
+                                    <Setter Property="Background" Value="{StaticResource NeonGreenBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding LoadState}" Value="Empty">
+                                    <!-- REVIEW-FIX(对比度): 深橙底配白字 5.2:1（原 #EF6C00 白字仅 3.1:1） -->
+                                    <Setter Property="Background" Value="#C2410C" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding LoadState}" Value="Error">
+                                    <Setter Property="Background" Value="{StaticResource StatusErrorBrush}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding LoadState}" Value="Loading">
+                                    <Setter Property="Background" Value="{StaticResource NeonCyanBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock
+                        FontWeight="Bold"
+                        FontSize="{StaticResource FontSizeMicro}"
+                        Foreground="White"
+                        Text="{Binding LoadState}" />
+                </Border>
+            </Grid>
+        </Border>
+
+        <!--  P2-9: 异步操作 Loading 覆盖层（使用 LoadingOverlay 控件，绑定 IsBusy + BusyMessage）  -->
+        <controls:LoadingOverlay
+            Grid.RowSpan="4"
+            Message="{Binding BusyMessage}"
+            Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}" />
+    </Grid>
+</UserControl>

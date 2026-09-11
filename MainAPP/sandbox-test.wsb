@@ -1,0 +1,16 @@
+<Configuration>
+  <!-- MainAPP 发布产物沙盒验证：Windows 沙盒(一次性干净 Windows)里测试发布版能否运行。
+       使用前提：Windows 10/11 专业版/企业版 + 已启用沙盒功能（见 README-部署验证.md）。 -->
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>D:\ItemBinding\MainAPP\publish</HostFolder>
+      <SandboxFolder>C:\MainAPP</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <!-- FDD 版：沙盒内需先装 .NET 8 Desktop Runtime（见 README-部署验证.md 第 3 步），装好后双击 C:\MainAPP\MainAPP.exe。
+         自包含版：直接双击即可，无需任何安装。 -->
+    <Command>cmd /c start C:\MainAPP\MainAPP.exe</Command>
+  </LogonCommand>
+</Configuration>

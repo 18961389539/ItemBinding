@@ -1,0 +1,215 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:hc="https://handyorg.github.io/handycontrol">
+
+    <!--  ===== 深色科技风表单控件命名样式 =====  -->
+    <!--  来源：RecipeWindow.xaml 的 Window.Resources 隐式样式  -->
+    <!--  原始样式无 BasedOn 的，此处保持无 BasedOn 以保留原行为（避免引入默认 Style 的额外 Setter）  -->
+
+    <!--  GroupBox：青色 Header 文字 + 深色背景/边框  -->
+    <Style x:Key="DarkGroupBoxStyle" TargetType="GroupBox">
+        <Setter Property="Foreground" Value="{StaticResource NeonCyanBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!--  TabItem：默认浅色，选中时青色高亮（卡片式横向标签，统一 HomeView/RecipeWindow）  -->
+    <!--  前景层级：Tertiary(默认) → Secondary(悬停) → NeonCyan(选中)  -->
+    <Style x:Key="DarkTabItemStyle" TargetType="TabItem">
+        <Setter Property="Foreground" Value="{StaticResource TechTextTertiaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechCardBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+        <Setter Property="Padding" Value="12,6" />
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource NeonCyanBrush}" />
+                <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource NeonCyanBrush}" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource TechTextSecondaryBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--  原生 TextBox：白字 + 深色内框 + 卡片边框  -->
+    <!--  聚焦视觉态：外层 1px 默认边框 + 内层 2px 青色聚焦指示器（ColorAnimation 200ms EaseInOut）  -->
+    <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{StaticResource SurfaceCardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <!--  内层 2px 聚焦指示器：默认透明，聚焦时平滑过渡为青色  -->
+                        <Border
+                            x:Name="FocusBorder"
+                            BorderBrush="Transparent"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            IsHitTestVisible="False">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation
+                                            Storyboard.TargetName="FocusBorder"
+                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                            To="#00838F"
+                                            Duration="0:0:0.2"
+                                            EasingFunction="{StaticResource EaseInOut}" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation
+                                            Storyboard.TargetName="FocusBorder"
+                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                            To="Transparent"
+                                            Duration="0:0:0.2"
+                                            EasingFunction="{StaticResource EaseInOut}" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  hc:TextBox：BasedOn HandyControl 默认样式 + 深色化  -->
+    <Style x:Key="DarkHCTextBoxStyle" TargetType="hc:TextBox" BasedOn="{StaticResource {x:Type hc:TextBox}}">
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+    </Style>
+
+    <!--  hc:NumericUpDown：BasedOn HandyControl 默认样式 + 深色化（数字白色显示）  -->
+    <Style x:Key="DarkHCNumericUpDownStyle" TargetType="hc:NumericUpDown" BasedOn="{StaticResource {x:Type hc:NumericUpDown}}">
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+    </Style>
+
+    <!--  原生 ComboBox：BasedOn 默认样式 + 深色化  -->
+    <!--  聚焦视觉态：聚焦或下拉打开时 BorderBrush 切换为 AccentPrimaryBrush（保留默认模板以维持下拉箭头）  -->
+    <Style x:Key="DarkComboBoxStyle" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsDropDownOpen" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--  原生 PasswordBox：白字 + 深色内框 + 卡片边框  -->
+    <!--  聚焦视觉态：外层 1px 默认边框 + 内层 2px 青色聚焦指示器（ColorAnimation 200ms EaseInOut）  -->
+    <Style x:Key="DarkPasswordBoxStyle" TargetType="PasswordBox">
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Setter Property="CaretBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="SelectionBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{StaticResource SurfaceCardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <!--  内层 2px 聚焦指示器：默认透明，聚焦时平滑过渡为青色  -->
+                        <Border
+                            x:Name="FocusBorder"
+                            BorderBrush="Transparent"
+                            BorderThickness="2"
+                            CornerRadius="4"
+                            IsHitTestVisible="False">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                        </Border>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocused" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation
+                                            Storyboard.TargetName="FocusBorder"
+                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                            To="#00838F"
+                                            Duration="0:0:0.2"
+                                            EasingFunction="{StaticResource EaseInOut}" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <ColorAnimation
+                                            Storyboard.TargetName="FocusBorder"
+                                            Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)"
+                                            To="Transparent"
+                                            Duration="0:0:0.2"
+                                            EasingFunction="{StaticResource EaseInOut}" />
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  hc:DateTimePicker：BasedOn HandyControl 默认样式 + 深色化  -->
+    <!--  聚焦视觉态：聚焦时 BorderBrush 切换为 AccentPrimaryBrush（保留 HC 默认模板以维持日历弹层/Placeholder）  -->
+    <Style x:Key="DarkDateTimePickerStyle" TargetType="hc:DateTimePicker" BasedOn="{StaticResource {x:Type hc:DateTimePicker}}">
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Style.Triggers>
+            <Trigger Property="IsKeyboardFocused" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--  CheckBox：文字浅青色  -->
+    <Style x:Key="DarkCheckBoxStyle" TargetType="CheckBox">
+        <Setter Property="Foreground" Value="{StaticResource TechTextSecondaryBrush}" />
+    </Style>
+
+    <!--  Expander：青色 Header + 深色展开内容  -->
+    <Style x:Key="DarkExpanderStyle" TargetType="Expander">
+        <Setter Property="Foreground" Value="{StaticResource NeonCyanBrush}" />
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!--  ProgressBar：霓虹青色  -->
+    <Style x:Key="DarkProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Foreground" Value="{StaticResource NeonCyanBrush}" />
+    </Style>
+
+</ResourceDictionary>

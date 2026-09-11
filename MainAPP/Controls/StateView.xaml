@@ -1,0 +1,160 @@
+<UserControl
+    x:Class="MainAPP.Controls.StateView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:icons="http://metro.mahapps.com/winfx/xaml/iconpacks"
+    x:Name="Root">
+    <Grid>
+        <!--  加载中状态  -->
+        <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="{Binding State, ElementName=Root, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Loading}">
+            <icons:PackIconPhosphorIcons
+                Width="48"
+                Height="48"
+                Margin="0,0,0,12"
+                HorizontalAlignment="Center"
+                Foreground="{StaticResource NeonCyanBrush}"
+                Kind="CircleNotch"
+                RenderTransformOrigin="0.5,0.5">
+                <icons:PackIconPhosphorIcons.RenderTransform>
+                    <RotateTransform x:Name="LoadingSpinnerRotate" Angle="0" />
+                </icons:PackIconPhosphorIcons.RenderTransform>
+                <icons:PackIconPhosphorIcons.Triggers>
+                    <EventTrigger RoutedEvent="Loaded">
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation
+                                    RepeatBehavior="Forever"
+                                    Storyboard.TargetName="LoadingSpinnerRotate"
+                                    Storyboard.TargetProperty="Angle"
+                                    From="0"
+                                    To="360"
+                                    Duration="0:0:1" />
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </EventTrigger>
+                </icons:PackIconPhosphorIcons.Triggers>
+            </icons:PackIconPhosphorIcons>
+            <TextBlock
+                HorizontalAlignment="Center"
+                FontSize="{StaticResource FontSizeStat}"
+                Foreground="{StaticResource TechTextSecondaryBrush}"
+                Text="{Binding Message, ElementName=Root, TargetNullValue=加载中...}" />
+        </StackPanel>
+
+        <!--  空状态（根据 EmptyStateType 切换图标 / 主标题 / 副标题）  -->
+        <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="{Binding State, ElementName=Root, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Empty}">
+            <icons:PackIconPhosphorIcons
+                Width="48"
+                Height="48"
+                Margin="0,0,0,8"
+                HorizontalAlignment="Center"
+                Foreground="{StaticResource TechTextLabelBrush}">
+                <icons:PackIconPhosphorIcons.Style>
+                    <Style TargetType="icons:PackIconPhosphorIcons">
+                        <Setter Property="Kind" Value="Tray" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NoConfig">
+                                <Setter Property="Kind" Value="Gear" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NoResult">
+                                <Setter Property="Kind" Value="MagnifyingGlass" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NetworkError">
+                                <Setter Property="Kind" Value="PlugsConnected" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </icons:PackIconPhosphorIcons.Style>
+            </icons:PackIconPhosphorIcons>
+            <TextBlock HorizontalAlignment="Center">
+                <TextBlock.Style>
+                    <Style BasedOn="{StaticResource EmptyStatePrimaryText}" TargetType="TextBlock">
+                        <Setter Property="Text" Value="{Binding Title, ElementName=Root, TargetNullValue=暂无数据}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NoConfig">
+                                <Setter Property="Text" Value="未配置" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NoResult">
+                                <Setter Property="Text" Value="未找到匹配的记录" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NetworkError">
+                                <Setter Property="Text" Value="网络异常" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <TextBlock
+                MaxWidth="300"
+                Margin="0,4,0,0"
+                HorizontalAlignment="Center"
+                TextAlignment="Center"
+                TextWrapping="Wrap">
+                <TextBlock.Style>
+                    <Style BasedOn="{StaticResource EmptyStateSecondaryText}" TargetType="TextBlock">
+                        <Setter Property="Text" Value="{Binding Hint, ElementName=Root, TargetNullValue=数据将在加载后显示}" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NoConfig">
+                                <Setter Property="Text" Value="请先在设置中完成配置" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NoResult">
+                                <Setter Property="Text" Value="尝试调整筛选条件后重试" />
+                            </DataTrigger>
+                            <DataTrigger Binding="{Binding EmptyStateType, ElementName=Root}" Value="NetworkError">
+                                <Setter Property="Text" Value="无法连接到服务，请检查网络后重试" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            <!--  CTA 按钮：CtaText 非空时显示  -->
+            <Button
+                Margin="0,16,0,0"
+                HorizontalAlignment="Center"
+                Command="{Binding CtaCommand, ElementName=Root}"
+                Content="{Binding CtaText, ElementName=Root}"
+                Style="{StaticResource PrimaryButtonStyle}"
+                Visibility="{Binding CtaText, ElementName=Root, Converter={StaticResource NullToVisibilityConverter}}" />
+        </StackPanel>
+
+        <!--  错误状态  -->
+        <StackPanel
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="{Binding State, ElementName=Root, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Error}">
+            <icons:PackIconPhosphorIcons
+                Width="48"
+                Height="48"
+                Margin="0,0,0,8"
+                HorizontalAlignment="Center"
+                Foreground="{StaticResource StatusErrorBrush}"
+                Kind="WarningCircle" />
+            <TextBlock
+                HorizontalAlignment="Center"
+                FontSize="{StaticResource FontSizeStat}"
+                FontWeight="SemiBold"
+                Foreground="{StaticResource StatusErrorBrush}"
+                Text="{Binding Title, ElementName=Root, TargetNullValue=加载失败}" />
+            <TextBlock
+                MaxWidth="400"
+                Margin="0,4,0,12"
+                HorizontalAlignment="Center"
+                FontSize="{StaticResource FontSizeSmall}"
+                Foreground="{StaticResource TechTextSecondaryBrush}"
+                Text="{Binding Message, ElementName=Root}"
+                TextAlignment="Center"
+                TextWrapping="Wrap" />
+            <Button
+                Padding="20,8"
+                Command="{Binding RetryCommand, ElementName=Root}"
+                Content="重试"
+                Style="{StaticResource NeonButtonStyle}" />
+        </StackPanel>
+    </Grid>
+</UserControl>

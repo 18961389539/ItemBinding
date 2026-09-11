@@ -1,0 +1,154 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:media="clr-namespace:System.Windows.Media.Animation;assembly=PresentationCore">
+
+    <!--
+        ============================================================
+        Animation & Motion Token System
+        ============================================================
+        包含三类资源：
+        1. Duration Token — 动画时长（Fast / Normal / Slow）
+        2. Easing 函数库 — 缓动函数（EaseInOut / EaseOut / Spring / Decelerate）
+        3. 通用 Storyboard — FadeIn / FadeOut / SlideInFromRight / ScaleIn
+        ============================================================
+    -->
+
+    <!--  ===== Duration Token =====  -->
+    <Duration x:Key="DurationFast">0:0:0.15</Duration>
+    <Duration x:Key="DurationNormal">0:0:0.25</Duration>
+    <Duration x:Key="DurationSlow">0:0:0.4</Duration>
+
+
+    <!--  ===== Easing 函数库 =====  -->
+
+    <!--  EaseInOut — 通用进出过渡（自然感）  -->
+    <media:CubicEase x:Key="EaseInOut" EasingMode="EaseInOut" />
+
+    <!--  EaseOut — 入场过渡（先快后慢，符合手势预期）  -->
+    <media:QuadraticEase x:Key="EaseOut" EasingMode="EaseOut" />
+
+    <!--  EaseIn — 出场过渡（先慢后快）  -->
+    <media:QuadraticEase x:Key="EaseIn" EasingMode="EaseIn" />
+
+    <!--  Spring — 弹性效果（按钮按下回弹）  -->
+    <media:ElasticEase x:Key="EaseSpring" EasingMode="EaseOut" Oscillations="1" Springiness="6" />
+
+    <!--  Decelerate — 减速入场（列表项依次出现）  -->
+    <media:PowerEase x:Key="EaseDecelerate" EasingMode="EaseOut" Power="3" />
+
+    <!--  Accelerate — 加速出场  -->
+    <media:PowerEase x:Key="EaseAccelerate" EasingMode="EaseIn" Power="3" />
+
+
+    <!--  ===== 通用 Storyboard =====  -->
+
+    <!--  FadeIn（淡入）— 用于页面/控件入场  -->
+    <Storyboard x:Key="FadeInStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.Opacity)"
+            From="0"
+            To="1"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+    </Storyboard>
+
+    <!--  FadeOut（淡出）— 用于控件退场  -->
+    <Storyboard x:Key="FadeOutStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.Opacity)"
+            From="1"
+            To="0"
+            Duration="{StaticResource DurationFast}"
+            EasingFunction="{StaticResource EaseIn}" />
+    </Storyboard>
+
+    <!--  SlideInFromRight — 从右侧滑入（页面切换）  -->
+    <Storyboard x:Key="SlideInFromRightStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+            From="40"
+            To="0"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.Opacity)"
+            From="0"
+            To="1"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+    </Storyboard>
+
+    <!--  SlideInFromBottom — 从底部滑入（对话框/抽屉）  -->
+    <Storyboard x:Key="SlideInFromBottomStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+            From="40"
+            To="0"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.Opacity)"
+            From="0"
+            To="1"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+    </Storyboard>
+
+    <!--  ScaleIn — 缩放入场（徽章/弹窗强调）  -->
+    <Storyboard x:Key="ScaleInStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+            From="0.9"
+            To="1"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+            From="0.9"
+            To="1"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.Opacity)"
+            From="0"
+            To="1"
+            Duration="{StaticResource DurationNormal}"
+            EasingFunction="{StaticResource EaseOut}" />
+    </Storyboard>
+
+    <!--  ButtonPress — 按钮按下回弹（微交互）  -->
+    <Storyboard x:Key="ButtonPressStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+            To="0.97"
+            Duration="{StaticResource DurationFast}"
+            EasingFunction="{StaticResource EaseIn}"
+            AutoReverse="True" />
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+            To="0.97"
+            Duration="{StaticResource DurationFast}"
+            EasingFunction="{StaticResource EaseIn}"
+            AutoReverse="True" />
+    </Storyboard>
+
+    <!--  CardHoverIn — 卡片 hover 抬升（基于 Elevation 切换）  -->
+    <Storyboard x:Key="CardHoverInStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+            To="-2"
+            Duration="{StaticResource DurationFast}"
+            EasingFunction="{StaticResource EaseOut}" />
+    </Storyboard>
+
+    <!--  CardHoverOut — 卡片 hover 离开  -->
+    <Storyboard x:Key="CardHoverOutStoryboard">
+        <DoubleAnimation
+            Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+            To="0"
+            Duration="{StaticResource DurationFast}"
+            EasingFunction="{StaticResource EaseOut}" />
+    </Storyboard>
+
+</ResourceDictionary>

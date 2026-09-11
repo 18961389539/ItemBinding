@@ -1,0 +1,583 @@
+<Window
+    x:Class="MainAPP.Views.ChartsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ScottPlot="clr-namespace:ScottPlot.WPF;assembly=ScottPlot.WPF"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:hc="https://handyorg.github.io/handycontrol"
+    xmlns:icons="http://metro.mahapps.com/winfx/xaml/iconpacks"
+    xmlns:local="clr-namespace:MainAPP.Views"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="Chart Analysis"
+    Width="1600"
+    Height="1000"
+    MinWidth="1200"
+    MinHeight="800"
+    Background="{StaticResource TechPageBackgroundBrush}"
+    WindowStartupLocation="CenterScreen"
+    mc:Ignorable="d">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+        <Grid.Resources>
+            <!--  标签页样式：深色科技风，选中态霓虹青色  -->
+            <Style TargetType="TabItem">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="Padding" Value="16,10" />
+                <Setter Property="Margin" Value="1,0" />
+                <Setter Property="Foreground" Value="{StaticResource TechTextTertiaryBrush}" />
+                <Setter Property="FontSize" Value="{StaticResource FontSizeStat}" />
+                <Setter Property="FontWeight" Value="Medium" />
+                <Style.Triggers>
+                    <Trigger Property="IsSelected" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource NeonCyanBrush}" />
+                        <Setter Property="BorderThickness" Value="0,0,0,3" />
+                        <Setter Property="BorderBrush" Value="{StaticResource NeonCyanBrush}" />
+                        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                    </Trigger>
+                    <Trigger Property="IsMouseOver" Value="True">
+                        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                    </Trigger>
+                </Style.Triggers>
+            </Style>
+        </Grid.Resources>
+        <!--  装饰性网格背景层  -->
+        <Rectangle Grid.RowSpan="5" Opacity="0.3">
+            <Rectangle.Fill>
+                <StaticResource ResourceKey="TechGridBrush" />
+            </Rectangle.Fill>
+        </Rectangle>
+        <!--  标题栏：深色卡片 + 霓虹青色标题  -->
+        <Border
+            Grid.Row="0"
+            Padding="15,10"
+            Background="{StaticResource TechCardBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock
+                    FontSize="{StaticResource FontSizeHeader}"
+                    FontWeight="Bold"
+                    Foreground="{StaticResource NeonCyanBrush}"
+                    Text="Chart Analysis System" />
+                <TextBlock
+                    Margin="20,0,0,0"
+                    FontSize="{StaticResource FontSizeStat}"
+                    Foreground="{StaticResource TechTextTertiaryBrush}"
+                    Text="Data Visualization and Performance Analysis" />
+            </StackPanel>
+        </Border>
+        <!--  时间范围筛选栏：深色内嵌背景  -->
+        <Border
+            Grid.Row="1"
+            Padding="12,8"
+            Background="{StaticResource TechInnerBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="0,0,0,1">
+            <StackPanel Margin="5" Orientation="Horizontal">
+                <TextBlock
+                    Margin="0,0,5,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource TechTextSecondaryBrush}"
+                    Text="Time Range:" />
+                <DatePicker
+                    x:Name="StartDatePicker"
+                    Width="120"
+                    SelectedDate="{Binding StartTime, Mode=TwoWay}"
+                    ToolTip="Start date (inclusive)" />
+                <TextBlock
+                    Margin="5,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource TechTextSecondaryBrush}"
+                    Text="to" />
+                <DatePicker
+                    x:Name="EndDatePicker"
+                    Width="120"
+                    SelectedDate="{Binding EndTime, Mode=TwoWay}"
+                    ToolTip="End date (inclusive)" />
+                <Button
+                    Margin="5,0,0,0"
+                    Padding="8,3"
+                    Command="{Binding TodayFilterCommand}"
+                    Content="Today"
+                    Style="{StaticResource NeonButtonStyle}" />
+                <Button
+                    Margin="5,0,0,0"
+                    Padding="8,3"
+                    Command="{Binding Last7DaysFilterCommand}"
+                    Content="Last 7 Days"
+                    Style="{StaticResource NeonButtonStyle}" />
+                <Button
+                    Margin="5,0,0,0"
+                    Padding="8,3"
+                    Command="{Binding Last30DaysFilterCommand}"
+                    Content="Last 30 Days"
+                    Style="{StaticResource NeonButtonStyle}" />
+                <Button
+                    Margin="5,0,0,0"
+                    Padding="8,3"
+                    Command="{Binding ClearFilterCommand}"
+                    Content="All"
+                    Style="{StaticResource NeonButtonStyle}" />
+                <Button
+                    Margin="10,0,0,0"
+                    Padding="12,3"
+                    Command="{Binding QueryCommand}"
+                    Content="Query"
+                    Style="{StaticResource ButtonPrimary}"
+                    ToolTip="Reload chart data for the selected time range" />
+            </StackPanel>
+        </Border>
+        <!--  智能分析摘要 Banner：深色霓虹边框 + 异常状态切换  -->
+        <Border
+            x:Name="AnalyticsBanner"
+            Grid.Row="2"
+            Margin="15,5,15,0"
+            Padding="12,8"
+            BorderThickness="1"
+            CornerRadius="4">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource NeonCyanDeepBrush}" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding HasAnomalies}" Value="True">
+                            <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource StatusErrorSoftBrush}" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!--  推荐图标：青色 ChartBar  -->
+                <icons:PackIconPhosphorIcons
+                    Grid.Column="0"
+                    Width="16"
+                    Height="16"
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource NeonCyanBrush}"
+                    Kind="ChartBar" />
+
+                <!--  推荐文本与异常汇总  -->
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock
+                        FontSize="{StaticResource FontSizeBody}"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource TechTextSecondaryBrush}"
+                        Text="{Binding RecommendationText}"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        Margin="0,2,0,0"
+                        FontSize="{StaticResource FontSizeSmall}"
+                        Foreground="{StaticResource TechTextTertiaryBrush}"
+                        Text="{Binding AnomalySummaryText}"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <!--  异常指示徽章：青色 -> 红色  -->
+                <Border
+                    Grid.Column="2"
+                    Margin="10,0,0,0"
+                    Padding="8,2"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    BorderThickness="1"
+                    CornerRadius="10">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="{StaticResource NeonCyanDeepBrush}" />
+                            <Setter Property="BorderBrush" Value="{StaticResource NeonCyanBrush}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding HasAnomalies}" Value="True">
+                                    <!-- REVIEW-FIX(对比度): 异常 Banner 用深红底 #C62828，白字 5.6:1（原 #E53935 仅 4.2:1） -->
+                                    <Setter Property="Background" Value="{StaticResource StatusErrorBrush}" />
+                                    <Setter Property="BorderBrush" Value="{StaticResource StatusErrorBrush}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock
+                        FontSize="{StaticResource FontSizeMicro}"
+                        FontWeight="Bold"
+                        Foreground="White">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="OK" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasAnomalies}" Value="True">
+                                        <Setter Property="Text" Value="ANOMALY" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Border>
+            </Grid>
+        </Border>
+        <!--  主内容区域：深色 TabControl  -->
+        <TabControl
+            x:Name="MainTabControl"
+            Grid.Row="3"
+            Margin="15,10,15,10"
+            Padding="8"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Background="{StaticResource TechInnerBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="1"
+            FontSize="{StaticResource FontSizeStat}">
+            <!--  趋势分析标签页  -->
+            <TabItem Header="Trend Analysis">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!--  分数趋势  -->
+                        <Border Grid.Row="0" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Score Trend Analysis" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the trend of detection scores over time, for analyzing detection performance stability." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="ScoreOverTimePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  速度趋势  -->
+                        <Border Grid.Row="2" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Speed Trend Analysis" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the trend of detection speed over time, for analyzing detection efficiency." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="SpeedOverTimePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  耗时分析  -->
+                        <Border Grid.Row="4" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Duration Analysis" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the detection duration over time, for analyzing detection performance fluctuations." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="CostTimePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  距离趋势  -->
+                        <Border Grid.Row="6" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Distance Trend Analysis" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the trend of detection distance over time, for analyzing detection accuracy." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="DistanceOverTimePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!--  分布分析标签页  -->
+            <TabItem Header="Distribution Analysis">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!--  总体分数分布  -->
+                        <Border Grid.Row="0" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Score Distribution" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the score distribution of all detection records, for analyzing AI detection quality." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="ScorePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  速度分布  -->
+                        <Border Grid.Row="2" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Speed Distribution" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the distribution of detection speeds, for analyzing encoder transmission frequency." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="SpeedPlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  面积分布  -->
+                        <Border Grid.Row="4" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Area Distribution" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the area distribution of detection regions, for analyzing target size." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="AreaPlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  角度分布  -->
+                        <Border Grid.Row="6" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Angle Distribution" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the angle distribution of detections, for analyzing detection direction." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="AnglePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!--  条码分析标签页  -->
+            <TabItem Header="Barcode Analysis">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!--  条码分数分布  -->
+                        <Border Grid.Row="0" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Barcode Score Distribution" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the distribution of barcode recognition scores, for analyzing barcode recognition quality." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="BarcodeScorePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  条码分数趋势  -->
+                        <Border Grid.Row="2" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Barcode Score Trend" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the trend of barcode recognition scores over time, for analyzing barcode recognition stability." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="BarcodeScoreOverTimePlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  距离分布  -->
+                        <Border Grid.Row="4" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Distance Distribution" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Distance from product center to barcode center, for analyzing product bending." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="DistanceHistogramPlot"
+                                    Height="300"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  条码位置分数热力图  -->
+                        <Border Grid.Row="6" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Barcode Position-Score Heatmap" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the heatmap of barcode positions and recognition scores, for analyzing recognition quality across different positions." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="BarcodePositionScoreHeatmapPlot"
+                                    Height="400"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+
+            <!--  散点分析标签页  -->
+            <TabItem Header="Scatter Analysis">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid Margin="10">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <!--  坐标散点图  -->
+                        <Border Grid.Row="0" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Coordinate Scatter Plot" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the distribution of detection coordinates, for analyzing detection position distribution." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="ScatterPlot"
+                                    Height="400"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  条码坐标散点  -->
+                        <Border Grid.Row="2" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Barcode Coordinate Scatter Plot" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the distribution of barcode coordinates, for analyzing barcode position distribution." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="BarcodeScatterPlot"
+                                    Height="400"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  距离与分数散点图  -->
+                        <Border Grid.Row="4" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Distance-Score Scatter Plot" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Shows the relationship between detection distance and barcode recognition score, for analyzing the impact of distance on recognition quality." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="DistanceScoreScatterPlot"
+                                    Height="400"
+                                    HorizontalAlignment="Stretch"
+                                    VerticalAlignment="Stretch" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!--  状态栏：深色卡片背景  -->
+        <Border
+            Grid.Row="4"
+            Padding="10,5"
+            Background="{StaticResource TechCardBgBrush}"
+            BorderBrush="{StaticResource TechCardBorderBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!--  统计信息  -->
+                <StackPanel
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource TechMetricLabel}" Text="Statistics:" />
+                    <TextBlock
+                        Margin="10,0,0,0"
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="Total Records:" />
+                    <TextBlock
+                        x:Name="TotalRecordsText"
+                        Margin="2,0,20,0"
+                        Style="{StaticResource TechMetricValue}"
+                        Foreground="{StaticResource NeonOrangeBrush}"
+                        Text="{Binding RecordCount}" />
+                    <TextBlock
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="Time Range:" />
+                    <TextBlock
+                        x:Name="TimeRangeText"
+                        Margin="2,0,20,0"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding TimeRangeText}" />
+                    <TextBlock
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="Avg Score:" />
+                    <TextBlock
+                        x:Name="AvgScoreText"
+                        Margin="2,0,20,0"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding AvgScoreText}" />
+                    <TextBlock
+                        Style="{StaticResource TechMetricLabel}"
+                        Text="Avg Speed:" />
+                    <TextBlock
+                        x:Name="AvgSpeedText"
+                        Margin="2,0,20,0"
+                        Style="{StaticResource TechMetricValue}"
+                        Text="{Binding AvgSpeedText}" />
+                </StackPanel>
+
+                <!--  操作按钮  -->
+                <StackPanel
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Orientation="Horizontal">
+                    <Button
+                        x:Name="ExportButton"
+                        Command="{Binding ExportImagesCommand}"
+                        Content="{Binding ExportButtonText}"
+                        Style="{StaticResource ButtonSuccess}"
+                        ToolTip="Export current charts as scalable vector graphics (SVG), suitable for printing and reports" />
+                    <Separator
+                        Width="1"
+                        Margin="10,0"
+                        VerticalAlignment="Stretch"
+                        Background="{StaticResource TechCardBorderBrush}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

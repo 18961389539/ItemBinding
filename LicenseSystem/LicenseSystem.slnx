@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DemoApp/DemoApp.csproj" />
+    <Project Path="src/LicenseCore/LicenseCore.csproj" />
+    <Project Path="src/LicenseManager/LicenseManager.csproj" />
+    <Project Path="src/LicenseTool/LicenseTool.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LicenseCore.Tests/LicenseCore.Tests.csproj" />
+  </Folder>
+</Solution>

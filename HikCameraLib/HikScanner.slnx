@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="HikScanner/HikScanner.csproj" />
+  <Project Path="HikScannerDemo/HikScannerDemo.csproj" />
+  <Project Path="HikScanner.Tests/HikScanner.Tests.csproj" />
+  <Project Path="HikScannerBenchmarks/HikScannerBenchmarks.csproj" />
+</Solution>

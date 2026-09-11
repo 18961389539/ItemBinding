@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <data name="MenuUndo" xml:space="preserve"><value>撤销 (Ctrl+Z)</value></data>
+  <data name="MenuRedo" xml:space="preserve"><value>重做 (Ctrl+Y)</value></data>
+  <data name="MenuDraw" xml:space="preserve"><value>绘制</value></data>
+  <data name="MenuMeasure" xml:space="preserve"><value>测量</value></data>
+  <data name="MenuRoiOperations" xml:space="preserve"><value>ROI 操作</value></data>
+  <data name="MenuDeleteSelectedRoi" xml:space="preserve"><value>删除所选 ROI</value></data>
+  <data name="MenuClearAllRois" xml:space="preserve"><value>清空所有 ROI</value></data>
+  <data name="MenuEditProperties" xml:space="preserve"><value>编辑属性...</value></data>
+  <data name="MenuSetLabel" xml:space="preserve"><value>设置标签...</value></data>
+  <data name="MenuSetColor" xml:space="preserve"><value>设置颜色</value></data>
+  <data name="MenuColorCyanDefault" xml:space="preserve"><value>青色 (默认)</value></data>
+  <data name="MenuColorRed" xml:space="preserve"><value>红色</value></data>
+  <data name="MenuColorGreen" xml:space="preserve"><value>绿色</value></data>
+  <data name="MenuColorYellow" xml:space="preserve"><value>黄色</value></data>
+  <data name="MenuColorMagenta" xml:space="preserve"><value>紫色</value></data>
+  <data name="MenuCalibratePixels" xml:space="preserve"><value>像素物理校准...</value></data>
+  <data name="MenuEditCaliperSettings" xml:space="preserve"><value>卡尺参数...</value></data>
+  <data name="MenuGradientAlignCaliper" xml:space="preserve"><value>梯度检测对齐（卡尺）</value></data>
+  <data name="MenuFileAndProjects" xml:space="preserve"><value>文件与项目</value></data>
+  <data name="MenuOpenImageFile" xml:space="preserve"><value>打开图像文件...</value></data>
+  <data name="MenuSaveRois" xml:space="preserve"><value>保存 ROI...</value></data>
+  <data name="MenuLoadRois" xml:space="preserve"><value>加载 ROI...</value></data>
+  <data name="MenuSaveSession" xml:space="preserve"><value>保存会话...</value></data>
+  <data name="MenuOpenProjectOrSession" xml:space="preserve"><value>打开项目或会话...</value></data>
+  <data name="MenuRecentProjects" xml:space="preserve"><value>最近项目</value></data>
+  <data name="MenuExportProjectPackage" xml:space="preserve"><value>导出项目包...</value></data>
+  <data name="MenuAutoSave" xml:space="preserve"><value>自动保存</value></data>
+  <data name="MenuAnalysisAndExport" xml:space="preserve"><value>分析与导出</value></data>
+  <data name="MenuExportCurrentViewPng" xml:space="preserve"><value>导出当前视图为 PNG...</value></data>
+  <data name="MenuExportAnalysisCsv" xml:space="preserve"><value>导出分析结果为 CSV...</value></data>
+  <data name="MenuShowAnalysisSummary" xml:space="preserve"><value>显示分析摘要...</value></data>
+  <data name="MenuAnalysisRun" xml:space="preserve"><value>分析运行</value></data>
+  <data name="MenuEnableAsyncAnalysis" xml:space="preserve"><value>启用异步分析</value></data>
+  <data name="MenuPauseRealtimeHistogram" xml:space="preserve"><value>暂停实时直方图</value></data>
+  <data name="MenuPauseRealtimeProfile" xml:space="preserve"><value>暂停实时剖面图</value></data>
+  <data name="MenuRefreshAnalysis" xml:space="preserve"><value>立即刷新分析</value></data>
+  <data name="MenuLargeImageAndPerformance" xml:space="preserve"><value>大图与性能</value></data>
+  <data name="MenuEnableImagePyramid" xml:space="preserve"><value>启用分级金字塔</value></data>
+  <data name="MenuAutoSelectPyramidLevel" xml:space="preserve"><value>自动切换分辨率</value></data>
+  <data name="MenuAdvancedPerformance" xml:space="preserve"><value>高级性能</value></data>
+  <data name="MenuEnableTiledRendering" xml:space="preserve"><value>启用分块渲染</value></data>
+  <data name="MenuPrefetchAdjacentTiles" xml:space="preserve"><value>预取相邻分块</value></data>
+  <data name="MenuEnableGpuViewportCache" xml:space="preserve"><value>启用 GPU 视口缓存</value></data>
+  <data name="MenuClearPyramidCache" xml:space="preserve"><value>清空多分辨率缓存</value></data>
+  <data name="MenuClearAnalysisCache" xml:space="preserve"><value>清空分析缓存</value></data>
+  <data name="MenuRenderAndPseudoColor" xml:space="preserve"><value>渲染与伪彩</value></data>
+  <data name="MenuPseudoColorStrategy" xml:space="preserve"><value>伪彩策略</value></data>
+  <data name="MenuPreferShaderPseudoColor" xml:space="preserve"><value>优先使用 ShaderEffect 伪彩</value></data>
+  <data name="MenuAllowCpuFallback" xml:space="preserve"><value>ShaderEffect 失败时回退到 CPU</value></data>
+  <data name="MenuPseudoColor" xml:space="preserve"><value>伪彩</value></data>
+  <data name="MenuPseudoColorOriginal" xml:space="preserve"><value>原始</value></data>
+  <data name="MenuPseudoColorHot" xml:space="preserve"><value>Hot</value></data>
+  <data name="MenuPseudoColorJet" xml:space="preserve"><value>Jet</value></data>
+  <data name="MenuPseudoColorViridis" xml:space="preserve"><value>Viridis</value></data>
+  <data name="MenuShowRenderStatus" xml:space="preserve"><value>显示渲染状态...</value></data>
+  <data name="MenuDisplaySettings" xml:space="preserve"><value>显示设置</value></data>
+  <data name="MenuShowPixelGrid" xml:space="preserve"><value>显示像素网格</value></data>
+  <data name="MenuShowSnapGrid" xml:space="preserve"><value>显示吸附网格</value></data>
+  <data name="MenuEnableSnapToGrid" xml:space="preserve"><value>启用网格吸附</value></data>
+  <data name="MenuShowCrosshair" xml:space="preserve"><value>显示十字准星</value></data>
+  <data name="MenuShowCaliperScores" xml:space="preserve"><value>显示卡尺分数</value></data>
+  <data name="MenuShowInfoPanel" xml:space="preserve"><value>显示信息面板</value></data>
+  <data name="MenuShowHistogram" xml:space="preserve"><value>显示直方图</value></data>
+  <data name="MenuShowProfile" xml:space="preserve"><value>显示灰度剖面图</value></data>
+  <data name="MenuShowScaleBar" xml:space="preserve"><value>显示比例尺</value></data>
+  <data name="MenuShowRoiList" xml:space="preserve"><value>显示 ROI 列表</value></data>
+  <data name="MenuViewControl" xml:space="preserve"><value>视图控制</value></data>
+  <data name="MenuFitToView" xml:space="preserve"><value>适应窗口</value></data>
+  <data name="MenuActualSize" xml:space="preserve"><value>实际大小 (100%)</value></data>
+  <data name="MenuZoomToSelectedRoi" xml:space="preserve"><value>缩放到所选 ROI</value></data>
+  <data name="MenuResetView" xml:space="preserve"><value>重置视图</value></data>
+  <data name="RoiListTitle" xml:space="preserve"><value>ROI 列表</value></data>
+  <data name="RoiListToggleVisible" xml:space="preserve"><value>显示</value></data>
+  <data name="RoiListToggleVisibleTooltip" xml:space="preserve"><value>切换 ROI 显示状态</value></data>
+  <data name="RoiListToggleLocked" xml:space="preserve"><value>锁定</value></data>
+  <data name="RoiListToggleLockedTooltip" xml:space="preserve"><value>切换 ROI 锁定状态</value></data>
+  <data name="PropertyPanelTitle" xml:space="preserve"><value>对象属性</value></data>
+  <data name="HistogramPanelTitle" xml:space="preserve"><value>直方图</value></data>
+  <data name="ProfilePanelTitle" xml:space="preserve"><value>剖面图</value></data>
+  <data name="ScaleBarDefault" xml:space="preserve"><value>100 px</value></data>
+  <data name="DialogButtonOk" xml:space="preserve"><value>确定</value></data>
+  <data name="DialogButtonCancel" xml:space="preserve"><value>取消</value></data>
+  <data name="DialogButtonClose" xml:space="preserve"><value>关闭</value></data>
+  <data name="DialogPreviewNow" xml:space="preserve"><value>立即预览</value></data>
+  <data name="DialogLivePreview" xml:space="preserve"><value>实时预览</value></data>
+  <data name="DialogAdvancedParameters" xml:space="preserve"><value>高级参数</value></data>
+  <data name="DialogTextInputTitle" xml:space="preserve"><value>设置标签</value></data>
+  <data name="DialogTextAnnotationPrompt" xml:space="preserve"><value>请输入标注文本:</value></data>
+  <data name="DialogTextAnnotationDefault" xml:space="preserve"><value>Text</value></data>
+  <data name="DialogRoiLabelPrompt" xml:space="preserve"><value>请输入 ROI 标签:</value></data>
+  <data name="DialogEditRoiTitle" xml:space="preserve"><value>编辑 {0}</value></data>
+  <data name="DialogAnalysisSummaryTitle" xml:space="preserve"><value>ROI 分析摘要</value></data>
+  <data name="DialogRenderStatusTitle" xml:space="preserve"><value>渲染状态</value></data>
+  <data name="ImageLoadStatusStarting" xml:space="preserve"><value>正在准备图像...</value></data>
+  <data name="ImageLoadStatusDecoding" xml:space="preserve"><value>正在解码图像...</value></data>
+  <data name="ImageLoadStatusApplying" xml:space="preserve"><value>正在应用图像...</value></data>
+  <data name="ImageLoadStatusRetrying" xml:space="preserve"><value>加载失败，正在重试...</value></data>
+  <data name="ImageLoadStatusFailed" xml:space="preserve"><value>加载失败，点击重试。</value></data>
+  <data name="ImageLoadStatusReady" xml:space="preserve"><value>图像已加载</value></data>
+  <data name="ImageLoadRetry" xml:space="preserve"><value>重试</value></data>
+  <data name="EmptyStateTitle" xml:space="preserve"><value>尚未加载图像</value></data>
+  <data name="EmptyStateDescription" xml:space="preserve"><value>拖放图像到窗口，或使用上方的打开按钮导入。</value></data>
+  <data name="EmptyStateHint" xml:space="preserve"><value>支持大图分块、后台加载和失败重试。</value></data>
+  <data name="CalibrationDialogTitle" xml:space="preserve"><value>像素物理校准</value></data>
+  <data name="CalibrationDialogPrompt" xml:space="preserve"><value>请输入选中线段对应的实际长度:</value></data>
+  <data name="CalibrationDialogActualLengthLabel" xml:space="preserve"><value>实际长度</value></data>
+  <data name="CalibrationDialogUnitLabel" xml:space="preserve"><value>单位</value></data>
+  <data name="CalibrationDialogWarningTitle" xml:space="preserve"><value>校准</value></data>
+  <data name="CalibrationDialogInvalidLengthMessage" xml:space="preserve"><value>请输入有效的实际长度。</value></data>
+  <data name="CalibrationDefaultUnit" xml:space="preserve"><value>mm</value></data>
+  <data name="CaliperFieldCount" xml:space="preserve"><value>卡尺数量</value></data>
+  <data name="CaliperFieldSearchRange" xml:space="preserve"><value>搜索范围 (px)</value></data>
+  <data name="CaliperFieldSamplingHalfWidth" xml:space="preserve"><value>半宽采样 (px)</value></data>
+  <data name="CaliperFieldRegionLength" xml:space="preserve"><value>区域长度 (px, 0=自动)</value></data>
+  <data name="CaliperFieldMinimumGradient" xml:space="preserve"><value>最小梯度</value></data>
+  <data name="CaliperFieldMinimumValid" xml:space="preserve"><value>最少有效卡尺</value></data>
+  <data name="CaliperFieldOutlierThreshold" xml:space="preserve"><value>离群阈值 (px, 0=自动)</value></data>
+  <data name="CaliperFieldPolarity" xml:space="preserve"><value>边缘极性</value></data>
+  <data name="LineMeasureCaliperDialogTitle" xml:space="preserve"><value>卡尺参数</value></data>
+  <data name="LineMeasureCaliperDialogHeading" xml:space="preserve"><value>设置卡尺检测参数</value></data>
+  <data name="LineMeasureCaliperDialogDescription" xml:space="preserve"><value>说明: 极性控制两侧边缘的梯度方向；离群阈值为 0 时会自动估计。</value></data>
+  <data name="LineMeasureCaliperDialogInvalidMessage" xml:space="preserve"><value>请输入有效的卡尺参数。</value></data>
+  <data name="LineCaliperDialogTitle" xml:space="preserve"><value>直线查找卡尺参数</value></data>
+  <data name="LineCaliperDialogHeading" xml:space="preserve"><value>设置直线查找卡尺参数</value></data>
+  <data name="LineCaliperDialogDescription" xml:space="preserve"><value>说明: 先绘制一条近似直线，系统会沿线方向布置卡尺，在附近搜索真实直线。</value></data>
+  <data name="LineCaliperDialogInvalidMessage" xml:space="preserve"><value>请输入有效的直线查找卡尺参数。</value></data>
+  <data name="CircularCaliperDialogTitle" xml:space="preserve"><value>圆形卡尺参数</value></data>
+  <data name="CircularCaliperDialogHeading" xml:space="preserve"><value>设置圆形卡尺检测参数</value></data>
+  <data name="CircularCaliperDialogDescription" xml:space="preserve"><value>说明: 圆形卡尺沿圆周均匀取样；极性控制半径方向上的梯度方向；离群阈值为 0 时会自动估计。</value></data>
+  <data name="CircularCaliperDialogInvalidMessage" xml:space="preserve"><value>请输入有效的圆形卡尺参数。</value></data>
+  <data name="FileDialogOpenImageTitle" xml:space="preserve"><value>选择图像文件</value></data>
+  <data name="FileDialogOpenImageFilter" xml:space="preserve"><value>图像文件|*.png;*.jpg;*.jpeg;*.bmp;*.tif;*.tiff|所有文件|*.*</value></data>
+  <data name="FileDialogSaveRoiTitle" xml:space="preserve"><value>保存 ROI</value></data>
+  <data name="FileDialogOpenRoiTitle" xml:space="preserve"><value>加载 ROI</value></data>
+  <data name="FileDialogRoiFilter" xml:space="preserve"><value>ROI 文件|*.json|所有文件|*.*</value></data>
+  <data name="FileDialogSaveSessionTitle" xml:space="preserve"><value>保存会话</value></data>
+  <data name="FileDialogSessionFilter" xml:space="preserve"><value>ImageViewer 会话|*.ivsession|所有文件|*.*</value></data>
+  <data name="FileDialogOpenSessionTitle" xml:space="preserve"><value>打开项目或会话</value></data>
+  <data name="FileDialogOpenSessionFilter" xml:space="preserve"><value>ImageViewer 项目|*.ivsession;*.ivpkg|会话文件|*.ivsession|项目包|*.ivpkg|所有文件|*.*</value></data>
+  <data name="FileDialogSaveSnapshotTitle" xml:space="preserve"><value>导出当前视图为 PNG</value></data>
+  <data name="FileDialogPngFilter" xml:space="preserve"><value>PNG 文件|*.png|所有文件|*.*</value></data>
+  <data name="FileDialogSaveAnalysisCsvTitle" xml:space="preserve"><value>导出分析结果为 CSV</value></data>
+  <data name="FileDialogCsvFilter" xml:space="preserve"><value>CSV 文件|*.csv|所有文件|*.*</value></data>
+  <data name="FileDialogSaveProjectPackageTitle" xml:space="preserve"><value>导出项目包</value></data>
+  <data name="FileDialogProjectPackageFilter" xml:space="preserve"><value>ImageViewer 项目包|*.ivpkg|所有文件|*.*</value></data>
+  <data name="ToolRotatedRect" xml:space="preserve"><value>矩形 ROI</value></data>
+  <data name="ToolBlobAnalysis" xml:space="preserve"><value>斑点分析</value></data>
+  <data name="ToolEllipse" xml:space="preserve"><value>椭圆 ROI</value></data>
+  <data name="ToolFittedEllipse" xml:space="preserve"><value>拟合椭圆</value></data>
+  <data name="ToolPolygon" xml:space="preserve"><value>多边形 ROI</value></data>
+  <data name="ToolRing" xml:space="preserve"><value>圆环 ROI</value></data>
+  <data name="ToolCircle" xml:space="preserve"><value>圆形 ROI</value></data>
+  <data name="ToolPolyline" xml:space="preserve"><value>折线 ROI</value></data>
+  <data name="ToolFreehand" xml:space="preserve"><value>自由曲线 ROI</value></data>
+  <data name="ToolArrowAnnotation" xml:space="preserve"><value>箭头标注</value></data>
+  <data name="ToolPointAnnotation" xml:space="preserve"><value>点标注</value></data>
+  <data name="ToolTextAnnotation" xml:space="preserve"><value>文本标注</value></data>
+  <data name="ToolCircularCaliper" xml:space="preserve"><value>圆形卡尺</value></data>
+  <data name="ToolArcCaliper" xml:space="preserve"><value>弧形卡尺</value></data>
+  <data name="ToolLineMeasure" xml:space="preserve"><value>距离测量</value></data>
+  <data name="ToolCaliperMeasure" xml:space="preserve"><value>卡尺测量</value></data>
+  <data name="ToolLineCaliper" xml:space="preserve"><value>直线查找卡尺</value></data>
+  <data name="ToolAngleMeasure" xml:space="preserve"><value>角度测量</value></data>
+  <data name="ToolArcMeasure" xml:space="preserve"><value>圆弧测量</value></data>
+  <data name="ToolPointToLineDistance" xml:space="preserve"><value>点到线距离</value></data>
+  <data name="ToolPointToCircleDistance" xml:space="preserve"><value>点到圆距离</value></data>
+  <data name="ToolParallelism" xml:space="preserve"><value>平行度测量</value></data>
+  <data name="ToolPerpendicularity" xml:space="preserve"><value>垂直度测量</value></data>
+  <data name="ToolConcentricity" xml:space="preserve"><value>同心度测量</value></data>
+  <data name="RoiDisplayRotatedRect" xml:space="preserve"><value>矩形 ROI</value></data>
+  <data name="RoiDisplayBlobAnalysis" xml:space="preserve"><value>斑点分析</value></data>
+  <data name="RoiDisplayEllipse" xml:space="preserve"><value>椭圆 ROI</value></data>
+  <data name="RoiDisplayFittedEllipse" xml:space="preserve"><value>拟合椭圆</value></data>
+  <data name="RoiDisplayPolygon" xml:space="preserve"><value>多边形 ROI</value></data>
+  <data name="RoiDisplayRing" xml:space="preserve"><value>圆环 ROI</value></data>
+  <data name="RoiDisplayCircle" xml:space="preserve"><value>圆形 ROI</value></data>
+  <data name="RoiDisplayPolyline" xml:space="preserve"><value>折线 ROI</value></data>
+  <data name="RoiDisplayArrowAnnotation" xml:space="preserve"><value>箭头标注</value></data>
+  <data name="RoiDisplayPointAnnotation" xml:space="preserve"><value>点标注</value></data>
+  <data name="RoiDisplayTextAnnotation" xml:space="preserve"><value>文本标注</value></data>
+  <data name="RoiDisplayLineMeasure" xml:space="preserve"><value>距离测量</value></data>
+  <data name="RoiDisplayAngleMeasure" xml:space="preserve"><value>角度测量</value></data>
+  <data name="RoiDisplayArcMeasure" xml:space="preserve"><value>圆弧测量</value></data>
+  <data name="RoiDisplayPointToLineDistance" xml:space="preserve"><value>点到线距离</value></data>
+  <data name="RoiDisplayPointToCircleDistance" xml:space="preserve"><value>点到圆距离</value></data>
+  <data name="RoiDisplayParallelismMeasure" xml:space="preserve"><value>平行度测量</value></data>
+  <data name="RoiDisplayPerpendicularityMeasure" xml:space="preserve"><value>垂直度测量</value></data>
+  <data name="RoiDisplayConcentricityMeasure" xml:space="preserve"><value>同心度测量</value></data>
+  <data name="RoiDisplayCaliperMeasure" xml:space="preserve"><value>卡尺测量</value></data>
+  <data name="RoiDisplayLineCaliperMeasure" xml:space="preserve"><value>直线查找卡尺</value></data>
+  <data name="RoiDisplayCircularCaliperMeasure" xml:space="preserve"><value>圆形卡尺</value></data>
+  <data name="RoiDisplayArcCaliperMeasure" xml:space="preserve"><value>弧形卡尺</value></data>
+  <data name="InfoTitleLineCaliper" xml:space="preserve"><value>直线卡尺</value></data>
+  <data name="InfoTitleArcCaliper" xml:space="preserve"><value>弧形卡尺</value></data>
+  <data name="InfoTitleCircularCaliper" xml:space="preserve"><value>圆形卡尺</value></data>
+  <data name="InfoLineRectDimensions" xml:space="preserve"><value>矩形 ROI  W:{0} H:{1}</value></data>
+  <data name="InfoLineArea" xml:space="preserve"><value>Area:{0}</value></data>
+  <data name="InfoLineFittedEllipse" xml:space="preserve"><value>拟合椭圆  RX:{0} RY:{1}</value></data>
+  <data name="InfoLineAnglePoints" xml:space="preserve"><value>Angle:{0:F1}° Points:{1}</value></data>
+  <data name="InfoLineEllipse" xml:space="preserve"><value>椭圆 ROI  RX:{0} RY:{1}</value></data>
+  <data name="InfoLineCircle" xml:space="preserve"><value>圆形 ROI  R:{0}</value></data>
+  <data name="InfoLineRing" xml:space="preserve"><value>圆环 ROI  Inner:{0} Outer:{1}</value></data>
+  <data name="InfoLinePolygon" xml:space="preserve"><value>多边形 ROI  Perimeter:{0}</value></data>
+  <data name="InfoLinePolyline" xml:space="preserve"><value>折线 ROI  Length:{0}</value></data>
+  <data name="InfoLineArrow" xml:space="preserve"><value>箭头标注  Length:{0}</value></data>
+  <data name="InfoLinePointPair" xml:space="preserve"><value>P1:({0:F1}, {1:F1})  P2:({2:F1}, {3:F1})</value></data>
+  <data name="InfoLineLineMeasure" xml:space="preserve"><value>距离测量  Length:{0}</value></data>
+  <data name="InfoLineAngleMeasure" xml:space="preserve"><value>角度测量  {0:F1}°</value></data>
+  <data name="InfoLineArcMeasureRadius" xml:space="preserve"><value>圆弧测量  R:{0}</value></data>
+  <data name="InfoLineArcMeasureDetail" xml:space="preserve"><value>Arc:{0} Angle:{1:F1}°</value></data>
+  <data name="InfoLineCenterPoint" xml:space="preserve"><value>Center:({0:F1}, {1:F1})</value></data>
+  <data name="InfoLineInvalidArc" xml:space="preserve"><value>圆弧测量  无效圆弧</value></data>
+  <data name="InfoLinePointToLine" xml:space="preserve"><value>点到线距离  Distance:{0}</value></data>
+  <data name="InfoLinePointToCircle" xml:space="preserve"><value>点到圆距离  Distance:{0}</value></data>
+  <data name="InfoLinePointFoot" xml:space="preserve"><value>Point:({0:F1}, {1:F1}) Foot:({2:F1}, {3:F1})</value></data>
+  <data name="InfoLinePointCircleDetail" xml:space="preserve"><value>Center:({0:F1}, {1:F1}) Radius:{2}</value></data>
+  <data name="InfoLineNearestPoint" xml:space="preserve"><value>Nearest:({0:F1}, {1:F1})</value></data>
+  <data name="InfoLineParallelism" xml:space="preserve"><value>平行度测量  AngleDiff:{0:F2}°</value></data>
+  <data name="InfoLineParallelismDetail" xml:space="preserve"><value>AvgDist:{0} Error:{1:F2}°</value></data>
+  <data name="InfoLinePerpendicularity" xml:space="preserve"><value>垂直度测量  Angle:{0:F1}°</value></data>
+  <data name="InfoLinePerpendicularityDetail" xml:space="preserve"><value>Error:{0:F2}°</value></data>
+  <data name="InfoLineConcentricity" xml:space="preserve"><value>同心度测量  CenterDist:{0}</value></data>
+  <data name="InfoLineConcentricityDetail" xml:space="preserve"><value>R1:{0} R2:{1}</value></data>
+  <data name="InfoLinePointAnnotation" xml:space="preserve"><value>点标注  X:{0:F1} Y:{1:F1}</value></data>
+  <data name="InfoLineTextAnnotation" xml:space="preserve"><value>文本标注  X:{0:F1} Y:{1:F1}</value></data>
+  <data name="InfoLineBlobAnalysis" xml:space="preserve"><value>斑点分析  W:{0} H:{1} Angle:{2:F1}°</value></data>
+  <data name="InfoLineBlobThresholdOtsu" xml:space="preserve"><value>Threshold: Otsu  Polarity:{0} MinArea:{1}</value></data>
+  <data name="InfoLineBlobThresholdManual" xml:space="preserve"><value>Threshold: {0}  Polarity:{1} MinArea:{2}</value></data>
+  <data name="InfoPolarityDark" xml:space="preserve"><value>Dark</value></data>
+  <data name="InfoPolarityLight" xml:space="preserve"><value>Light</value></data>
+  <data name="InfoLineBlobCount" xml:space="preserve"><value>Blobs:{0}</value></data>
+  <data name="InfoLineBlobSummary" xml:space="preserve"><value>Blobs:{0} TotalArea:{1}</value></data>
+  <data name="InfoLineBlobItem" xml:space="preserve"><value>Blob#{0}  Area:{1} W:{2} H:{3} Center:({4:F1}, {5:F1})</value></data>
+  <data name="InfoLineBlobBox" xml:space="preserve"><value>Box: X:{0:F1} Y:{1:F1} W:{2} H:{3}</value></data>
+  <data name="InfoLineBlobRemaining" xml:space="preserve"><value>... 其余 {0} 个 Blob 未展开显示</value></data>
+  <data name="InfoLineCaliperMeasure" xml:space="preserve"><value>卡尺测量  Distance:{0}</value></data>
+  <data name="InfoLineRegionSearch" xml:space="preserve"><value>Region:{0} Search:{1}</value></data>
+  <data name="InfoLineSingleSearch" xml:space="preserve"><value>Search:{0}</value></data>
+  <data name="InfoLineCaliperParameters" xml:space="preserve"><value>Calipers:{0} SampleWidth:{1}px Polarity:{2}</value></data>
+  <data name="InfoLineFit" xml:space="preserve"><value>Fit  Valid:{0} Score:{1:F0}%</value></data>
+  <data name="InfoLineResidual" xml:space="preserve"><value>Residual RMS:{0:F2} Max:{1:F2}</value></data>
+  <data name="InfoLineConfidence" xml:space="preserve"><value>Confidence:{0:P1}</value></data>
+  <data name="InfoLineCaliperAngles" xml:space="preserve"><value>Angle1:{0:F2}° Angle2:{1:F2}° Parallel:{2:F2}°</value></data>
+  <data name="InfoLineSingleCaliper" xml:space="preserve"><value>{0}  {1}</value></data>
+  <data name="InfoLineStatisticsMean" xml:space="preserve"><value>Mean:{0:F2} Min:{1} Max:{2}</value></data>
+  <data name="InfoLineStatisticsStdDev" xml:space="preserve"><value>StdDev:{0:F2} Count:{1}</value></data>
+  <data name="InfoLineCalibration" xml:space="preserve"><value>Calibration: 1 px = {0:F4} {1}</value></data>
+  <data name="InfoUnitPixels" xml:space="preserve"><value>px</value></data>
+  <data name="InfoLineArcCaliperGeometry" xml:space="preserve"><value>Radius:{0} Arc:{1:F1}°</value></data>
+  <data name="InfoLineArcCaliperDetail" xml:space="preserve"><value>Center:({0:F1}, {1:F1}) Start:{2:F1}°</value></data>
+  <data name="InfoLineCircularCaliperDetail" xml:space="preserve"><value>Center:({0:F1}, {1:F1})</value></data>
+  <data name="RenderStatusNotAvailable" xml:space="preserve"><value>n/a</value></data>
+  <data name="RenderStatusModeShaderEffect" xml:space="preserve"><value>ShaderEffect</value></data>
+  <data name="RenderStatusModeOriginal" xml:space="preserve"><value>Original</value></data>
+  <data name="RenderStatusModeCpuFallback" xml:space="preserve"><value>CPU fallback</value></data>
+  <data name="RenderStatusLineImage" xml:space="preserve"><value>Image: {0}</value></data>
+  <data name="RenderStatusPyramidOn" xml:space="preserve"><value>On ({0} levels, build {1:F0} ms)</value></data>
+  <data name="RenderStatusPyramidOff" xml:space="preserve"><value>Off</value></data>
+  <data name="RenderStatusLinePyramid" xml:space="preserve"><value>Pyramid: {0}</value></data>
+  <data name="RenderStatusLineAutoLevel" xml:space="preserve"><value>Auto level: {0}</value></data>
+  <data name="RenderStatusLineTiledRendering" xml:space="preserve"><value>Tiled rendering: {0}</value></data>
+  <data name="RenderStatusLinePrefetchAdjacentTiles" xml:space="preserve"><value>Prefetch adjacent tiles: {0}</value></data>
+  <data name="RenderStatusLineTileCacheLimit" xml:space="preserve"><value>Tile cache limit: {0} MB</value></data>
+  <data name="RenderStatusLineTilePrefetchRadius" xml:space="preserve"><value>Tile prefetch radius: {0}</value></data>
+  <data name="RenderStatusLineFrame" xml:space="preserve"><value>Current frame: left={0:F1}, top={1:F1}, width={2:F1}, height={3:F1}, scaleFactor={4:F3}, tiled={5}</value></data>
+  <data name="RenderStatusLineGpuCache" xml:space="preserve"><value>GPU cache: {0}</value></data>
+  <data name="RenderStatusLinePseudoColor" xml:space="preserve"><value>Pseudo color: {0} ({1})</value></data>
+  <data name="RenderStatusLineAsyncAnalysis" xml:space="preserve"><value>Async analysis: {0}</value></data>
+  <data name="RenderStatusLineHistogram" xml:space="preserve"><value>Histogram paused: {0}, last update: {1:F0} ms</value></data>
+  <data name="RenderStatusLineProfile" xml:space="preserve"><value>Profile paused: {0}, last update: {1:F0} ms</value></data>
+  <data name="CommonYes" xml:space="preserve"><value>是</value></data>
+  <data name="CommonNo" xml:space="preserve"><value>否</value></data>
+  <data name="PixelInfoOutsideBounds" xml:space="preserve"><value>X: {0:F0}, Y: {1:F0}</value></data>
+  <data name="PixelInfoCoordinates" xml:space="preserve"><value>X: {0}, Y: {1}</value></data>
+  <data name="PixelInfoRgb" xml:space="preserve"><value> R:{0} G:{1} B:{2}</value></data>
+  <data name="PixelInfoGray" xml:space="preserve"><value> Gray:{0}</value></data>
+  <data name="PixelInfoValues" xml:space="preserve"><value> V:{0},{1},{2}</value></data>
+  <data name="EditorDetailsLabel" xml:space="preserve"><value>详情</value></data>
+  <data name="EditorLabel" xml:space="preserve"><value>标签</value></data>
+  <data name="EditorStrokeThickness" xml:space="preserve"><value>线宽</value></data>
+  <data name="EditorVisible" xml:space="preserve"><value>可见</value></data>
+  <data name="EditorLocked" xml:space="preserve"><value>锁定</value></data>
+  <data name="EditorUseOtsu" xml:space="preserve"><value>使用 Otsu</value></data>
+  <data name="EditorManualThreshold" xml:space="preserve"><value>手动阈值</value></data>
+  <data name="EditorDetectDark" xml:space="preserve"><value>检测暗斑</value></data>
+  <data name="EditorMinArea" xml:space="preserve"><value>最小面积</value></data>
+  <data name="EditorInnerRadius" xml:space="preserve"><value>内半径</value></data>
+  <data name="EditorOuterRadius" xml:space="preserve"><value>外半径</value></data>
+  <data name="EditorCenter" xml:space="preserve"><value>中心</value></data>
+  <data name="EditorRadius" xml:space="preserve"><value>半径</value></data>
+  <data name="EditorStartAngle" xml:space="preserve"><value>起始角度</value></data>
+  <data name="EditorSweepAngle" xml:space="preserve"><value>扫掠角度</value></data>
+  <data name="EditorCaliperCount" xml:space="preserve"><value>卡尺数量</value></data>
+  <data name="EditorSearchRange" xml:space="preserve"><value>搜索范围</value></data>
+  <data name="EditorSamplingHalfWidth" xml:space="preserve"><value>半宽采样</value></data>
+  <data name="EditorMinimumValidCalipers" xml:space="preserve"><value>最少有效卡尺</value></data>
+  <data name="EditorMinimumGradient" xml:space="preserve"><value>最小梯度</value></data>
+  <data name="EditorOutlierThreshold" xml:space="preserve"><value>离群阈值</value></data>
+  <data name="EditorEdgePolarity" xml:space="preserve"><value>边缘极性</value></data>
+  <data name="EditorWidth" xml:space="preserve"><value>宽度</value></data>
+  <data name="EditorHeight" xml:space="preserve"><value>高度</value></data>
+  <data name="EditorAngle" xml:space="preserve"><value>角度</value></data>
+  <data name="EditorPosition" xml:space="preserve"><value>位置</value></data>
+  <data name="EditorRadiusX" xml:space="preserve"><value>X 半径</value></data>
+  <data name="EditorRadiusY" xml:space="preserve"><value>Y 半径</value></data>
+  <data name="EditorVertices" xml:space="preserve"><value>顶点数: {0}</value></data>
+  <data name="EditorPoints" xml:space="preserve"><value>点数: {0}
+自由曲线: {1}</value></data>
+  <data name="EditorLineMeasureDetails" xml:space="preserve"><value>P1: {0:F1}, {1:F1}
+P2: {2:F1}, {3:F1}</value></data>
+  <data name="EditorAngleDetails" xml:space="preserve"><value>P1: {0:F1}, {1:F1}
+Vertex: {2:F1}, {3:F1}
+P2: {4:F1}, {5:F1}</value></data>
+  <data name="EditorArcDetailsBase" xml:space="preserve"><value>Start: {0:F1}, {1:F1}
+End: {2:F1}, {3:F1}
+Arc: {4:F1}, {5:F1}</value></data>
+  <data name="EditorArcDetailsRadius" xml:space="preserve"><value>
+Radius: {0:F2}</value></data>
+  <data name="EditorArcDetailsLength" xml:space="preserve"><value>
+Arc Length: {0:F2}</value></data>
+  <data name="EditorArcDetailsCentralAngle" xml:space="preserve"><value>
+Central Angle: {0:F1}°</value></data>
+  <data name="EditorPointToLineDetails" xml:space="preserve"><value>Point: {0:F1}, {1:F1}
+Line P1: {2:F1}, {3:F1}
+Line P2: {4:F1}, {5:F1}
+Distance: {6:F2}</value></data>
+  <data name="EditorPointToCircleDetails" xml:space="preserve"><value>Point: {0:F1}, {1:F1}
+Center: {2:F1}, {3:F1}
+Radius: {4:F2}
+To Circle: {5:F2}
+To Center: {6:F2}</value></data>
+  <data name="EditorParallelismDetails" xml:space="preserve"><value>Line1: ({0:F1},{1:F1})-({2:F1},{3:F1})
+Line2: ({4:F1},{5:F1})-({6:F1},{7:F1})
+Angle Diff: {8:F2}°
+Avg Distance: {9:F2}</value></data>
+  <data name="EditorPerpendicularityDetails" xml:space="preserve"><value>Line1: ({0:F1},{1:F1})-({2:F1},{3:F1})
+Line2: ({4:F1},{5:F1})-({6:F1},{7:F1})
+Angle: {8:F1}°
+Error: {9:F2}°</value></data>
+  <data name="EditorConcentricityDetails" xml:space="preserve"><value>Center1: {0:F1}, {1:F1}
+Radius1: {2:F2}
+Center2: {3:F1}, {4:F1}
+Radius2: {5:F2}
+Center Distance: {6:F2}</value></data>
+  <data name="ErrorOpenImageTitle" xml:space="preserve"><value>打开图像失败</value></data>
+  <data name="ErrorOpenImageMessage" xml:space="preserve"><value>无法加载图像文件。</value></data>
+  <data name="ErrorExportPngTitle" xml:space="preserve"><value>导出 PNG 失败</value></data>
+  <data name="ErrorExportPngMessage" xml:space="preserve"><value>无法导出当前视图。</value></data>
+  <data name="ErrorExportAnalysisTitle" xml:space="preserve"><value>导出分析失败</value></data>
+  <data name="ErrorExportAnalysisMessage" xml:space="preserve"><value>无法导出 ROI 分析 CSV。</value></data>
+  <data name="ErrorSaveSessionTitle" xml:space="preserve"><value>保存会话失败</value></data>
+  <data name="ErrorSaveSessionMessage" xml:space="preserve"><value>无法保存图像查看会话。</value></data>
+  <data name="ErrorExportProjectPackageTitle" xml:space="preserve"><value>导出工程包失败</value></data>
+  <data name="ErrorExportProjectPackageMessage" xml:space="preserve"><value>无法导出当前工程包。</value></data>
+  <data name="WarningFileMissingTitle" xml:space="preserve"><value>文件不存在</value></data>
+  <data name="WarningRecentProjectRemoved" xml:space="preserve"><value>最近项目文件已不存在，已从列表中移除。</value></data>
+  <data name="ErrorLoadProjectTitle" xml:space="preserve"><value>加载工程失败</value></data>
+  <data name="ErrorLoadProjectMessage" xml:space="preserve"><value>无法加载所选工程文件。</value></data>
+  <data name="ErrorSaveRoiTitle" xml:space="preserve"><value>保存 ROI 失败</value></data>
+  <data name="ErrorSaveRoiMessage" xml:space="preserve"><value>无法保存 ROI 文件，请检查路径和写入权限。</value></data>
+  <data name="ErrorLoadRoiTitle" xml:space="preserve"><value>加载 ROI 失败</value></data>
+  <data name="ErrorLoadRoiMessage" xml:space="preserve"><value>无法加载 ROI 文件，请检查文件格式是否有效。</value></data>
+  <data name="RecentProjectsEmpty" xml:space="preserve"><value>(无最近项目)</value></data>
+  <data name="RecentProjectHeader" xml:space="preserve"><value>{0} ({1})</value></data>
+</root>

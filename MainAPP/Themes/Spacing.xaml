@@ -1,0 +1,56 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!--
+        ============================================================
+        Spacing Token System（4px 网格）
+        ============================================================
+        4 / 8 / 12 / 16 / 20 / 24 / 32 / 40 / 48
+        复合 Padding 通过 Thickness 资源定义
+        ============================================================
+    -->
+
+    <!--  ===== 基础间距常量（9 级，4px 网格） =====  -->
+    <system:Double x:Key="SpaceXs">4</system:Double>
+    <system:Double x:Key="SpaceSm">8</system:Double>
+    <system:Double x:Key="SpaceMd">12</system:Double>
+    <system:Double x:Key="SpaceLg">16</system:Double>
+    <system:Double x:Key="SpaceXl">20</system:Double>
+    <system:Double x:Key="Space2Xl">24</system:Double>
+    <system:Double x:Key="Space3Xl">32</system:Double>
+    <system:Double x:Key="Space4Xl">40</system:Double>
+    <system:Double x:Key="Space5Xl">48</system:Double>
+
+    <!--  ===== 复合 Padding（Thickness） =====  -->
+
+    <!--  卡片内边距  -->
+    <Thickness x:Key="PaddingCardDefault">18,14</Thickness>
+    <Thickness x:Key="PaddingCardCompact">12,10</Thickness>
+    <Thickness x:Key="PaddingCardLg">24,20</Thickness>
+
+    <!--  按钮内边距  -->
+    <Thickness x:Key="PaddingButtonDefault">18,8</Thickness>
+    <Thickness x:Key="PaddingButtonCompact">12,6</Thickness>
+    <Thickness x:Key="PaddingButtonLg">24,12</Thickness>
+    <Thickness x:Key="PaddingButtonIcon">8,6</Thickness>
+
+    <!--  徽章内边距  -->
+    <Thickness x:Key="PaddingBadgeDefault">10,3</Thickness>
+    <Thickness x:Key="PaddingBadgeCompact">6,2</Thickness>
+
+    <!--  输入控件内边距  -->
+    <Thickness x:Key="PaddingInputDefault">10,8</Thickness>
+
+    <!--  ===== 复合 Margin（Thickness） =====  -->
+
+    <!--  卡片底部外边距（垂直堆叠时）  -->
+    <Thickness x:Key="MarginCardBottom">0,0,0,12</Thickness>
+    <Thickness x:Key="MarginCardBottomLg">0,0,0,20</Thickness>
+
+    <!--  控件水平间距  -->
+    <Thickness x:Key="MarginControlRight">6,0</Thickness>
+    <Thickness x:Key="MarginControlRightLg">10,0</Thickness>
+
+</ResourceDictionary>

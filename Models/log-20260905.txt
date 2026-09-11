@@ -1,0 +1,141 @@
+2026-09-05 18:42:14.348 +08:00 [INF] LogService initialized
+2026-09-05 18:42:14.381 +08:00 [WRN] [LIC] 激活码门禁已停用（ActivationRequired=false），跳过授权检查
+2026-09-05 18:42:14.384 +08:00 [INF] vgtClient 已连接到 127.0.0.1:2611
+2026-09-05 18:42:14.388 +08:00 [INF] 配方切换 TCP 服务已启动，监听端口 5000
+2026-09-05 18:42:14.689 +08:00 [INF] 应用程序启动
+2026-09-05 18:42:14.704 +08:00 [INF] 已恢复上次当前配方: jijing
+2026-09-05 18:42:14.704 +08:00 [INF] 配方管理器初始化完成，路径: D:\Programs\0905\publish\Saves\Recipes
+2026-09-05 18:42:14.707 +08:00 [INF] [MemSnapshot] Label=Startup, UptimeSec=0, TotalManaged=9.91MB, HeapSize=0.00MB, LOH=0.00MB, WorkingSet=110.37MB, PrivateMem=38.54MB, PagedMem=38.54MB, VirtualMem=2366137.79MB, GC_Gen0=0, GC_Gen1=0, GC_Gen2=0, Threads=29
+2026-09-05 18:42:14.709 +08:00 [INF] [MemDiagnostics] 启动周期性内存快照，间隔 60s
+2026-09-05 18:42:15.238 +08:00 [INF] 正在初始化 AI 模型... (起始后端: Cuda)
+2026-09-05 18:42:15.320 +08:00 [INF] [CUDA] 已预载可选组件 nvrtc-builtins64_129.dll
+2026-09-05 18:42:15.320 +08:00 [INF] [CUDA] 成功预加载 12/12 个 DLL
+2026-09-05 18:42:15.433 +08:00 [INF] [MainViewModel] 已自动登录默认管理员: abb
+2026-09-05 18:42:15.516 +08:00 [INF] [CUDA] 会话选项: device_id=0, gpu_mem_limit=2048 MiB, arena_extend_strategy=kSameAsRequested, cudnn_conv_algo_search=HEURISTIC, cudnn_conv_use_max_workspace=0
+2026-09-05 18:42:15.662 +08:00 [INF] AI 模型初始化完成 (CUDA)
+2026-09-05 18:42:15.737 +08:00 [INF] AI 模型初始化完成 (CPU)
+2026-09-05 18:42:22.064 +08:00 [WRN] 未检测到扫码器设备！
+2026-09-05 18:43:14.711 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=60, TotalManaged=31.18MB, HeapSize=33.22MB, LOH=11.02MB, WorkingSet=633.39MB, PrivateMem=1053.46MB, PagedMem=1053.46MB, VirtualMem=2410249.66MB, GC_Gen0=7, GC_Gen1=4, GC_Gen2=2, Threads=75
+2026-09-05 18:43:48.549 +08:00 [WRN] 切换软触发失败: 未连接到设备
+2026-09-05 18:44:06.652 +08:00 [INF] 测试推理：开始执行
+2026-09-05 18:44:06.656 +08:00 [WRN] 测试推理：未加载图片(_originalMat 为空)。
+2026-09-05 18:44:14.713 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=120, TotalManaged=28.50MB, HeapSize=35.24MB, LOH=11.02MB, WorkingSet=656.61MB, PrivateMem=1073.08MB, PagedMem=1073.08MB, VirtualMem=2410301.97MB, GC_Gen0=10, GC_Gen1=5, GC_Gen2=2, Threads=76
+2026-09-05 18:45:14.715 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=180, TotalManaged=26.47MB, HeapSize=35.33MB, LOH=11.02MB, WorkingSet=652.13MB, PrivateMem=1067.90MB, PagedMem=1067.90MB, VirtualMem=2410283.36MB, GC_Gen0=11, GC_Gen1=5, GC_Gen2=2, Threads=76
+2026-09-05 18:46:14.716 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=240, TotalManaged=36.27MB, HeapSize=35.33MB, LOH=11.02MB, WorkingSet=654.54MB, PrivateMem=1070.05MB, PagedMem=1070.05MB, VirtualMem=2410274.55MB, GC_Gen0=11, GC_Gen1=5, GC_Gen2=2, Threads=70
+2026-09-05 18:47:14.717 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=300, TotalManaged=33.83MB, HeapSize=35.03MB, LOH=11.02MB, WorkingSet=653.93MB, PrivateMem=1070.23MB, PagedMem=1070.23MB, VirtualMem=2410277.61MB, GC_Gen0=12, GC_Gen1=6, GC_Gen2=2, Threads=72
+2026-09-05 18:48:14.718 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=360, TotalManaged=31.59MB, HeapSize=35.06MB, LOH=11.02MB, WorkingSet=653.95MB, PrivateMem=1070.20MB, PagedMem=1070.20MB, VirtualMem=2410276.11MB, GC_Gen0=13, GC_Gen1=6, GC_Gen2=2, Threads=71
+2026-09-05 18:49:14.720 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=420, TotalManaged=29.70MB, HeapSize=35.15MB, LOH=11.02MB, WorkingSet=632.03MB, PrivateMem=1071.62MB, PagedMem=1071.62MB, VirtualMem=2410276.21MB, GC_Gen0=14, GC_Gen1=6, GC_Gen2=2, Threads=71
+2026-09-05 18:50:14.723 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=480, TotalManaged=27.50MB, HeapSize=35.18MB, LOH=11.02MB, WorkingSet=632.47MB, PrivateMem=1071.16MB, PagedMem=1071.16MB, VirtualMem=2410277.77MB, GC_Gen0=15, GC_Gen1=6, GC_Gen2=2, Threads=72
+2026-09-05 18:51:14.724 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=540, TotalManaged=37.23MB, HeapSize=35.18MB, LOH=11.02MB, WorkingSet=632.48MB, PrivateMem=1071.39MB, PagedMem=1071.39MB, VirtualMem=2410274.77MB, GC_Gen0=15, GC_Gen1=6, GC_Gen2=2, Threads=70
+2026-09-05 18:52:14.726 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=600, TotalManaged=35.05MB, HeapSize=35.22MB, LOH=11.02MB, WorkingSet=632.37MB, PrivateMem=1071.54MB, PagedMem=1071.54MB, VirtualMem=2410274.77MB, GC_Gen0=16, GC_Gen1=6, GC_Gen2=2, Threads=70
+2026-09-05 18:53:14.728 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=660, TotalManaged=32.86MB, HeapSize=35.25MB, LOH=11.02MB, WorkingSet=632.43MB, PrivateMem=1070.96MB, PagedMem=1070.96MB, VirtualMem=2410274.77MB, GC_Gen0=17, GC_Gen1=6, GC_Gen2=2, Threads=70
+2026-09-05 18:54:14.731 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=720, TotalManaged=30.72MB, HeapSize=35.29MB, LOH=11.02MB, WorkingSet=632.48MB, PrivateMem=1070.91MB, PagedMem=1070.91MB, VirtualMem=2410265.42MB, GC_Gen0=18, GC_Gen1=6, GC_Gen2=2, Threads=69
+2026-09-05 18:55:14.733 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=780, TotalManaged=28.53MB, HeapSize=35.32MB, LOH=11.02MB, WorkingSet=632.52MB, PrivateMem=1070.95MB, PagedMem=1070.95MB, VirtualMem=2410265.42MB, GC_Gen0=19, GC_Gen1=6, GC_Gen2=2, Threads=69
+2026-09-05 18:56:14.735 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=840, TotalManaged=26.32MB, HeapSize=35.35MB, LOH=11.02MB, WorkingSet=632.73MB, PrivateMem=1070.95MB, PagedMem=1070.95MB, VirtualMem=2410265.48MB, GC_Gen0=20, GC_Gen1=6, GC_Gen2=2, Threads=69
+2026-09-05 18:57:14.736 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=900, TotalManaged=36.14MB, HeapSize=35.35MB, LOH=11.02MB, WorkingSet=633.05MB, PrivateMem=1070.95MB, PagedMem=1070.95MB, VirtualMem=2410265.55MB, GC_Gen0=20, GC_Gen1=6, GC_Gen2=2, Threads=69
+2026-09-05 18:58:14.737 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=960, TotalManaged=34.00MB, HeapSize=35.39MB, LOH=11.02MB, WorkingSet=633.05MB, PrivateMem=1070.89MB, PagedMem=1070.89MB, VirtualMem=2410264.05MB, GC_Gen0=21, GC_Gen1=6, GC_Gen2=2, Threads=68
+2026-09-05 18:59:14.739 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1020, TotalManaged=31.79MB, HeapSize=35.42MB, LOH=11.02MB, WorkingSet=633.04MB, PrivateMem=1070.84MB, PagedMem=1070.84MB, VirtualMem=2410262.55MB, GC_Gen0=22, GC_Gen1=6, GC_Gen2=2, Threads=67
+2026-09-05 19:00:14.741 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1080, TotalManaged=29.61MB, HeapSize=35.45MB, LOH=11.02MB, WorkingSet=633.11MB, PrivateMem=1070.83MB, PagedMem=1070.83MB, VirtualMem=2410262.67MB, GC_Gen0=23, GC_Gen1=6, GC_Gen2=2, Threads=67
+2026-09-05 19:01:14.743 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1140, TotalManaged=27.19MB, HeapSize=35.24MB, LOH=11.02MB, WorkingSet=633.08MB, PrivateMem=1070.76MB, PagedMem=1070.76MB, VirtualMem=2410265.67MB, GC_Gen0=24, GC_Gen1=7, GC_Gen2=2, Threads=69
+2026-09-05 19:02:14.744 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1200, TotalManaged=36.93MB, HeapSize=35.24MB, LOH=11.02MB, WorkingSet=632.99MB, PrivateMem=1070.71MB, PagedMem=1070.71MB, VirtualMem=2410264.05MB, GC_Gen0=24, GC_Gen1=7, GC_Gen2=2, Threads=68
+2026-09-05 19:03:14.744 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1260, TotalManaged=34.81MB, HeapSize=35.26MB, LOH=11.02MB, WorkingSet=633.03MB, PrivateMem=1070.77MB, PagedMem=1070.77MB, VirtualMem=2410264.05MB, GC_Gen0=25, GC_Gen1=7, GC_Gen2=2, Threads=68
+2026-09-05 19:04:14.746 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1320, TotalManaged=32.66MB, HeapSize=35.29MB, LOH=11.02MB, WorkingSet=633.06MB, PrivateMem=1070.73MB, PagedMem=1070.73MB, VirtualMem=2410262.55MB, GC_Gen0=26, GC_Gen1=7, GC_Gen2=2, Threads=67
+2026-09-05 19:05:14.748 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1380, TotalManaged=30.51MB, HeapSize=35.33MB, LOH=11.02MB, WorkingSet=633.10MB, PrivateMem=1070.77MB, PagedMem=1070.77MB, VirtualMem=2410264.05MB, GC_Gen0=27, GC_Gen1=7, GC_Gen2=2, Threads=68
+2026-09-05 19:06:14.750 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1440, TotalManaged=28.37MB, HeapSize=35.36MB, LOH=11.02MB, WorkingSet=633.10MB, PrivateMem=1070.78MB, PagedMem=1070.78MB, VirtualMem=2410264.05MB, GC_Gen0=28, GC_Gen1=7, GC_Gen2=2, Threads=68
+2026-09-05 19:07:14.752 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1500, TotalManaged=26.21MB, HeapSize=35.39MB, LOH=11.02MB, WorkingSet=633.11MB, PrivateMem=1070.78MB, PagedMem=1070.78MB, VirtualMem=2410264.05MB, GC_Gen0=29, GC_Gen1=7, GC_Gen2=2, Threads=68
+2026-09-05 19:08:14.753 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1560, TotalManaged=35.99MB, HeapSize=35.39MB, LOH=11.02MB, WorkingSet=632.58MB, PrivateMem=1070.74MB, PagedMem=1070.74MB, VirtualMem=2410262.61MB, GC_Gen0=29, GC_Gen1=7, GC_Gen2=2, Threads=67
+2026-09-05 19:09:14.754 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1620, TotalManaged=33.81MB, HeapSize=35.43MB, LOH=11.02MB, WorkingSet=632.82MB, PrivateMem=1070.74MB, PagedMem=1070.74MB, VirtualMem=2410262.67MB, GC_Gen0=30, GC_Gen1=7, GC_Gen2=2, Threads=67
+2026-09-05 19:10:13.282 +08:00 [WRN] 恢复硬触发失败: 未连接到设备
+2026-09-05 19:10:14.756 +08:00 [INF] [MemSnapshot] Label=Periodic, UptimeSec=1680, TotalManaged=32.42MB, HeapSize=35.46MB, LOH=11.02MB, WorkingSet=632.33MB, PrivateMem=1077.69MB, PagedMem=1077.69MB, VirtualMem=2410292.38MB, GC_Gen0=31, GC_Gen1=7, GC_Gen2=2, Threads=69
+2026-09-05 19:10:15.990 +08:00 [ERR] InitializeAsync 初始化失败: System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at MainAPP.ViewModels.HomeViewModel.Loop()
+   at MainAPP.ViewModels.HomeViewModel.InitializeAsync()
+2026-09-05 19:10:16.007 +08:00 [INF] [MemSnapshot] Label=HomeViewModel_Disposed, UptimeSec=1681, TotalManaged=32.72MB, HeapSize=35.46MB, LOH=11.02MB, WorkingSet=605.13MB, PrivateMem=1040.61MB, PagedMem=1040.61MB, VirtualMem=2410233.36MB, GC_Gen0=31, GC_Gen1=7, GC_Gen2=2, Threads=30
+2026-09-05 19:10:16.008 +08:00 [WRN] 恢复硬触发失败: 未连接到设备
+2026-09-05 19:10:16.011 +08:00 [INF] [MemDiagnostics] 周期性内存快照已停止
+2026-09-05 19:10:29.522 +08:00 [INF] LogService initialized
+2026-09-05 19:10:29.556 +08:00 [WRN] [LIC] 激活码门禁已停用（ActivationRequired=false），跳过授权检查
+2026-09-05 19:10:29.559 +08:00 [INF] vgtClient 已连接到 127.0.0.1:2611
+2026-09-05 19:10:29.563 +08:00 [INF] 配方切换 TCP 服务已启动，监听端口 5000
+2026-09-05 19:10:29.868 +08:00 [INF] 应用程序启动
+2026-09-05 19:10:29.884 +08:00 [INF] 已恢复上次当前配方: jijing
+2026-09-05 19:10:29.884 +08:00 [INF] 配方管理器初始化完成，路径: D:\Programs\0905\publish\Saves\Recipes
+2026-09-05 19:10:29.887 +08:00 [INF] [MemSnapshot] Label=Startup, UptimeSec=0, TotalManaged=9.87MB, HeapSize=0.00MB, LOH=0.00MB, WorkingSet=110.33MB, PrivateMem=38.35MB, PagedMem=38.35MB, VirtualMem=2366137.77MB, GC_Gen0=0, GC_Gen1=0, GC_Gen2=0, Threads=29
+2026-09-05 19:10:29.889 +08:00 [INF] [MemDiagnostics] 启动周期性内存快照，间隔 60s
+2026-09-05 19:10:30.391 +08:00 [INF] 正在初始化 AI 模型... (起始后端: Cuda)
+2026-09-05 19:10:30.474 +08:00 [INF] [CUDA] 已预载可选组件 nvrtc-builtins64_129.dll
+2026-09-05 19:10:30.474 +08:00 [INF] [CUDA] 成功预加载 12/12 个 DLL
+2026-09-05 19:10:30.579 +08:00 [INF] [MainViewModel] 已自动登录默认管理员: abb
+2026-09-05 19:10:30.653 +08:00 [INF] [CUDA] 会话选项: device_id=0, gpu_mem_limit=2048 MiB, arena_extend_strategy=kSameAsRequested, cudnn_conv_algo_search=HEURISTIC, cudnn_conv_use_max_workspace=0
+2026-09-05 19:10:30.832 +08:00 [INF] AI 模型初始化完成 (CUDA)
+2026-09-05 19:10:30.945 +08:00 [INF] AI 模型初始化完成 (CPU)
+2026-09-05 19:10:37.215 +08:00 [WRN] 未检测到扫码器设备！
+2026-09-05 19:10:46.920 +08:00 [WRN] 切换软触发失败: 未连接到设备
+2026-09-05 19:10:50.213 +08:00 [INF] [MemAlloc] Label=RecipeVM(FolderGetImage), Size=0.30MB, TotalManaged=29.78MB, UptimeSec=20, Extra=File=draw_4266.jpg WxH=680x456
+2026-09-05 19:10:52.258 +08:00 [INF] [MemAlloc] Label=RecipeVM(FolderGetImage), Size=0.30MB, TotalManaged=32.59MB, UptimeSec=22, Extra=File=draw_4267.jpg WxH=680x456
+2026-09-05 19:10:53.164 +08:00 [INF] [MemAlloc] Label=RecipeVM(FolderGetImage), Size=0.30MB, TotalManaged=34.10MB, UptimeSec=23, Extra=File=draw_4268.jpg WxH=680x456
+2026-09-05 19:10:54.379 +08:00 [INF] [MemAlloc] Label=RecipeVM(FolderGetImage), Size=0.30MB, TotalManaged=35.68MB, UptimeSec=24, Extra=File=draw_4269.jpg WxH=680x456
+2026-09-05 19:11:01.309 +08:00 [INF] 测试推理：开始执行
+2026-09-05 19:11:01.312 +08:00 [INF] 测试推理：加载边缘模型 D:\Programs\0905\publish\Models\best.onnx
+2026-09-05 19:11:01.376 +08:00 [INF] [MemAlloc] Label=RecopeVM(InferenceMat), Size=0.00MB, TotalManaged=34.28MB, UptimeSec=31, Extra=WxH=85x57, IsResize=True
+2026-09-05 19:11:01.526 +08:00 [INF] 测试推理：边缘推理完成，目标数=1，推理图=85x57，IsResize=True，缩放比=8/8
+2026-09-05 19:11:01.529 +08:00 [INF] 测试推理：边缘目标数=1，选定产品 OBB面积=704
+2026-09-05 19:11:01.529 +08:00 [INF] 测试推理：角度检测开关=True，AngleDetection配置=存在，进入角度模型=是
+2026-09-05 19:11:01.529 +08:00 [INF] 测试推理：角度模型路径有效: D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:01.529 +08:00 [INF] 测试推理：加载角度模型 D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:01.682 +08:00 [WRN] 测试推理：角度质量门拒绝，原因=角度模型在裁剪图 24x35 上无任何输出
+2026-09-05 19:11:01.683 +08:00 [WRN] 测试推理：角度模型已推理但未输出有效结果（具体原因见角度质量门日志）。
+2026-09-05 19:11:02.196 +08:00 [INF] 测试推理完成：耗时=818ms，目标数=1，产品坐标=X=180.38 mm, Y=357.68 mm，角度输出=无
+2026-09-05 19:11:08.787 +08:00 [INF] 测试推理：开始执行
+2026-09-05 19:11:08.787 +08:00 [INF] [MemAlloc] Label=RecopeVM(InferenceMat), Size=0.00MB, TotalManaged=110.96MB, UptimeSec=39, Extra=WxH=85x57, IsResize=True
+2026-09-05 19:11:08.899 +08:00 [INF] 测试推理：边缘推理完成，目标数=1，推理图=85x57，IsResize=True，缩放比=8/8
+2026-09-05 19:11:08.899 +08:00 [INF] 测试推理：边缘目标数=1，选定产品 OBB面积=704
+2026-09-05 19:11:08.899 +08:00 [INF] 测试推理：角度检测开关=True，AngleDetection配置=存在，进入角度模型=是
+2026-09-05 19:11:08.899 +08:00 [INF] 测试推理：角度模型路径有效: D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:08.955 +08:00 [WRN] 测试推理：角度质量门拒绝，原因=角度模型在裁剪图 24x35 上无任何输出
+2026-09-05 19:11:08.955 +08:00 [WRN] 测试推理：角度模型已推理但未输出有效结果（具体原因见角度质量门日志）。
+2026-09-05 19:11:09.049 +08:00 [INF] 测试推理完成：耗时=260ms，目标数=1，产品坐标=X=180.38 mm, Y=357.68 mm，角度输出=无
+2026-09-05 19:11:11.041 +08:00 [INF] 测试推理：开始执行
+2026-09-05 19:11:11.042 +08:00 [INF] [MemAlloc] Label=RecopeVM(InferenceMat), Size=0.00MB, TotalManaged=113.63MB, UptimeSec=41, Extra=WxH=85x57, IsResize=True
+2026-09-05 19:11:11.137 +08:00 [INF] 测试推理：边缘推理完成，目标数=1，推理图=85x57，IsResize=True，缩放比=8/8
+2026-09-05 19:11:11.137 +08:00 [INF] 测试推理：边缘目标数=1，选定产品 OBB面积=704
+2026-09-05 19:11:11.137 +08:00 [INF] 测试推理：角度检测开关=True，AngleDetection配置=存在，进入角度模型=是
+2026-09-05 19:11:11.137 +08:00 [INF] 测试推理：角度模型路径有效: D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:11.242 +08:00 [WRN] 测试推理：角度质量门拒绝，原因=角度模型在裁剪图 24x35 上无任何输出
+2026-09-05 19:11:11.242 +08:00 [WRN] 测试推理：角度模型已推理但未输出有效结果（具体原因见角度质量门日志）。
+2026-09-05 19:11:11.248 +08:00 [INF] 测试推理完成：耗时=205ms，目标数=1，产品坐标=X=180.38 mm, Y=357.68 mm，角度输出=无
+2026-09-05 19:11:12.474 +08:00 [INF] 测试推理：开始执行
+2026-09-05 19:11:12.474 +08:00 [INF] [MemAlloc] Label=RecopeVM(InferenceMat), Size=0.00MB, TotalManaged=136.40MB, UptimeSec=43, Extra=WxH=85x57, IsResize=True
+2026-09-05 19:11:12.567 +08:00 [INF] 测试推理：边缘推理完成，目标数=1，推理图=85x57，IsResize=True，缩放比=8/8
+2026-09-05 19:11:12.567 +08:00 [INF] 测试推理：边缘目标数=1，选定产品 OBB面积=704
+2026-09-05 19:11:12.567 +08:00 [INF] 测试推理：角度检测开关=True，AngleDetection配置=存在，进入角度模型=是
+2026-09-05 19:11:12.567 +08:00 [INF] 测试推理：角度模型路径有效: D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:12.633 +08:00 [WRN] 测试推理：角度质量门拒绝，原因=角度模型在裁剪图 24x35 上无任何输出
+2026-09-05 19:11:12.633 +08:00 [WRN] 测试推理：角度模型已推理但未输出有效结果（具体原因见角度质量门日志）。
+2026-09-05 19:11:12.637 +08:00 [INF] 测试推理完成：耗时=161ms，目标数=1，产品坐标=X=180.38 mm, Y=357.68 mm，角度输出=无
+2026-09-05 19:11:13.997 +08:00 [INF] 测试推理：开始执行
+2026-09-05 19:11:13.997 +08:00 [INF] [MemAlloc] Label=RecopeVM(InferenceMat), Size=0.00MB, TotalManaged=133.98MB, UptimeSec=44, Extra=WxH=85x57, IsResize=True
+2026-09-05 19:11:14.097 +08:00 [INF] 测试推理：边缘推理完成，目标数=1，推理图=85x57，IsResize=True，缩放比=8/8
+2026-09-05 19:11:14.097 +08:00 [INF] 测试推理：边缘目标数=1，选定产品 OBB面积=704
+2026-09-05 19:11:14.097 +08:00 [INF] 测试推理：角度检测开关=True，AngleDetection配置=存在，进入角度模型=是
+2026-09-05 19:11:14.097 +08:00 [INF] 测试推理：角度模型路径有效: D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:14.267 +08:00 [WRN] 测试推理：角度质量门拒绝，原因=角度模型在裁剪图 24x35 上无任何输出
+2026-09-05 19:11:14.267 +08:00 [WRN] 测试推理：角度模型已推理但未输出有效结果（具体原因见角度质量门日志）。
+2026-09-05 19:11:14.271 +08:00 [INF] 测试推理完成：耗时=272ms，目标数=1，产品坐标=X=180.38 mm, Y=357.68 mm，角度输出=无
+2026-09-05 19:11:16.291 +08:00 [INF] 测试推理：开始执行
+2026-09-05 19:11:16.292 +08:00 [INF] [MemAlloc] Label=RecopeVM(InferenceMat), Size=0.00MB, TotalManaged=158.53MB, UptimeSec=46, Extra=WxH=85x57, IsResize=True
+2026-09-05 19:11:16.394 +08:00 [INF] 测试推理：边缘推理完成，目标数=1，推理图=85x57，IsResize=True，缩放比=8/8
+2026-09-05 19:11:16.394 +08:00 [INF] 测试推理：边缘目标数=1，选定产品 OBB面积=704
+2026-09-05 19:11:16.394 +08:00 [INF] 测试推理：角度检测开关=True，AngleDetection配置=存在，进入角度模型=是
+2026-09-05 19:11:16.394 +08:00 [INF] 测试推理：角度模型路径有效: D:\Programs\ItemBinding\Models\jiao.onnx
+2026-09-05 19:11:16.445 +08:00 [WRN] 测试推理：角度质量门拒绝，原因=角度模型在裁剪图 24x35 上无任何输出
+2026-09-05 19:11:16.445 +08:00 [WRN] 测试推理：角度模型已推理但未输出有效结果（具体原因见角度质量门日志）。
+2026-09-05 19:11:16.448 +08:00 [INF] 测试推理完成：耗时=155ms，目标数=1，产品坐标=X=180.38 mm, Y=357.68 mm，角度输出=无
+2026-09-05 19:11:22.333 +08:00 [WRN] 恢复硬触发失败: 未连接到设备
+2026-09-05 19:11:22.334 +08:00 [INF] [MemFree] Label=RecopeVM(OriginalMat-Dispose), Size=0.30MB, TotalManaged=162.58MB, UptimeSec=52
+2026-09-05 19:11:24.534 +08:00 [ERR] InitializeAsync 初始化失败: System.Threading.Tasks.TaskCanceledException: A task was canceled.
+   at MainAPP.ViewModels.HomeViewModel.Loop()
+   at MainAPP.ViewModels.HomeViewModel.InitializeAsync()
+2026-09-05 19:11:24.551 +08:00 [INF] [MemSnapshot] Label=HomeViewModel_Disposed, UptimeSec=55, TotalManaged=163.38MB, HeapSize=137.47MB, LOH=66.89MB, WorkingSet=738.57MB, PrivateMem=1171.38MB, PagedMem=1171.38MB, VirtualMem=2410269.93MB, GC_Gen0=16, GC_Gen1=11, GC_Gen2=4, Threads=39
+2026-09-05 19:11:24.552 +08:00 [WRN] 恢复硬触发失败: 未连接到设备
+2026-09-05 19:11:24.557 +08:00 [INF] [MemDiagnostics] 周期性内存快照已停止

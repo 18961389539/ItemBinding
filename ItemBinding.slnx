@@ -1,0 +1,35 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="MainAPP/MainAPP.csproj" />
+    <Project Path="CoordinateSystemMapping/CoordinateSystemMapping.csproj" Id="c9f54f48-e8ff-4718-b47a-6533350a6161" />
+    <Project Path="Extensions/Extensions.csproj" Id="887071d1-08c1-4e53-94ec-5b9137402e05" />
+    <Project Path="HikCameraLib/HikScanner/HikScanner.csproj" />
+    <Project Path="JinlongYolo/JinlongYolo.csproj" />
+    <Project Path="Blob/Blob.csproj" Id="7cc5cabd-08c9-41d1-96f8-0fed7235707d" />
+    <Project Path="ImageViewerControl/ImageViewerControl.csproj" />
+  </Folder>
+  <Folder Name="/src/ScottPlot/">
+    <Project Path="ScottPlot.WPF/ScottPlot.WPF.csproj" />
+    <Project Path="ScottPlot5/ScottPlot.csproj" />
+  </Folder>
+  <Folder Name="/src/Tools/">
+    <Project Path="AIAgent/AIAgent.csproj" Id="2a7fab7d-829c-42ba-889d-216a389ded4a" />
+    <Project Path="WebLiveView/WebLiveView.csproj" />
+  </Folder>
+  <Folder Name="/src/LicenseSystem/">
+    <Project Path="LicenseSystem/src/LicenseCore/LicenseCore.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="MainAPP.Tests/MainAPP.Tests.csproj" />
+    <Project Path="JinlongYolo.Tests/JinlongYolo.Tests.csproj" />
+    <Project Path="ConsoleApp.Test/ConsoleApp.Test.csproj" Id="45f90eb8-ee8c-4faf-8248-6fa612894e13" />
+    <Project Path="ConsoleApp10/ConsoleApp10.csproj" Id="605eafc0-3186-4554-9034-44989bb35e40" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="MainAPP.Benchmarks/MainAPP.Benchmarks.csproj" />
+    <Project Path="JinlongYolo.Benchmarks/JinlongYolo.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+  </Folder>
+</Solution>

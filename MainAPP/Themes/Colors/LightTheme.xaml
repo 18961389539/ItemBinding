@@ -1,0 +1,18 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  ===== 浅色界面画刷（备用，未来主题切换） =====  -->
+    <!--  浅色文本  -->
+    <SolidColorBrush x:Key="TextPrimaryBrush" Color="#263238" />
+    <SolidColorBrush x:Key="TextSecondaryBrush" Color="#37474F" />
+    <SolidColorBrush x:Key="TextTertiaryBrush" Color="#78909C" />
+
+    <!--  浅色界面  -->
+    <SolidColorBrush x:Key="CardBackgroundBrush" Color="White" />
+    <SolidColorBrush x:Key="PageBackgroundBrush" Color="#FAFAFA" />
+    <SolidColorBrush x:Key="CardBorderBrush" Color="#E0E0E0" />
+    <SolidColorBrush x:Key="CardHeaderBackgroundBrush" Color="#F5F5F5" />
+    <SolidColorBrush x:Key="FilterBarBackgroundBrush" Color="#F5F9FF" />
+
+</ResourceDictionary>

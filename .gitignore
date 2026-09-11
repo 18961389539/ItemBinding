@@ -1,0 +1,134 @@
+## .NET / C# 项目通用忽略规则
+
+# 构建输出
+[Bb]in/
+[Oo]bj/
+*.exe
+*.dll
+*.exe.config
+*.dll.config
+
+# NuGet 包（不提交实际包文件）
+**/[Pp]ackages/*
+!**/[Pp]ackages/repositories.config
+*.nupkg
+# NuGet 包管理器自动还原生成的文件
+project.lock.json
+*.nuget.props
+*.nuget.targets
+
+# Visual Studio 缓存与设置
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+
+# Visual Studio 历史记录
+*.vshost.exe
+*.vshost.exe.config
+*.vshost.exe.manifest
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Visual Studio Code
+.vscode/
+
+# Windows 缩略图缓存
+Thumbs.db
+
+# 用户特定的文件
+*.rsuser
+*.dbmdl
+*.jfm
+
+# Visual Studio 代码分析结果
+*.mdf
+*.ldf
+*.log
+
+# 测试结果
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.pch
+*.pdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp
+*.tmp_proj
+*.vspscc
+*.vssscc
+
+# 代码覆盖率结果
+*.coverage
+*.coveragexml
+
+# 性能分析器
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# ReSharper 是 JetBrains 产品，相关文件已在 .idea/ 排除
+# 但补充一些本地设置
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# NCrunch
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+# MightyMoose
+*.mm.*
+AutoTest.Net/
+
+# Web 发布相关（如使用 MSDeploy）
+*.Publish.xml
+*.pubxml
+*.pubxml.user
+*.azurePubxml
+
+# SharePoint 相关
+*.wsp
+*.spuser
+
+# 数据库项目
+*.dbmdl
+*.jfm
+*.mdf
+*.ldf
+
+# 实体框架迁移
+*.edmx.diagram
+*.edmx.sql
+
+# 一些常见 IDE 缓存
+*.gpState
+
+# 事件日志文件
+*.evtx
+
+# Office 临时文件
+~$*
+
+# Windows 文件属性
+desktop.ini
+
+# AI 助手工作区（本地记忆与临时诊断文件，不属于产品源码）
+.workbuddy/

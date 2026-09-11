@@ -1,0 +1,122 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+		<ApplicationIcon>机械手.ico</ApplicationIcon>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<NoWarn>NU1701;NETSDK1206</NoWarn>
+	</PropertyGroup>
+
+	<!-- 2026-09-11: 允许测试程序集访问 internal 成员，用于直接单测灰度判向等纯算法逻辑
+	     （ApplyBrightnessHeadDirectionIfEnabled / BrightnessDirectionStats 均为 internal）。 -->
+	<ItemGroup>
+		<InternalsVisibleTo Include="MainAPP.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+		<PackageReference Include="DataGridExtensions" Version="2.9.1" />
+		<PackageReference Include="HandyControl" Version="3.4.0" />
+		<PackageReference Include="MahApps.Metro.IconPacks" Version="6.2.1" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.24" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.24" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.24">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
+		<PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.28.0" />
+		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
+		<!-- Roslyn 分析器：强制 async void 使用规范、检测 sync-over-async 等 -->
+		<PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.13.61">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+		<PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.11.0.20250507" />
+		<PackageReference Include="Serilog" Version="4.3.0" />
+		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+		<PackageReference Include="Serilog.Sinks.SQLite" Version="6.0.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\CoordinateSystemMapping\CoordinateSystemMapping.csproj" />
+		<ProjectReference Include="..\Extensions\Extensions.csproj" />
+		<ProjectReference Include="..\HikCameraLib\HikScanner\HikScanner.csproj" />
+		<ProjectReference Include="..\JinlongYolo\JinlongYolo.csproj" />
+		<ProjectReference Include="..\LicenseSystem\src\LicenseCore\LicenseCore.csproj" />
+		<ProjectReference Include="..\ScottPlot.WPF\ScottPlot.WPF.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Update="机械手.ico">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<!-- REVIEW(2026-09-04): 发布修复——CUDA 运行时必须随发布携带，否则无 CUDA Toolkit 的部署机 GPU 推理缺依赖。
+	     cuda_runtime_dlls/ 的完整清单见 CudaRuntimeLoader.cs（s_cudaDlls + s_optionalCudaDllPatterns + s_cudnnCompanionFiles）。
+	     重建方式：运行 tools\extract_cuda_minimal.ps1（从 NVIDIA 官方 PyPI 轮子提取，无需 CUDA Toolkit）。
+	     历史坑：早期该目录由手工拷贝生成，漏了 nvrtc/curand/nvJitLink，导致部分机器在卷积节点抛
+	             CUDNN_FE failure 7: GRAPH_EXECUTION_FAILED（cuDNN 回退到「运行时编译引擎」时需要 NVRTC）。
+	     注意：cuDNN 按「文件名」LoadLibrary 加载 nvrtc，而本目录是应用目录下的子目录、不在 Windows DLL
+	           搜索顺序内，因此这些文件必须在 CudaRuntimeLoader 中显式预载，只放进目录是无效的。
+	     模型(best.onnx)属运行时资产：由下方 CopyYoloModel / CopyYoloModelToPublish Target 自动拷贝到
+	     输出与发布目录的 Models\（HomeViewModel 从 BaseDirectory\Models\best.onnx 加载）。
+	     勿用 Content 声明：MainAPP\Models 是 C# 源码目录，与仓库根的 Models\（模型仓库）不是同一个。 -->
+	<ItemGroup>
+		<Content Include="cuda_runtime_dlls\**" Condition="Exists('cuda_runtime_dlls')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+	</ItemGroup>
+
+	<!-- REVIEW(2026-09-04): 模型自动拷贝。
+	     历史坑：best.onnx 此前靠发布后手工拷贝，8-13 的发布包就漏了它；
+	             且该模型（md5 00b0d409）与仓库 Models\ 下其他 onnx 大小相同但内容不同，
+	             曾只存在于即将被清理的旧 publish 目录里，险些丢失——现已归位到仓库根 Models\best.onnx。
+	     源路径默认 $(MSBuildThisFileDirectory)..\Models\best.onnx，可用 -p:YoloModelSourcePath=... 覆盖；
+	     发布时若源文件缺失会直接报错终止（缺模型的发布包不能上产线），确需跳过传 -p:SkipYoloModelCopy=true。 -->
+	<PropertyGroup>
+		<YoloModelSourcePath Condition="'$(YoloModelSourcePath)' == ''">$(MSBuildThisFileDirectory)..\Models\best.onnx</YoloModelSourcePath>
+		<SkipYoloModelCopy Condition="'$(SkipYoloModelCopy)' == ''">false</SkipYoloModelCopy>
+	</PropertyGroup>
+
+	<!-- 开发运行用：拷到常规输出目录（bin\Debug|Release\net8.0-windows\Models\） -->
+	<Target Name="CopyYoloModel" AfterTargets="Build" Condition="'$(SkipYoloModelCopy)' != 'true'">
+		<Copy SourceFiles="$(YoloModelSourcePath)" DestinationFolder="$(OutputPath)Models\"
+		      SkipUnchangedFiles="true" Condition="Exists('$(YoloModelSourcePath)')" />
+		<Warning Text="[模型] 未找到 $(YoloModelSourcePath)，输出目录将缺少 Models\best.onnx"
+		         Condition="!Exists('$(YoloModelSourcePath)')" />
+	</Target>
+
+	<!-- 部署用：拷到发布目录。注意 publish 的文件清单不来自 OutputPath 镜像，
+	     所以这里必须独立于 CopyYoloModel 再拷一次。 -->
+	<Target Name="CopyYoloModelToPublish" AfterTargets="Publish" Condition="'$(SkipYoloModelCopy)' != 'true'">
+		<Copy SourceFiles="$(YoloModelSourcePath)" DestinationFolder="$(PublishDir)Models\"
+		      SkipUnchangedFiles="true" Condition="Exists('$(YoloModelSourcePath)')" />
+		<Error Text="[模型] 未找到 $(YoloModelSourcePath)，发布目录将缺少 Models\best.onnx，不能用于产线部署。确需跳过请传 -p:SkipYoloModelCopy=true"
+		       Condition="!Exists('$(YoloModelSourcePath)')" />
+	</Target>
+
+	<!-- REVIEW(2026-08-06): 发布修复——OnnxRuntime.Gpu 的原生 DLL（onnxruntime.dll / providers_cuda 等）
+	     位于 runtimes\win-x64\native，dotnet publish 默认漏拷，显式补拷到发布目录。 -->
+	<Target Name="CopyOnnxNativeDlls" AfterTargets="Publish">
+		<ItemGroup>
+			<_OnnxNative Include="$(TargetDir)runtimes\win-x64\native\onnxruntime*.dll" />
+		</ItemGroup>
+		<Copy SourceFiles="@(_OnnxNative)" DestinationFolder="$(PublishDir)" Condition="Exists('$(TargetDir)runtimes\win-x64\native')" />
+	</Target>
+
+	<!-- CUDA DLL：运行时按需加载策略
+	     构建时不自动复制，运行时由 CudaRuntimeLoader 从 CUDA Toolkit 或本地目录动态加载。
+	     如需部署到无 CUDA Toolkit 的机器，运行 extract_cuda_minimal.bat 提取到 cuda_runtime_dlls/ 目录。 -->
+	<Target Name="WarnCudaMissing" AfterTargets="Build" Condition="!Exists('$(CUDA_PATH)\bin\cudart64_13.dll') And !Exists('$(MSBuildProjectDirectory)\cuda_runtime_dlls\cudart64_13.dll')">
+		<Message Text="[CUDA] 未找到 CUDA DLL。运行时将自动回退到 OpenVINO/CPU。如需 CUDA 加速，请安装 CUDA Toolkit 13.x 或运行 extract_cuda_minimal.bat" Importance="high" />
+	</Target>
+
+
+
+</Project>

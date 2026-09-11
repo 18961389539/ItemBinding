@@ -1,0 +1,52 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:system="clr-namespace:System;assembly=mscorlib">
+
+    <!--
+        ============================================================
+        Typography Token System
+        ============================================================
+        FontSize: Caption/Micro/Small/Body/Stat/Title/Header/H3/H2/H1/Display
+        FontWeight: Regular/Medium/SemiBold/Bold
+        LineHeight: 紧凑/标准/宽松
+        FontFamily: Default / Mono（等宽，用于数据展示）
+        ============================================================
+    -->
+
+    <!--  ===== 字号常量（11 级） =====  -->
+    <system:Double x:Key="FontSizeCaption">10</system:Double>
+    <system:Double x:Key="FontSizeMicro">11</system:Double>
+    <system:Double x:Key="FontSizeSmall">12</system:Double>
+    <system:Double x:Key="FontSizeBody">13</system:Double>
+    <system:Double x:Key="FontSizeStat">14</system:Double>
+    <system:Double x:Key="FontSizeTitle">16</system:Double>
+    <system:Double x:Key="FontSizeHeader">18</system:Double>
+    <system:Double x:Key="FontSizeH3">20</system:Double>
+    <system:Double x:Key="FontSizeH2">24</system:Double>
+    <system:Double x:Key="FontSizeH1">28</system:Double>
+    <system:Double x:Key="FontSizeDisplay">32</system:Double>
+
+    <!--  ===== 行高（3 档） =====  -->
+    <system:Double x:Key="LineHeightCompact">16</system:Double>
+    <system:Double x:Key="LineHeightNormal">20</system:Double>
+    <system:Double x:Key="LineHeightRelaxed">24</system:Double>
+
+    <!--  ===== FontWeight Token =====  -->
+    <FontWeight x:Key="FontWeightRegular">Regular</FontWeight>
+    <FontWeight x:Key="FontWeightMedium">Medium</FontWeight>
+    <FontWeight x:Key="FontWeightSemiBold">SemiBold</FontWeight>
+    <FontWeight x:Key="FontWeightBold">Bold</FontWeight>
+
+    <!--  ===== FontFamily Token =====  -->
+
+    <!--  默认字体（UI 文本）—— 使用 Windows 系统默认 Segoe UI，确保中文渲染清晰  -->
+    <FontFamily x:Key="FontFamilyDefault">Segoe UI, Microsoft YaHei UI, Microsoft YaHei, PingFang SC, sans-serif</FontFamily>
+
+    <!--  等宽字体（数据/代码/坐标显示）  -->
+    <FontFamily x:Key="FontFamilyMono">Cascadia Code, Consolas, 'JetBrains Mono', monospace</FontFamily>
+
+    <!--  数字字体（计数器/大数字指标，使用等宽保证位数对齐）  -->
+    <FontFamily x:Key="FontFamilyNumeric">Cascadia Code, Consolas, 'JetBrains Mono', monospace</FontFamily>
+
+</ResourceDictionary>

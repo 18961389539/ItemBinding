@@ -1,0 +1,91 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        ============================================================
+        Card Style System（hover 抬升 + Elevation 切换）
+        ============================================================
+        TechCardBorder       — 默认卡片（Elevation1）
+        TechCardHoverBorder  — 可交互卡片（hover 时抬升 Elevation2）
+        TechCardFlatBorder   — 扁平卡片（无阴影）
+        ============================================================
+    -->
+
+    <!--  ===== 默认卡片样式（Elevation1 静态阴影） =====  -->
+    <Style x:Key="TechCardBorder" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource SurfaceCardBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="{StaticResource PaddingCardDefault}" />
+        <Setter Property="Margin" Value="{StaticResource MarginCardBottom}" />
+        <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <TranslateTransform Y="0" />
+            </Setter.Value>
+        </Setter>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect
+                    BlurRadius="8"
+                    Opacity="0.25"
+                    ShadowDepth="0"
+                    Color="#000000" />
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--  ===== 可交互卡片样式（hover 时抬升至 Elevation2） =====  -->
+    <Style x:Key="TechCardHoverBorder" TargetType="Border" BasedOn="{StaticResource TechCardBorder}">
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+                <Setter Property="Effect">
+                    <Setter.Value>
+                        <DropShadowEffect
+                            BlurRadius="16"
+                            Opacity="0.35"
+                            ShadowDepth="2"
+                            Color="#000000" />
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="RenderTransform">
+                    <Setter.Value>
+                        <TranslateTransform Y="-2" />
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!--  ===== 扁平卡片样式（无阴影，用于内嵌层级） =====  -->
+    <Style x:Key="TechCardFlatBorder" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource SurfaceInnerBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource SurfaceCardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="{StaticResource PaddingCardCompact}" />
+        <Setter Property="Margin" Value="0" />
+    </Style>
+
+    <!--  ===== 浅色卡片样式（保留，向后兼容） =====  -->
+    <Style x:Key="CardBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource CardBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource CardBorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="4" />
+        <Setter Property="Padding" Value="15" />
+        <Setter Property="Margin" Value="5" />
+    </Style>
+
+    <!--  ===== 分隔符 =====  -->
+    <Style x:Key="VerticalSeparator" TargetType="Rectangle">
+        <Setter Property="Width" Value="1" />
+        <Setter Property="Height" Value="20" />
+        <Setter Property="Fill" Value="{StaticResource SeparatorBrush}" />
+        <Setter Property="Margin" Value="20,0" />
+    </Style>
+
+</ResourceDictionary>

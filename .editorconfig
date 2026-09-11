@@ -1,0 +1,23 @@
+[*.cs]
+
+# CA1416: 验证平台兼容性
+dotnet_diagnostic.CA1416.severity = none
+
+# VSTHRD200: async 方法应使用 Async 后缀（提示级别，不阻断构建）
+dotnet_diagnostic.VSTHRD200.severity = suggestion
+
+# VSTHRD100: async void 方法应命名为 OnXxxAsync 或为事件处理器（警告级别）
+# 允许 WPF 生命周期事件（OnStartup, OnExit）和事件处理器
+dotnet_diagnostic.VSTHRD100.severity = warning
+
+# VSTHRD101: 避免 async void（警告级别，事件处理器除外）
+dotnet_diagnostic.VSTHRD101.severity = warning
+
+# VSTHRD002: 避免同步等待异步任务（sync-over-async，警告级别）
+dotnet_diagnostic.VSTHRD002.severity = warning
+
+# VSTHRD003: 避免等待外部 Task（警告级别）
+dotnet_diagnostic.VSTHRD003.severity = suggestion
+
+# VSTHRD110: 观察 async 方法的结果（警告级别）
+dotnet_diagnostic.VSTHRD110.severity = warning

@@ -1,0 +1,22 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  ===== ImageViewer 功能性覆盖层画刷 =====  -->
+    <!--  十字准线  -->
+    <SolidColorBrush x:Key="OverlayCrosshairBrush" Color="#00FF00" />
+    <!--  坐标信息遮罩（半透明黑）  -->
+    <SolidColorBrush x:Key="OverlayCoordBackgroundBrush" Color="#AA000000" />
+    <!--  测量信息遮罩（半透明黄）  -->
+    <SolidColorBrush x:Key="OverlayMeasureBackgroundBrush" Color="#AAFFFF00" />
+    <!--  ROI 信息遮罩（半透明绿）  -->
+    <SolidColorBrush x:Key="OverlayRoiBackgroundBrush" Color="#AA00FF00" />
+    <!--  角度信息遮罩（半透明橙）  -->
+    <SolidColorBrush x:Key="OverlayAngleBackgroundBrush" Color="#AAFFA500" />
+    <!--  属性面板遮罩（更不透明的黑）  -->
+    <SolidColorBrush x:Key="OverlayInfoPanelBackgroundBrush" Color="#DD000000" />
+
+    <!--  ===== 加载遮罩 =====  -->
+    <SolidColorBrush x:Key="LoadingOverlayBrush" Color="#80000000" />
+
+</ResourceDictionary>

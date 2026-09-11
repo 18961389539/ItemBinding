@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>CudaVerify</AssemblyName>
+    <RootNamespace>CudaVerify</RootNamespace>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- 免 NuGet：直接引用发布包程序集，规避外部 restore（本工程无任何 PackageReference） -->
+    <RestoreSources></RestoreSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 托管入口：与 MainAPP 发布包同版本的 Microsoft.ML.OnnxRuntime -->
+    <Reference Include="Microsoft.ML.OnnxRuntime">
+      <HintPath>..\MainAPP\bin\Release\net10.0-windows\publish\Microsoft.ML.OnnxRuntime.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ONNX Runtime 原生（CUDA 构建），随验证器分发，保证与 MainAPP 发布包同源 -->
+    <None Include="..\MainAPP\bin\Release\net10.0-windows\publish\onnxruntime.dll" Link="onnxruntime.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\MainAPP\bin\Release\net10.0-windows\publish\onnxruntime_providers_cuda.dll" Link="onnxruntime_providers_cuda.dll" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\MainAPP\bin\Release\net10.0-windows\publish\onnxruntime_providers_shared.dll" Link="onnxruntime_providers_shared.dll" CopyToOutputDirectory="PreserveNewest" />
+
+    <!-- 最小 Conv 探针模型（首层卷积形态与生产分割模型一致） -->
+    <None Include="conv_verify.onnx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- 干净环境核心：随验证器自带整份 cuda_runtime_dlls（模拟发布包子目录形态，
+       目标机无需安装 CUDA Toolkit / cuDNN） -->
+  <ItemGroup>
+    <Content Include="cuda_runtime_dlls\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

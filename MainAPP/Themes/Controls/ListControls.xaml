@@ -1,0 +1,27 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  ===== 深色科技风列表控件命名样式 =====  -->
+    <!--  来源：RecipesManageView.xaml 的 ListBox.ItemContainerStyle 隐式样式  -->
+
+    <!--  ListBoxItem：透明背景 + 选中时青色半透明高亮 + 悬停浅青半透明  -->
+    <!--  REVIEW-FIX(亮色主题): 文字改深色、选中/悬停改浅青  -->
+    <Style x:Key="DarkListBoxItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Margin" Value="2,1" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Style.Triggers>
+            <Trigger Property="IsSelected" Value="True">
+                <Setter Property="Background" Value="#3D00838F" />
+                <Setter Property="Foreground" Value="{StaticResource TechTextPrimaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="#1A00838F" />
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

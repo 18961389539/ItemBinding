@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net8.0-windows</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<UseWPF>true</UseWPF>
+		<!-- NU1701: net8.0-windows 引用 net8.0 项目或反向引用时产生的兼容性警告 -->
+		<NoWarn>NU1701</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
+		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+	</ItemGroup>
+
+	<!-- HikScanner 提供 HikBarcodeResult 类型，供 MainAppTools.DrawBarcodeResults 使用。
+	     PrivateAssets=all 防止 HikScanner 的原生 DLL 透传到 Extensions 的消费者；
+	     MainAPP 已直接引用 HikScanner，不受此设置影响。 -->
+	<ItemGroup>
+		<ProjectReference Include="..\HikCameraLib\HikScanner\HikScanner.csproj" PrivateAssets="all" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "AIAgent": {
+      "command": "C:\\Users\\jinlong\\Code\\ItemBinding\\AIAgent\\bin\\Debug\\net10.0-windows\\AIAgent.exe",
+      "args": ["--stdio"]
+    }
+  }
+}

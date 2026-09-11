@@ -1,0 +1,16 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--  ===== 深色科技风 ScrollBar 命名样式 =====  -->
+    <!--  来源：HomeView / LogView 的隐式样式（统一为带 BasedOn 的版本，保留默认模板）  -->
+    <!--  用法：View 内通常以 <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBarStyle}" /> 隐式应用，  -->
+    <!--  因为 DataGrid / ScrollViewer 内部 ScrollBar 为模板自动生成，无法直接 Style 引用  -->
+
+    <Style x:Key="DarkScrollBarStyle" TargetType="ScrollBar" BasedOn="{StaticResource {x:Type ScrollBar}}">
+        <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource NeonCyanBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+    </Style>
+
+</ResourceDictionary>

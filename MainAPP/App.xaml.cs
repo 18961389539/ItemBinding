@@ -35,6 +35,10 @@ namespace MainAPP
         private readonly CancellationTokenSource _dataCleanupCts = new();
         // RTC(2026-08-06): 配方切换 TCP 服务（上位机指令切换配方，监听 5000 端口）
         private readonly RecipeTcpServerService _recipeTcpServer = new();
+        // 2026-09-11: 相机调试 Web 服务（手机实时看图 + 只读参数，监听 5188 端口）。
+        // 由原 WebLiveView 独立进程的能力移植而来，改为进程内托管以复用 Devices.Scanners 单例，
+        // 避免两个进程争抢同一台 GigE 读码器；使用 HttpListener 而非 Kestrel，零新增框架依赖。
+        private readonly CameraWebHost _cameraWebHost = new();
         // L407b: OnExit 数据清理任务等待超时（秒）
         private const int OnExitDataCleanupWaitSec = 5;
         private const int OnExitDataCleanupFinalWaitSec = 1;
@@ -240,6 +244,11 @@ namespace MainAPP
             // RTC(2026-08-06): 停止配方切换 TCP 服务
             try { _recipeTcpServer.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止配方切换 TCP 服务失败: {ex}"); }
+
+            // 2026-09-11: 停止相机调试 Web 服务。必须在扫码枪关闭之前完成，
+            // 否则可能遗留"主循环暂停 + 软触发"状态阻止进程正常退出。
+            try { _cameraWebHost.Stop(); }
+            catch (Exception ex) { LogService.Instance.Error($"停止相机调试 Web 服务失败: {ex}"); }
 
             // H64: 超时后 Cancel 并等待任务退出（带较短二次等待），再调用 Close()
             try { _scannerInitializeCts?.Cancel(); }
@@ -498,6 +507,17 @@ namespace MainAPP
             catch (Exception ex)
             {
                 LogService.Instance.Error($"启动配方切换 TCP 服务失败: {ex}");
+            }
+
+            // 2026-09-11: 启动相机调试 Web 服务（手机实时看图）。此处仅起监听，
+            // 真正接管相机发生在首个客户端接入时，故可与其他服务并列启动。
+            try
+            {
+                _cameraWebHost.Start();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"启动相机调试 Web 服务失败: {ex}");
             }
         }
 

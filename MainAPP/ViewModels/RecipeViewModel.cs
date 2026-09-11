@@ -426,14 +426,19 @@ namespace MainAPP.ViewModels
         }
 
         /// <summary>
-        /// 配方页激活：暂停主循环 → 等当前帧完成 → 切软触发。
+        /// 配方页激活：暂停主循环 → 等在途推理租约归还 → 切软触发。
         /// 软触发模式下实时显示和"获取图像"都能正常出图。
         /// </summary>
         public async Task ActivateAsync()
         {
             HomeViewModel.PauseLoop();
-            // 等主循环当前帧释放锁（10s 取图超时 + 余量）
-            await Task.Delay(TimeSpan.FromSeconds(12)).ConfigureAwait(false);
+            // 按真实状态等待主循环在途推理结束（原实现为固定 12 秒盲等，正常情况白等 12 秒）。
+            // 12 秒上限覆盖主循环单帧取图超时（10s）+ 余量，仅在异常路径才会真正等满。
+            var drained = await HomeViewModel.WaitForMainLoopDrainAsync(TimeSpan.FromSeconds(12)).ConfigureAwait(false);
+            if (!drained)
+            {
+                LogService.Instance.Warning("配方页激活：等待主循环排空超时（12 秒），仍继续切换软触发");
+            }
             // 主循环已暂停，切到软触发使实时显示和获取图像可用
             try
             {

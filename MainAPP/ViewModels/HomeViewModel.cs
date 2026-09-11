@@ -59,6 +59,12 @@ namespace MainAPP.ViewModels
         public static void PauseLoop() => s_isPaused = true;
         public static void ResumeLoop() => s_isPaused = false;
 
+        /// <summary>
+        /// 主循环当前是否处于暂停状态。供外部组件（配方页、相机 Web 调试宿主）判断
+        /// 暂停是由自己发起还是已由他方持有，避免退出时误恢复对方持有的状态。
+        /// </summary>
+        public static bool IsLoopPaused => s_isPaused;
+
         // L362c: 记录上一次 TryEnsureProcessingReady 的错误消息，避免配方未就绪时重复刷屏日志
         private string? _lastProcessingReadyError;
         // P1-1: 预测器池为 null 时仅记录一次日志，避免每帧刷屏（配置错误已在 CreatePredictorPoolAsync 中通过 NotificationService.Error 提示）
@@ -1029,6 +1035,50 @@ namespace MainAPP.ViewModels
             }
 
             await waitTcs.Task.ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 供非 UI 调用方等待主循环在途推理租约全部归还（按真实状态等待，替代固定时长盲等）。
+        /// 必须与 <see cref="PauseLoop"/> 配对：先 <see cref="PauseLoop"/>，再 await 本方法，最后切换相机触发模式。
+        /// 主视图模型实例不可用或无在途推理时立即返回 true；超时返回 false，调用方应记录告警。
+        /// </summary>
+        /// <param name="timeout">最长等待时间（应覆盖主循环单帧取图超时 + 余量）</param>
+        /// <param name="cancellationToken">取消令牌</param>
+        public static async Task<bool> WaitForMainLoopDrainAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            var viewModel = TryGetCurrentViewModel();
+            if (viewModel is null)
+            {
+                // 设计时或 DI 容器未就绪：无可等待对象，按已排空处理
+                return true;
+            }
+
+            try
+            {
+                await viewModel.WaitForInferenceDrainAsync().WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 从 DI 容器获取当前主视图模型实例（<see cref="App"/> 中注册为单例）。
+        /// 设计时或容器尚未构建时返回 null。
+        /// </summary>
+        private static HomeViewModel? TryGetCurrentViewModel()
+        {
+            try
+            {
+                return App.Services?.GetService<HomeViewModel>();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Warning($"获取主视图模型实例失败: {ex.Message}");
+                return null;
+            }
         }
 
         private void ResetInferenceDrainSignalIfNeeded(int previousCount)

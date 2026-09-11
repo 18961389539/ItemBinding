@@ -6,6 +6,12 @@
 - **第三方代码（不在范围）**：ScottPlot5 / ScottPlot.WPF、HikCameraLib 原生 SDK DLL、ImageViewerControl 上游代码
 - **修复状态**：✅ 全部 13 项 P0 已修复；主要 P1 已修复（见文末"六、修复记录"）；编译 8 项目 0 错误，MainAPP.Tests 489/490（1 项存量失败），JinlongYolo.Tests 178/178
 
+> **后续处置说明（2026-09-11 追加，不改写下方原始结论）**
+> 本报告中的 **`WebLiveView` 相关条目（P0-12、第 34 / 37 行缺陷表、第 242 行编译清单）已随该项目整体删除而失效**。
+> `WebLiveView` 已于 2026-09-11 移除（提交 `ba71f2a`），原因是它自建 `HikScanner` 实例与 MainAPP 争抢同一台
+> GigE 读码器。其"手机实时看图 + 调参"能力已以**进程内 `MainAPP/Services/CameraWebHost.cs`**（HttpListener，
+> 端口 5188）重新实现，复用 `Devices.Scanners` 单例，不再自行连接设备。下方原始条目仅作为历史审计记录保留。
+
 ---
 
 ## 一、总体评价

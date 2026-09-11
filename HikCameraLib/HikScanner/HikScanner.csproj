@@ -41,4 +41,14 @@
     </Content>
   </ItemGroup>
 
+  <!-- 海康 SDK 运行时配置文件（CodeReaderSdkConfig.ini / CommonParameters.ini / log4cxx.properties）
+       必须与原生 DLL 同目录，否则 SDK 初始化会读取失败。同样平铺到输出根目录。 -->
+  <ItemGroup>
+    <Content Include="DLLs\*.ini;DLLs\*.properties">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(FileName)%(Extension)</Link>
+      <Visible>false</Visible>
+    </Content>
+  </ItemGroup>
+
 </Project>

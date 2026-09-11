@@ -17,7 +17,6 @@
 |---|---|
 | `MainAPP/MainAPP.csproj` | ORT 1.24.1 → 1.28.0；WarnCudaMissing 检查 cudart64_13.dll |
 | `JinlongYolo/JinlongYolo.csproj` | OnnxRuntimeVersion 1.24.1 → 1.28.0 |
-| `ConsoleApp.Test/ConsoleApp.Test.csproj` | 3 个 ORT 包 1.24.1 → 1.28.0 |
 | `JinlongYolo.Tests/JinlongYolo.Tests.csproj` | Gpu.Windows 1.24.1 → 1.28.0 |
 | `MainAPP/Services/CudaRuntimeLoader.cs` | s_cudaDlls 后缀 12→13（cufft 11→12、nvJitLink/nvrtc 120_0→130_0）；companion 文件 3→5 项（+tensor_ir +ext）|
 | `MainAPP/tools/extract_cuda_minimal.ps1` | 重写为 CUDA 13 + pip download |

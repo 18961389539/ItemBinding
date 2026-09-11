@@ -22,8 +22,6 @@
   <Folder Name="/tests/">
     <Project Path="MainAPP.Tests/MainAPP.Tests.csproj" />
     <Project Path="JinlongYolo.Tests/JinlongYolo.Tests.csproj" />
-    <Project Path="ConsoleApp.Test/ConsoleApp.Test.csproj" Id="45f90eb8-ee8c-4faf-8248-6fa612894e13" />
-    <Project Path="ConsoleApp10/ConsoleApp10.csproj" Id="605eafc0-3186-4554-9034-44989bb35e40" />
   </Folder>
   <Folder Name="/benchmarks/">
     <Project Path="MainAPP.Benchmarks/MainAPP.Benchmarks.csproj" />

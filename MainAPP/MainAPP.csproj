@@ -83,6 +83,7 @@
 		<ProjectReference Include="..\JinlongYolo\JinlongYolo.csproj" />
 		<ProjectReference Include="..\LicenseSystem\src\LicenseCore\LicenseCore.csproj" />
 		<ProjectReference Include="..\ScottPlot.WPF\ScottPlot.WPF.csproj" />
+		<ProjectReference Include="..\ImageViewerControl\ImageViewerControl.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>

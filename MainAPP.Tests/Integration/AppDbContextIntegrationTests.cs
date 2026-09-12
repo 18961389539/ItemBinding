@@ -32,6 +32,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
 
         Assert.True(await ctx.Database.CanConnectAsync());
     }
@@ -41,6 +44,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
 
         var model = new DbModel
         {
@@ -64,6 +70,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
         var model = new DbModel { Barcode = "FINDME", WorldX = 99 };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();
@@ -80,6 +89,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
         var model = new DbModel { Barcode = "BEFORE", WorldX = 0 };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();
@@ -98,6 +110,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
         var model = new DbModel { Barcode = "DELETE" };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();
@@ -115,6 +130,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
         for (int i = 0; i < 15; i++)
         {
             ctx.BarcodeData.Add(new DbModel
@@ -140,6 +158,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
 
         var exception = await Record.ExceptionAsync(() => ctx.EnsureIndexesAsync());
 
@@ -151,6 +172,9 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
 
         await ctx.EnsureIndexesAsync();
         var exception = await Record.ExceptionAsync(() => ctx.EnsureIndexesAsync());
@@ -165,6 +189,9 @@ public class AppDbContextIntegrationTests : IDisposable
         // EF Core 不会自动将 null 转空字符串，此处验证空字符串能正常持久化
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        await ctx.EnsureTraceColumnsAsync();
+        await ctx.EnsureBrightnessColumnsAsync();
         var model = new DbModel { Barcode = string.Empty };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();

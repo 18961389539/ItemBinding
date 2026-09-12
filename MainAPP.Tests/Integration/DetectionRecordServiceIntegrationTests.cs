@@ -34,6 +34,15 @@ public class DetectionRecordServiceIntegrationTests : IAsyncDisposable
     public DetectionRecordServiceIntegrationTests()
     {
         Directory.CreateDirectory(_tempFolder);
+        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        EnsureDatabaseSchema();
+    }
+
+    private static void EnsureDatabaseSchema()
+    {
+        using var ctx = new MainAPP.Models.AppDbContext();
+        ctx.EnsureTraceColumnsAsync().GetAwaiter().GetResult();
+        ctx.EnsureBrightnessColumnsAsync().GetAwaiter().GetResult();
     }
 
     public async ValueTask DisposeAsync()

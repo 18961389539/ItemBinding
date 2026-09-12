@@ -110,6 +110,19 @@ namespace MainAPP.Models
         public double BrightnessDirectionDeadband { get; set; } = 5.0;
 
         /// <summary>
+        /// 2026-09-13: 头尾特征池级联开关（默认 true）。启用后，掩码回退路径的头尾判定
+        /// 在灰度兜底之前增加"特征池级联"——按固定优先级依次计算几何/结构特征，
+        /// 第一个出死区的特征以"数值大的一侧是头部"定头尾（零定标，见 HeadTailFeaturePool）。
+        /// </summary>
+        public bool HeadTailFeaturePoolEnabled { get; set; } = true;
+
+        /// <summary>
+        /// 特征池相对差死区阈值（默认 0.10）：特征的"正/负半区相对差"绝对值达到该值才判定头尾。
+        /// 相对差 = (P−M)/(P+M) ∈ (-1,1)，天然抗整体光照缩放；轴向偏度特征使用 2× 本值。
+        /// </summary>
+        public double HeadTailFeatureDeadband { get; set; } = 0.10;
+
+        /// <summary>
         /// 是否启用"掩码内对比度拉伸"（默认 true）：灰度判向前，把掩码内灰度的
         /// [<see cref="BrightnessStretchLowPercentile"/>, <see cref="BrightnessStretchHighPercentile"/>]
         /// 分位窗口线性映射到 [0,255]（超界截断），再统计两侧平均值与差值。

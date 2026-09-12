@@ -161,6 +161,13 @@ namespace MainAPP.Models
         public double? BrightnessDiff { get; set; }
 
         /// <summary>
+        /// 头尾特征池判定轨迹（2026-09-13，JSON）：级联来源特征 + 各候选特征的有符号值/
+        /// 死区阈值/是否 decisive。诊断用途——验证特征池在现网产品的区分度与"数值大=头"约定一致性。
+        /// null = 特征池未运行（开关关闭/无图像/掩码退化）。
+        /// </summary>
+        public string? HeadFeatures { get; set; }
+
+        /// <summary>
         /// 检测时使用的配方名（2026-09-12 追溯补列）。null = 历史数据或配方未知。
         /// 有了它才能回答「某个配方下的合格率/耗时」这类追溯问题。
         /// </summary>

@@ -442,6 +442,9 @@ public sealed class DetectionRecordService
             bool hasBarcode = !string.IsNullOrEmpty(barcode)
                               && !string.Equals(barcode, "noread", StringComparison.OrdinalIgnoreCase);
 
+            // 2026-09-13: 特征池判定结果（声明在方法级——DbModel 落库在 if 块外引用）
+            HeadTailPoolDecision? poolDecision = null;
+
             if (useMaskAnglePath)
             {
                 // REVIEW-FIX(需求 2026-08-05): 未启用角度检测时，直接用分割掩码最小外接旋转矩形主轴角度
@@ -492,8 +495,27 @@ public sealed class DetectionRecordService
 
                 double longAxisPx = isResize ? maskMinAreaRect.Width * (double)resizeWidth : maskMinAreaRect.Width;
 
+                // 2026-09-13: 特征池头尾判定——"数值大的一侧是头部"零定标级联。
+                // 顺序：二维码位置（QR 真值，99.9% 有码）→ 特征池（几何→结构，见 HeadTailFeaturePool）→ 灰度（兼容回退）。
+                // 码位置三用：变体分流（codePresent）/光度特征码区剔除/（有码帧）头尾真值。
+                if (Models.Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled)
+                {
+                    var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
+                    poolDecision = HeadTailFeaturePool.Evaluate(
+                        fallbackAngle, angleSourceImage, edgeResult,
+                        maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
+                        longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
+                        Models.Settings.Instance.Algorithm.HeadTailFeatureDeadband);
+                    if (poolDecision is { Decisive: true })
+                    {
+                        LogService.Instance.Debug(
+                            $"[特征池判向] {poolDecision.SourceFeature} 定头尾: 角度 {fallbackAngle:F1}°→{poolDecision.Angle:F1}°（翻转={poolDecision.Flipped}）");
+                    }
+                }
+
                 modelAngle = TryApplyBarcodeHeadDirection(
                                   fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx)
+                              ?? (poolDecision is { Decisive: true } ? (double?)poolDecision.Angle : null)
                               ?? brightnessAngle;
                 // 头尾翻转标记：与实发角完全同源（二维码优先 → 灰度兜底），供 UI 箭头复现朝向
                 headFlipped = IsHeadOppositeDegrees(modelAngle.Value, fallbackAngle);
@@ -531,6 +553,8 @@ public sealed class DetectionRecordService
                 BrightMean = brightnessStats?.MeanPlus,
                 DarkMean = brightnessStats?.MeanMinus,
                 BrightnessDiff = brightnessStats?.Diff,
+                // 2026-09-13: 头尾特征池判定轨迹（JSON），诊断特征池在现网产品的区分度与"大=头"约定一致性。
+                HeadFeatures = HeadTailFeaturePool.SerializeTrace(poolDecision),
                 // 2026-09-12: 追溯列——记录本帧检测时生效的配方名，使「某配方的合格率/耗时」
                 // 这类问题可被回答。取当前配方名，与界面/TCP 切配方同源（RecipesManage 单例）。
                 RecipeName = RecipesManage.Instance.CurrentRecipe?.Name,

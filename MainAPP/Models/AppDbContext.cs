@@ -172,6 +172,10 @@ namespace MainAPP.Models
             {
                 await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN Station TEXT NULL", cancellationToken).ConfigureAwait(false);
             }
+            if (!cols.Contains("HeadFeatures"))
+            {
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN HeadFeatures TEXT NULL", cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 }

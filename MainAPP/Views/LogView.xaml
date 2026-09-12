@@ -793,7 +793,7 @@
                                             VerticalAlignment="Center"
                                             Foreground="{Binding Color}"
                                             HighlightText="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Text="{Binding Message}"
+                                            PlainText="{Binding Message}"
                                             TextWrapping="Wrap" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -808,7 +808,7 @@
                                             FontFamily="Consolas"
                                             Foreground="{StaticResource StatusErrorBrush}"
                                             HighlightText="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                            Text="{Binding FormattedException}"
+                                            PlainText="{Binding FormattedException}"
                                             TextWrapping="Wrap" />
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -963,7 +963,7 @@
                                     Foreground="{StaticResource TechTextSecondaryBrush}"
                                     HighlightText="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=UserControl}}"
                                     LineHeight="18"
-                                    Text="{Binding SelectedLog.Message}"
+                                    PlainText="{Binding SelectedLog.Message}"
                                     TextWrapping="Wrap" />
                             </Border>
                             <TextBlock Style="{StaticResource TechMetricLabel}" Text="异常:" />
@@ -979,7 +979,7 @@
                                     FontSize="{StaticResource FontSizeSmall}"
                                     Foreground="{StaticResource StatusErrorBrush}"
                                     HighlightText="{Binding DataContext.SearchText, RelativeSource={RelativeSource AncestorType=UserControl}}"
-                                    Text="{Binding SelectedLog.FormattedException, TargetNullValue=无}"
+                                    PlainText="{Binding SelectedLog.FormattedException, TargetNullValue=无}"
                                     TextWrapping="Wrap" />
                             </Border>
                         </StackPanel>

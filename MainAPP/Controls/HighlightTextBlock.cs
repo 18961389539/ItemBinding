@@ -6,9 +6,13 @@ using System.Windows.Media;
 namespace MainAPP.Controls
 {
     /// <summary>
-    /// 支持关键字行内高亮的 TextBlock：把 Text 中所有与 HighlightText 匹配的片段
-    /// （大小写不敏感）以琥珀色背景 + 深色文字渲染，与日志页深色主题形成强对比。
-    /// HighlightText 为空或不匹配时按普通文本渲染。用于日志内容/异常列的搜索词高亮。
+    /// 支持关键字行内高亮的 TextBlock：把 <see cref="PlainText"/> 中所有与 <see cref="HighlightText"/>
+    /// 匹配的片段（大小写不敏感）以琥珀色背景 + 深色文字渲染。
+    ///
+    /// ★ 实现约束（2026-09-12 修复）：高亮文本必须绑定到自有的 <see cref="PlainText"/> 依赖属性，
+    /// **禁止绑定继承的 Text 属性**。原因：在 Text 的属性变更回调里修改 Inlines 会与 TextBlock
+    /// 内部的 Text-DP 同步互相干扰（回调里写 Inlines → 内部回写 Text 值），叠加 DataGrid 行回收
+    /// 虚拟化后绑定/文本状态被破坏，表现为内容列全空白。PlainText 不触碰 Text 绑定，无此冲突。
     /// </summary>
     public class HighlightTextBlock : TextBlock
     {
@@ -22,12 +26,17 @@ namespace MainAPP.Controls
             RebuildInlines();
         }
 
-        static HighlightTextBlock()
+        public static readonly DependencyProperty PlainTextProperty = DependencyProperty.Register(
+            nameof(PlainText),
+            typeof(string),
+            typeof(HighlightTextBlock),
+            new PropertyMetadata(string.Empty, OnTextPropertyChanged));
+
+        /// <summary>要显示的完整文本（替代绑定继承的 Text——见类注释的实现约束）。</summary>
+        public string PlainText
         {
-            // 监听继承的 Text 属性：文本变化时重建 Inlines
-            TextProperty.OverrideMetadata(
-                typeof(HighlightTextBlock),
-                new FrameworkPropertyMetadata(string.Empty, OnTextPropertyChanged));
+            get => (string)GetValue(PlainTextProperty);
+            set => SetValue(PlainTextProperty, value);
         }
 
         public static readonly DependencyProperty HighlightTextProperty = DependencyProperty.Register(
@@ -57,7 +66,7 @@ namespace MainAPP.Controls
 
         private void RebuildInlines()
         {
-            // 修改 Inlines 会反写 Text 属性，可能再次触发本方法——用守卫打断递归
+            // 修改 Inlines 会反写内部文本状态，可能再次触发本方法——用守卫打断递归
             if (_isRebuilding)
             {
                 return;
@@ -67,7 +76,7 @@ namespace MainAPP.Controls
             try
             {
                 Inlines.Clear();
-                var text = Text ?? string.Empty;
+                var text = PlainText ?? string.Empty;
                 if (text.Length == 0)
                 {
                     return;

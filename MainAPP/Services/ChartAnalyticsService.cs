@@ -141,6 +141,109 @@ namespace MainAPP.Services
 
             return new AnomalySummary(scoreOutliers, speedOutliers, distanceOutliers, data.Count);
         }
+
+        /// <summary>
+        /// 判定数据集是否包含 Result 判定列数据（追溯列 2026-09-12 起才有，旧数据为空）。
+        /// </summary>
+        public static bool HasResultData(IReadOnlyList<DbModel> data)
+            => data.Any(m => !string.IsNullOrWhiteSpace(m.Result));
+
+        /// <summary>
+        /// 计算 NG 率摘要：仅统计有 Result 判定的记录（OK/NG，忽略大小写）。
+        /// </summary>
+        public static NgSummary ComputeNgSummary(IReadOnlyList<DbModel> data)
+        {
+            var withResult = data.Where(m => !string.IsNullOrWhiteSpace(m.Result)).ToList();
+            if (withResult.Count == 0)
+                return NgSummary.Empty;
+
+            int ng = withResult.Count(m => !string.Equals(m.Result, "OK", StringComparison.OrdinalIgnoreCase));
+            return new NgSummary(withResult.Count - ng, ng, withResult.Count);
+        }
+
+        /// <summary>
+        /// 按小时聚合 NG 率（仅统计有 Result 判定的记录），按小时升序返回。
+        /// </summary>
+        public static IReadOnlyList<NgRatePoint> ComputeNgRateByHour(IReadOnlyList<DbModel> data)
+        {
+            var withResult = data.Where(m => !string.IsNullOrWhiteSpace(m.Result)).ToList();
+            if (withResult.Count == 0)
+                return Array.Empty<NgRatePoint>();
+
+            return withResult
+                .GroupBy(m => new DateTime(m.DetectTime.Year, m.DetectTime.Month, m.DetectTime.Day, m.DetectTime.Hour, 0, 0))
+                .OrderBy(g => g.Key)
+                .Select(g => new NgRatePoint(
+                    g.Key,
+                    g.Count(),
+                    g.Count(m => !string.Equals(m.Result, "OK", StringComparison.OrdinalIgnoreCase))))
+                .ToList();
+        }
+
+        /// <summary>
+        /// 检测异常点并返回明细记录（Score/Speed/Distance 三维度，与 SummarizeAnomalies 同口径）。
+        /// 按最大 |Z| 降序，最多 maxRecords 条——供"质量复盘"标签页的异常明细表使用。
+        /// </summary>
+        public static IReadOnlyList<OutlierRecord> DetectOutlierRecords(IReadOnlyList<DbModel> data, int maxRecords = 200)
+        {
+            if (data.Count < 3)
+                return Array.Empty<OutlierRecord>();
+
+            var scores = data.Select(m => (double)m.Score).ToArray();
+            var speeds = data.Select(m => (double)m.Speed).ToArray();
+            var distances = data.Select(m =>
+                Math.Sqrt(Math.Pow(m.ImageBarcodeX - m.ImageX, 2) + Math.Pow(m.ImageBarcodeY - m.ImageY, 2))).ToArray();
+
+            var scoreStats = ComputeStats(scores);
+            var speedStats = ComputeStats(speeds);
+            var distanceStats = ComputeStats(distances);
+
+            var result = new List<OutlierRecord>();
+            for (int i = 0; i < data.Count; i++)
+            {
+                var reasons = new List<string>();
+                double maxAbsZ = 0;
+
+                if (scoreStats.StdDev > double.Epsilon)
+                {
+                    double z = (scores[i] - scoreStats.Mean) / scoreStats.StdDev;
+                    if (Math.Abs(z) > OutlierZScoreThreshold)
+                    {
+                        reasons.Add($"Score Z={z:+0.0;-0.0}");
+                        maxAbsZ = Math.Max(maxAbsZ, Math.Abs(z));
+                    }
+                }
+                if (speedStats.StdDev > double.Epsilon)
+                {
+                    double z = (speeds[i] - speedStats.Mean) / speedStats.StdDev;
+                    if (Math.Abs(z) > OutlierZScoreThreshold)
+                    {
+                        reasons.Add($"Interval Z={z:+0.0;-0.0}");
+                        maxAbsZ = Math.Max(maxAbsZ, Math.Abs(z));
+                    }
+                }
+                if (distanceStats.StdDev > double.Epsilon)
+                {
+                    double z = (distances[i] - distanceStats.Mean) / distanceStats.StdDev;
+                    if (Math.Abs(z) > OutlierZScoreThreshold)
+                    {
+                        reasons.Add($"Distance Z={z:+0.0;-0.0}");
+                        maxAbsZ = Math.Max(maxAbsZ, Math.Abs(z));
+                    }
+                }
+
+                if (reasons.Count > 0)
+                {
+                    result.Add(new OutlierRecord(
+                        data[i], data[i].DetectTime,
+                        string.IsNullOrWhiteSpace(data[i].Barcode) ? "-" : data[i].Barcode,
+                        scores[i], speeds[i], distances[i],
+                        string.Join("; ", reasons), maxAbsZ));
+                }
+            }
+
+            return result.OrderByDescending(o => o.MaxAbsZ).Take(maxRecords).ToList();
+        }
     }
 
     /// <summary>
@@ -165,4 +268,29 @@ namespace MainAPP.Services
         public int TotalOutliers => ScoreOutliers + SpeedOutliers + DistanceOutliers;
         public bool HasAnomalies => TotalOutliers > 0;
     }
+
+    /// <summary>单小时 NG 率聚合点（仅统计有 Result 判定的记录）。</summary>
+    public sealed record NgRatePoint(DateTime HourStart, int TotalCount, int NgCount)
+    {
+        public double NgRatePercent => TotalCount > 0 ? NgCount * 100.0 / TotalCount : 0;
+    }
+
+    /// <summary>NG 率摘要。Empty 的 HasResultData=false 表示数据集无判定列数据。</summary>
+    public sealed record NgSummary(int OkCount, int NgCount, int TotalCount)
+    {
+        public static NgSummary Empty { get; } = new(0, 0, 0);
+        public bool HasResultData => TotalCount > 0;
+        public double NgRatePercent => TotalCount > 0 ? NgCount * 100.0 / TotalCount : 0;
+    }
+
+    /// <summary>异常点明细记录（三维度的原因标签 + 最大 |Z| 排序键）。</summary>
+    public sealed record OutlierRecord(
+        DbModel Record,
+        DateTime Time,
+        string Barcode,
+        double Score,
+        double Speed,
+        double Distance,
+        string Reason,
+        double MaxAbsZ);
 }

@@ -33,6 +33,8 @@ namespace MainAPP.Views
             _viewModel.GetExportItemsCallback = GetExportItems;
             _viewModel.DataChanged += ViewModel_DataChanged;
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
+            // 2026-09-12 调试闭环改进：问 AI 助手（复制摘要 + 跳转 AI 标签页）
+            _viewModel.AiAssistRequested += ViewModel_AiAssistRequested;
             DataContext = _viewModel;
 
             Loaded += ChartsView_Loaded;
@@ -125,6 +127,9 @@ namespace MainAPP.Views
                 case 3:
                     RenderScatterCharts();
                     break;
+                case 4:
+                    RenderQualityCharts();
+                    break;
             }
         }
 
@@ -134,6 +139,7 @@ namespace MainAPP.Views
             RenderTab(1);
             RenderTab(2);
             RenderTab(3);
+            RenderTab(4);
         }
 
         private void RenderTrendCharts()
@@ -186,6 +192,13 @@ namespace MainAPP.Views
             DistanceScoreScatterPlot.Refresh();
         }
 
+        // 2026-09-12 调试闭环改进：质量复盘标签页（NG 率小时趋势）
+        private void RenderQualityCharts()
+        {
+            ChartRenderingService.RenderNgRateOverTime(NgRatePlot.Plot, _viewModel.DbModels);
+            NgRatePlot.Refresh();
+        }
+
         // 供 ViewModel 导出回调使用：返回 (WpfPlot, 文件名) 列表
         private IEnumerable<(WpfPlot Plot, string FileName)> GetExportItems()
         {
@@ -207,6 +220,7 @@ namespace MainAPP.Views
                 // M136: 补充之前缺失的两个图表导出
                 (BarcodePositionScoreHeatmapPlot, "BarcodePositionScoreHeatmap.svg"),
                 (DistanceScoreScatterPlot, "DistanceScoreScatter.svg"),
+                (NgRatePlot, "NgRateTrend.svg"),
             };
         }
 
@@ -218,7 +232,18 @@ namespace MainAPP.Views
             _isDisposed = true;
             _viewModel.DataChanged -= ViewModel_DataChanged;
             _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+            _viewModel.AiAssistRequested -= ViewModel_AiAssistRequested;
             _renderedTabIndexes.Clear();
+        }
+
+        // 问 AI 助手：摘要已在 VM 复制到剪贴板，此处切换主窗口 AI 标签页
+        private void ViewModel_AiAssistRequested()
+        {
+            if (System.Windows.Application.Current?.MainWindow is MainWindow mainWindow)
+            {
+                mainWindow.ActivateAiChatTab();
+                NotificationService.Info("分析摘要已复制到剪贴板，可在 AI 助手中粘贴提问。");
+            }
         }
     }
 }

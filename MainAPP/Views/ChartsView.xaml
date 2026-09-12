@@ -132,6 +132,44 @@
                     Content="Query"
                     Style="{StaticResource ButtonPrimary}"
                     ToolTip="Reload chart data for the selected time range" />
+
+                <!--  2026-09-12 调试闭环改进：配方/工位/结果切片（对当前数据集即时生效）  -->
+                <Rectangle
+                    Width="1"
+                    Height="20"
+                    Margin="12,0,2,0"
+                    VerticalAlignment="Center"
+                    Fill="{StaticResource TechCardBorderBrush}" />
+                <TextBlock
+                    Margin="8,0,5,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource TechTextSecondaryBrush}"
+                    Text="配方:" />
+                <ComboBox
+                    Width="130"
+                    ItemsSource="{Binding RecipeOptions}"
+                    SelectedItem="{Binding SelectedRecipe}"
+                    ToolTip="按配方切片，所有图表与统计即时联动" />
+                <TextBlock
+                    Margin="8,0,5,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource TechTextSecondaryBrush}"
+                    Text="工位:" />
+                <ComboBox
+                    Width="130"
+                    ItemsSource="{Binding StationOptions}"
+                    SelectedItem="{Binding SelectedStation}"
+                    ToolTip="按工位（机器序列号）切片" />
+                <TextBlock
+                    Margin="8,0,5,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource TechTextSecondaryBrush}"
+                    Text="结果:" />
+                <ComboBox
+                    Width="90"
+                    ItemsSource="{Binding ResultOptions}"
+                    SelectedItem="{Binding SelectedResult}"
+                    ToolTip="只看 OK 或 NG 记录" />
             </StackPanel>
         </Border>
         <!--  智能分析摘要 Banner：深色霓虹边框 + 异常状态切换  -->
@@ -502,6 +540,121 @@
                         </Border>
                     </Grid>
                 </ScrollViewer>
+            </TabItem>
+            <!--  质量复盘标签页（2026-09-12 调试闭环改进）：NG 率趋势 + 异常点明细 + 问 AI  -->
+            <TabItem Header="质量复盘">
+                <Grid Margin="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!--  摘要与操作条  -->
+                    <Border
+                        Grid.Row="0"
+                        Margin="0,0,0,8"
+                        Padding="10,6"
+                        Background="{StaticResource TechInnerBgBrush}"
+                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="{StaticResource FontSizeBody}"
+                                Foreground="{StaticResource TechTextSecondaryBrush}"
+                                Text="{Binding NgRateSummaryText}"
+                                TextTrimming="CharacterEllipsis" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                                <Button
+                                    Margin="0,0,8,0"
+                                    Padding="10,4"
+                                    Command="{Binding CopyOutliersCommand}"
+                                    Content="复制异常明细"
+                                    Style="{StaticResource ButtonPrimary}"
+                                    ToolTip="复制切片条件、NG 率与全部异常点到剪贴板" />
+                                <Button
+                                    Padding="10,4"
+                                    Command="{Binding AskAiCommand}"
+                                    Content="问 AI 助手"
+                                    Style="{StaticResource NeonButtonStyle}"
+                                    ToolTip="复制分析摘要并跳转 AI 助手标签页" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*" />
+                            <ColumnDefinition Width="2*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!--  NG 率小时趋势  -->
+                        <Border Grid.Column="0" Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="NG Rate by Hour" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Hourly NG rate (%) — only records with Result judgement are counted. Orange dashed line in other charts = OK threshold." />
+                                <ScottPlot:WpfPlot
+                                    x:Name="NgRatePlot"
+                                    Height="460"
+                                    Background="White" />
+                            </StackPanel>
+                        </Border>
+
+                        <!--  异常点明细  -->
+                        <Border
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource TechCardBorder}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource TechCardTitleText}" Text="Outlier Records" />
+                                <TextBlock Style="{StaticResource CardDescriptionText}" Text="Z-Score &gt; 2.5 异常点明细，按偏离度降序（最多 200 条）。" />
+                                <DataGrid
+                                    AutoGenerateColumns="False"
+                                    CanUserAddRows="False"
+                                    CanUserDeleteRows="False"
+                                    FontSize="11"
+                                    HeadersVisibility="Column"
+                                    IsReadOnly="True"
+                                    ItemsSource="{Binding OutlierRecords}"
+                                    MaxHeight="520"
+                                    SelectionMode="Single"
+                                    SelectionUnit="FullRow">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn
+                                            Width="110"
+                                            Binding="{Binding Time, StringFormat={}{0:MM-dd HH:mm:ss}}"
+                                            Header="时间" />
+                                        <DataGridTextColumn
+                                            Width="*"
+                                            Binding="{Binding Barcode}"
+                                            Header="条码" />
+                                        <DataGridTextColumn
+                                            Width="56"
+                                            Binding="{Binding Score, StringFormat={}{0:0.000}}"
+                                            Header="Score" />
+                                        <DataGridTextColumn
+                                            Width="64"
+                                            Binding="{Binding Speed, StringFormat={}{0:0}}"
+                                            Header="间隔ms" />
+                                        <DataGridTextColumn
+                                            Width="64"
+                                            Binding="{Binding Distance, StringFormat={}{0:0.0}}"
+                                            Header="偏移px" />
+                                        <DataGridTextColumn
+                                            Width="160"
+                                            Binding="{Binding Reason}"
+                                            Header="异常原因" />
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
             </TabItem>
         </TabControl>
 

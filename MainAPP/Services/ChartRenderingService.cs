@@ -113,6 +113,57 @@ namespace MainAPP.Services
             plot.Axes.SetLimitsY(0, SafeMaxYScale(scores.DefaultIfEmpty(0).Max()));
 
             AddTrendAnalytics(plot, dates, scores);
+            AddOkThresholdLine(plot);
+
+            ApplyTechChartTheme(plot);
+            plot.Axes.Bottom.TickLabelStyle.Rotation = 45;
+        }
+
+        /// <summary>
+        /// 叠加 OK/NG 判定阈值线（2026-09-12 调试闭环改进）：
+        /// ResultOkScorePercent 为百分比口径，Score 列为 0~1 量纲，先 /100 再画线。
+        /// </summary>
+        private static void AddOkThresholdLine(Plot plot)
+        {
+            double threshold = Settings.Instance.Algorithm.ResultOkScorePercent / 100.0;
+            var line = plot.Add.HorizontalLine(threshold);
+            line.Color = ScottPlot.Color.FromHex("#D55E00");
+            line.LineWidth = 2;
+            line.LinePattern = LinePattern.Dashed;
+            line.LegendText = $"OK threshold {threshold:0.00}";
+        }
+
+        /// <summary>
+        /// NG 率小时趋势（2026-09-12 调试闭环改进）：按小时统计 NG 占比（%）。
+        /// 仅统计有 Result 判定的记录；数据集无判定列时显示空状态标题。
+        /// </summary>
+        public static void RenderNgRateOverTime(Plot plot, IEnumerable<DbModel> data)
+        {
+            var points = ChartAnalyticsService.ComputeNgRateByHour(data.ToList());
+            plot.Clear();
+
+            plot.Title("NG Rate by Hour (%)", size: 16);
+            plot.XLabel("Hour", size: 13);
+            plot.YLabel("NG Rate (%)", size: 13);
+
+            if (points.Count == 0)
+            {
+                ApplyTechChartTheme(plot);
+                return;
+            }
+
+            var xs = points.Select(p => p.HourStart.ToOADate()).ToArray();
+            var ys = points.Select(p => p.NgRatePercent).ToArray();
+            var scatter = plot.Add.Scatter(xs, ys);
+            scatter.LineWidth = 2;
+            scatter.LineColor = ScottPlot.Color.FromHex(TechChartPalette[2]); // Orange
+            scatter.MarkerSize = 7;
+            scatter.MarkerColor = ScottPlot.Color.FromHex("#D55E00");
+            scatter.MarkerShape = MarkerShape.FilledCircle;
+
+            plot.Axes.AutoScale();
+            // Y 下限固定 0，上限留 20% 余量（至少 10%，避免全 0 时无刻度）
+            plot.Axes.SetLimitsY(0, Math.Max(10, ys.Max() * 1.2));
 
             ApplyTechChartTheme(plot);
             plot.Axes.Bottom.TickLabelStyle.Rotation = 45;
@@ -222,6 +273,7 @@ namespace MainAPP.Services
             plot.Axes.AutoScale();
 
             AddHistogramAnalytics(plot, scores);
+            AddOkThresholdLine(plot);
 
             ApplyTechChartTheme(plot);
             plot.Axes.Bottom.TickLabelStyle.Rotation = 45;

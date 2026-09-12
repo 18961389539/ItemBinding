@@ -6,6 +6,7 @@ using Microsoft.Win32;
 using ScottPlot.WPF;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -39,10 +40,20 @@ namespace MainAPP.ViewModels
         private int _recommendedTabIndex;
         private string _anomalySummaryText = "No anomalies";
         private bool _hasAnomalies;
+        // 2026-09-12 调试闭环改进：切片筛选 / NG 率摘要 / 异常点明细
+        private List<DbModel> _filteredModels = [];
+        private string? _selectedRecipe;
+        private string? _selectedStation;
+        private string? _selectedResult;
+        private string _ngRateSummaryText = "-";
+        private bool _hasOutliers;
+        private ObservableCollection<OutlierRowVm> _outlierRecords = new();
 
         public ChartsViewModel(IEnumerable<DbModel> initialData)
         {
             _dbModels = initialData?.ToList() ?? new List<DbModel>();
+            _filteredModels = _dbModels;
+            RefreshSliceOptions();
 
             QueryCommand = new AsyncRelayCommand(LoadDataAsync, () => !IsLoading);
             TodayFilterCommand = new AsyncRelayCommand(TodayFilterAsync, () => !IsLoading);
@@ -50,15 +61,88 @@ namespace MainAPP.ViewModels
             Last30DaysFilterCommand = new AsyncRelayCommand(Last30DaysFilterAsync, () => !IsLoading);
             ClearFilterCommand = new AsyncRelayCommand(ClearFilterAsync, () => !IsLoading);
             ExportImagesCommand = new AsyncRelayCommand(ExportImagesAsync, () => !IsExporting);
+            CopyOutliersCommand = new RelayCommand(CopyOutliers, () => HasOutliers);
+            AskAiCommand = new RelayCommand(AskAi, () => HasOutliers);
 
             UpdateStatus();
             RunAnalytics();
         }
 
         /// <summary>
-        /// 当前已加载的数据集合（只读视图），供 View 渲染图表使用。
+        /// 当前用于渲染/统计的数据集合（只读视图），供 View 渲染图表使用。
+        /// 2026-09-12: 语义变更为"切片筛选后"的集合——配方/工位/结果筛选即时生效于所有图表。
         /// </summary>
-        public IReadOnlyList<DbModel> DbModels => _dbModels;
+        public IReadOnlyList<DbModel> DbModels => _filteredModels;
+
+        /// <summary>切片前的完整数据集合（切片选项的数据源）。</summary>
+        public IReadOnlyList<DbModel> AllModels => _dbModels;
+
+        /// <summary>配方切片选项（数据集内 distinct，"全部" 表示不过滤）。</summary>
+        public ObservableCollection<string> RecipeOptions { get; } = new();
+
+        /// <summary>工位切片选项（数据集内 distinct，"全部" 表示不过滤）。</summary>
+        public ObservableCollection<string> StationOptions { get; } = new();
+
+        /// <summary>结果切片选项。</summary>
+        public List<string> ResultOptions { get; } = ["全部", "OK", "NG"];
+
+        /// <summary>当前配方切片（"全部" = 不过滤）。</summary>
+        public string? SelectedRecipe
+        {
+            get => _selectedRecipe;
+            set { if (SetProperty(ref _selectedRecipe, value)) ApplySlice(); }
+        }
+
+        /// <summary>当前工位切片（"全部" = 不过滤）。</summary>
+        public string? SelectedStation
+        {
+            get => _selectedStation;
+            set { if (SetProperty(ref _selectedStation, value)) ApplySlice(); }
+        }
+
+        /// <summary>当前结果切片（"全部" = 不过滤）。</summary>
+        public string? SelectedResult
+        {
+            get => _selectedResult;
+            set { if (SetProperty(ref _selectedResult, value)) ApplySlice(); }
+        }
+
+        /// <summary>NG 率摘要文本（无判定列数据时给出明确说明）。</summary>
+        public string NgRateSummaryText
+        {
+            get => _ngRateSummaryText;
+            private set => SetProperty(ref _ngRateSummaryText, value);
+        }
+
+        /// <summary>异常点明细集合（Z-Score > 2.5，按偏离度降序，最多 200 条）。</summary>
+        public ObservableCollection<OutlierRowVm> OutlierRecords
+        {
+            get => _outlierRecords;
+            private set => SetProperty(ref _outlierRecords, value);
+        }
+
+        /// <summary>是否存在异常点明细（控制复制/问 AI 按钮可用性）。</summary>
+        public bool HasOutliers
+        {
+            get => _hasOutliers;
+            private set
+            {
+                if (SetProperty(ref _hasOutliers, value))
+                {
+                    CopyOutliersCommand.NotifyCanExecuteChanged();
+                    AskAiCommand.NotifyCanExecuteChanged();
+                }
+            }
+        }
+
+        /// <summary>请求跳转到 AI 助手标签页（View 订阅：复制摘要 + 切换主窗口标签）。</summary>
+        public event Action? AiAssistRequested;
+
+        /// <summary>复制异常点明细到剪贴板（含切片条件与 NG 率上下文）。</summary>
+        public IRelayCommand CopyOutliersCommand { get; }
+
+        /// <summary>复制分析摘要到剪贴板并请求跳转 AI 助手标签页。</summary>
+        public IRelayCommand AskAiCommand { get; }
 
         /// <summary>
         /// 起始日期（包含），null 表示不限制下限
@@ -229,8 +313,10 @@ namespace MainAPP.ViewModels
                 }
 
                 _dbModels = items ?? new List<DbModel>();
-                UpdateStatus();
-                RunAnalytics();
+                _filteredModels = _dbModels;
+                RefreshSliceOptions();
+                // ApplySlice 内部完成统计/分析刷新；此处不重复触发 DataChanged（下方统一触发）
+                ApplySlice(notifyView: false);
                 // 通知 View 清除已渲染缓存并重绘当前标签页
                 DataChanged?.Invoke();
             }
@@ -340,7 +426,8 @@ namespace MainAPP.ViewModels
         // 根据当前数据集合更新状态栏统计信息
         private void UpdateStatus()
         {
-            if (_dbModels.Count == 0)
+            // 2026-09-12: 统计口径改为切片筛选后的集合（与图表一致）
+            if (_filteredModels.Count == 0)
             {
                 RecordCount = 0;
                 TimeRangeText = "-";
@@ -349,14 +436,14 @@ namespace MainAPP.ViewModels
                 return;
             }
 
-            RecordCount = _dbModels.Count;
-            var minTime = _dbModels.Min(r => r.DetectTime);
-            var maxTime = _dbModels.Max(r => r.DetectTime);
+            RecordCount = _filteredModels.Count;
+            var minTime = _filteredModels.Min(r => r.DetectTime);
+            var maxTime = _filteredModels.Max(r => r.DetectTime);
             // M120: 时间范围显示转换为本地时间
             TimeRangeText = $"{minTime:yyyy-MM-dd HH:mm:ss}  ~  {maxTime:yyyy-MM-dd HH:mm:ss}";
-            AvgScoreText = $"Barcode Score:{Math.Round(_dbModels.Average(p => p.BarcodeScore), 3)},AI Score:{Math.Round(_dbModels.Average(p => p.Score), 3)}";
+            AvgScoreText = $"Barcode Score:{Math.Round(_filteredModels.Average(p => p.BarcodeScore), 3)},AI Score:{Math.Round(_filteredModels.Average(p => p.Score), 3)}";
             // P0-3: Speed 字段实际语义为"编码器报文间隔（ms）"而非"速度"，与传送带速度成反比
-            AvgSpeedText = $"Interval:{Math.Round(_dbModels.Average(p => p.Speed))}ms";
+            AvgSpeedText = $"Interval:{Math.Round(_filteredModels.Average(p => p.Speed))}ms";
         }
 
         /// <summary>
@@ -366,16 +453,141 @@ namespace MainAPP.ViewModels
         private void RunAnalytics()
         {
             // 图表类型推荐
-            var recommendation = ChartAnalyticsService.RecommendChartType(_dbModels);
+            var recommendation = ChartAnalyticsService.RecommendChartType(_filteredModels);
             RecommendedTabIndex = recommendation.RecommendedTabIndex;
             RecommendationText = recommendation.Reason;
 
             // 异常点汇总
-            var anomalies = ChartAnalyticsService.SummarizeAnomalies(_dbModels);
+            var anomalies = ChartAnalyticsService.SummarizeAnomalies(_filteredModels);
             HasAnomalies = anomalies.HasAnomalies;
             AnomalySummaryText = anomalies.TotalRecords == 0
                 ? "No data"
                 : $"Score:{anomalies.ScoreOutliers}  Speed:{anomalies.SpeedOutliers}  Distance:{anomalies.DistanceOutliers}  (Total {anomalies.TotalOutliers}/{anomalies.TotalRecords})";
+
+            // 2026-09-12 调试闭环改进：异常点明细 + NG 率摘要
+            var outliers = ChartAnalyticsService.DetectOutlierRecords(_filteredModels);
+            OutlierRecords = new ObservableCollection<OutlierRowVm>(
+                outliers.Select(o => new OutlierRowVm
+                {
+                    Time = o.Time,
+                    Barcode = o.Barcode,
+                    Score = o.Score,
+                    Speed = o.Speed,
+                    Distance = o.Distance,
+                    Reason = o.Reason,
+                }));
+            HasOutliers = OutlierRecords.Count > 0;
+
+            var ng = ChartAnalyticsService.ComputeNgSummary(_filteredModels);
+            NgRateSummaryText = !ng.HasResultData
+                ? "本数据集无 Result 判定（追溯列上线前的旧数据不支持 NG 率分析）"
+                : $"NG 率 {ng.NgRatePercent:0.0}%（NG {ng.NgCount} / 有判定 {ng.TotalCount}）";
+        }
+
+        /// <summary>
+        /// 应用切片筛选并刷新统计/分析与图表。
+        /// notifyView=false 时不触发重绘，由调用方（LoadDataAsync）统一触发。
+        /// </summary>
+        private void ApplySlice(bool notifyView = true)
+        {
+            IEnumerable<DbModel> query = _dbModels;
+            if (!string.IsNullOrEmpty(_selectedRecipe) && _selectedRecipe != "全部")
+                query = query.Where(m => m.RecipeName == _selectedRecipe);
+            if (!string.IsNullOrEmpty(_selectedStation) && _selectedStation != "全部")
+                query = query.Where(m => m.Station == _selectedStation);
+            if (!string.IsNullOrEmpty(_selectedResult) && _selectedResult != "全部")
+                query = query.Where(m => string.Equals(m.Result, _selectedResult, StringComparison.OrdinalIgnoreCase));
+
+            _filteredModels = query.ToList();
+            UpdateStatus();
+            RunAnalytics();
+            if (notifyView)
+            {
+                DataChanged?.Invoke();
+            }
+        }
+
+        /// <summary>从完整数据集重建切片下拉选项；保持仍存在的当前选中项。</summary>
+        private void RefreshSliceOptions()
+        {
+            var recipes = _dbModels
+                .Select(m => m.RecipeName)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct().OrderBy(n => n).ToList();
+            var stations = _dbModels
+                .Select(m => m.Station)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct().OrderBy(n => n).ToList();
+
+            RecipeOptions.Clear();
+            RecipeOptions.Add("全部");
+            foreach (var r in recipes) RecipeOptions.Add(r);
+            StationOptions.Clear();
+            StationOptions.Add("全部");
+            foreach (var st in stations) StationOptions.Add(st);
+
+            // 当前选中项已不在数据集中（新查询后）→ 回退"全部"
+            if (!string.IsNullOrEmpty(_selectedRecipe) && _selectedRecipe != "全部" && !recipes.Contains(_selectedRecipe))
+            {
+                _selectedRecipe = "全部";
+                OnPropertyChanged(nameof(SelectedRecipe));
+            }
+            if (!string.IsNullOrEmpty(_selectedStation) && _selectedStation != "全部" && !stations.Contains(_selectedStation))
+            {
+                _selectedStation = "全部";
+                OnPropertyChanged(nameof(SelectedStation));
+            }
+        }
+
+        /// <summary>切片条件摘要（复制/问 AI 的上下文前缀）。</summary>
+        private string SliceSummaryText =>
+            $"配方={_selectedRecipe ?? "全部"}, 工位={_selectedStation ?? "全部"}, 结果={_selectedResult ?? "全部"}";
+
+        private void CopyOutliers()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"图表分析异常明细（{SliceSummaryText}）");
+            sb.AppendLine($"时间范围: {TimeRangeText}    NG 率: {NgRateSummaryText}");
+            sb.AppendLine($"共 {OutlierRecords.Count} 条异常点（Z-Score > 2.5，按偏离度降序，最多 200 条）:");
+            foreach (var o in OutlierRecords)
+            {
+                sb.AppendLine($"[{o.Time:yyyy-MM-dd HH:mm:ss}] 条码={o.Barcode}  Score={o.Score:0.000}  Interval={o.Speed:0}ms  Distance={o.Distance:0.0}px  异常: {o.Reason}");
+            }
+
+            try
+            {
+                System.Windows.Clipboard.SetText(sb.ToString());
+                NotificationService.Success("异常明细已复制到剪贴板");
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"复制异常明细失败: {ex}");
+                NotificationService.Error("复制失败，请稍后重试。");
+            }
+        }
+
+        private void AskAi()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"图表分析摘要（{SliceSummaryText}，共 {RecordCount} 条）:");
+            sb.AppendLine($"- 时间范围: {TimeRangeText}");
+            sb.AppendLine($"- {AnomalySummaryText}");
+            sb.AppendLine($"- {NgRateSummaryText}");
+            sb.AppendLine("- 异常点 Top（Z-Score > 2.5）:");
+            foreach (var o in OutlierRecords.Take(8))
+            {
+                sb.AppendLine($"  [{o.Time:MM-dd HH:mm:ss}] 条码={o.Barcode} Score={o.Score:0.000} 异常: {o.Reason}");
+            }
+
+            try
+            {
+                System.Windows.Clipboard.SetText(sb.ToString());
+                AiAssistRequested?.Invoke();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"复制分析摘要失败: {ex}");
+            }
         }
 
         /// <summary>
@@ -393,5 +605,19 @@ namespace MainAPP.ViewModels
 
         // 标记是否已弹出异常预警通知，避免每次重新加载重复打扰
         private bool _analyticsNotified;
+    }
+
+    /// <summary>
+    /// 异常点明细行（"质量复盘"标签页 DataGrid 绑定模型）。
+    /// 集合整体重建式刷新，无需 INPC。
+    /// </summary>
+    public sealed class OutlierRowVm
+    {
+        public DateTime Time { get; init; }
+        public string Barcode { get; init; } = "-";
+        public double Score { get; init; }
+        public double Speed { get; init; }
+        public double Distance { get; init; }
+        public string Reason { get; init; } = "-";
     }
 }

@@ -1028,7 +1028,7 @@
         <!--  ===== 日志加载 Loading 覆盖层（参考 DatabaseView 的 IsBusy 实现）  ===== -->
         <Border
             Grid.RowSpan="5"
-            Background="#CCF2F5F8"
+            Background="#CC0B131D"
             Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel
                 HorizontalAlignment="Center"

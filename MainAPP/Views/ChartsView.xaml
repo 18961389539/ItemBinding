@@ -147,6 +147,7 @@
                     Text="配方:" />
                 <ComboBox
                     Width="130"
+                    Style="{StaticResource DarkComboBoxStyle}"
                     ItemsSource="{Binding RecipeOptions}"
                     SelectedItem="{Binding SelectedRecipe}"
                     ToolTip="按配方切片，所有图表与统计即时联动" />
@@ -157,6 +158,7 @@
                     Text="工位:" />
                 <ComboBox
                     Width="130"
+                    Style="{StaticResource DarkComboBoxStyle}"
                     ItemsSource="{Binding StationOptions}"
                     SelectedItem="{Binding SelectedStation}"
                     ToolTip="按工位（机器序列号）切片" />
@@ -167,6 +169,7 @@
                     Text="结果:" />
                 <ComboBox
                     Width="90"
+                    Style="{StaticResource DarkComboBoxStyle}"
                     ItemsSource="{Binding ResultOptions}"
                     SelectedItem="{Binding SelectedResult}"
                     ToolTip="只看 OK 或 NG 记录" />

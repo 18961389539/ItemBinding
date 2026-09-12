@@ -510,13 +510,16 @@ namespace MainAPP.ViewModels
         /// <summary>从完整数据集重建切片下拉选项；保持仍存在的当前选中项。</summary>
         private void RefreshSliceOptions()
         {
+            // Select(n => n!): IsWhitespace 过滤已排除 null，null 容忍标记消除 CS8604
             var recipes = _dbModels
                 .Select(m => m.RecipeName)
                 .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n!)
                 .Distinct().OrderBy(n => n).ToList();
             var stations = _dbModels
                 .Select(m => m.Station)
                 .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Select(n => n!)
                 .Distinct().OrderBy(n => n).ToList();
 
             RecipeOptions.Clear();

@@ -16,7 +16,8 @@ public class StorageSettingsTests
 
         Assert.True(settings.IsSaveDraw);
         Assert.False(settings.IsSaveSource);
-        Assert.Equal(10, settings.MinRecentDays);
+        // 2026-09-12 用户定案图片保留 3 天，默认值由 10 改为 3
+        Assert.Equal(3, settings.MinRecentDays);
         Assert.NotNull(settings.PicturesSaveFolder);
         Assert.Contains("Saves", settings.PicturesSaveFolder);
         Assert.Contains("Pictures", settings.PicturesSaveFolder);

@@ -26,7 +26,8 @@ public class SettingsIntegrationTests
 
         Assert.True(s.IsSaveDraw);
         Assert.False(s.IsSaveSource);
-        Assert.Equal(10, s.MinRecentDays);
+        // 2026-09-12 用户定案图片保留 3 天，默认值由 10 改为 3
+        Assert.Equal(3, s.MinRecentDays);
         Assert.Equal(5, s.BarcodeRemoveCount);
         Assert.Equal(300_000, s.ExistLoginTimeout);
         Assert.Equal(1000, s.LogsCount);

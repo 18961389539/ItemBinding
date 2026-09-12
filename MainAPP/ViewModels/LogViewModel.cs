@@ -426,7 +426,7 @@ namespace MainAPP.ViewModels
                 // 重置到第一页，按当前筛选条件加载
                 _currentPage = 1;
 
-                // 并行加载：日志列表、数据库真实总数、最早记录时间、级别计数
+                // 并行加载 5 任务：日志列表、数据库真实总数、最早记录时间、级别计数、分布条（仅普通刷新）
                 var logsTask = LogDatabaseService.Instance.LoadLogsFilteredAsync(
                     StartTimeFilter, EndTimeFilter, SelectedLevel, PageSize, 0, _hourFilterEnd);
                 var countTask = LogDatabaseService.Instance.GetLogCountAsync();

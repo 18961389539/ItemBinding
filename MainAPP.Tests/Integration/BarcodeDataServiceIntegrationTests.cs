@@ -200,8 +200,8 @@ public class BarcodeDataServiceIntegrationTests : IAsyncDisposable
             Assert.True(File.Exists(tempFile));
             var lines = await File.ReadAllLinesAsync(tempFile);
             Assert.True(lines.Length >= 2);
-            // L383: CSV 表头已扩展为 18 列，与 DataGrid 列定义完全一致
-            Assert.Equal("Id,Barcode,Encode,WorldX,WorldY,Angle,Width,Height,ImageX,ImageY,Area,ImageBarcodeX,ImageBarcodeY,BarcodeScore,Score,Speed,CostTime,DetectTime", lines[0]);
+            // L383: CSV 表头已扩展为 21 列（2026-09-08 尾追灰度判向统计列），与 GetCsvHeader() 完全一致
+            Assert.Equal("Id,Barcode,Encode,WorldX,WorldY,Angle,Width,Height,ImageX,ImageY,Area,ImageBarcodeX,ImageBarcodeY,BarcodeScore,Score,Speed,CostTime,DetectTime,BrightMean,DarkMean,BrightnessDiff", lines[0]);
         }
         finally
         {

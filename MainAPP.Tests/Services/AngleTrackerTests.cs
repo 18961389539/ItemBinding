@@ -26,11 +26,11 @@ namespace MainAPP.Tests.Services
 
             // 第 2 帧：拍到特征 → 锁定 270
             var frame2 = tracker.Resolve(encoder: 0, worldX: 10.5, worldY: 20.2, modelAngle: 270);
-            Assert.Equal(270, frame2);
+            Assert.Equal(-90, frame2);
 
             // 第 3 帧：未拍到特征 → 沿用锁定角 270
             var frame3 = tracker.Resolve(encoder: 0, worldX: 11, worldY: 20.5, modelAngle: null);
-            Assert.Equal(270, frame3);
+            Assert.Equal(-90, frame3);
         }
 
         [Fact]
@@ -101,11 +101,11 @@ namespace MainAPP.Tests.Services
 
             // 第 2 帧：编码器 1030（帧间位移 30 counts），拍到特征 → 锁定 270
             var frame2 = tracker.Resolve(encoder: 1030, worldX: 10.5, worldY: 20.2, modelAngle: 270);
-            Assert.Equal(270, frame2);
+            Assert.Equal(-90, frame2);
 
             // 第 3 帧：编码器 1060，未拍到特征 → 沿用锁定角 270
             var frame3 = tracker.Resolve(encoder: 1060, worldX: 11, worldY: 20.5, modelAngle: null);
-            Assert.Equal(270, frame3);
+            Assert.Equal(-90, frame3);
         }
 
         [Fact]

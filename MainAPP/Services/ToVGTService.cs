@@ -314,6 +314,20 @@ namespace MainAPP.Services
 
                 var closest = _encoderValues[foundIdx];
                 _encoderValues.RemoveRange(0, foundIdx + 1);
+
+                // 绑定新鲜度自检（2026-09-12）：记录时间与请求时刻（图像到达）的差
+                // = 图像-编码器配对的偏移。稳态 ≈ 上报周期（几十 ms）；
+                // 超过动态阈值（2×当前上报间隔，且 ≥500ms）说明编码器包丢失/断流恢复——
+                // 本帧绑到的是上一次触发的编码器，位置错位约一个触发间隔（200mm）。
+                var stalenessMs = (searchTime - closest.Time).TotalMilliseconds;
+                var thresholdMs = Math.Max(500, Speed * 2.0);
+                if (stalenessMs > thresholdMs)
+                {
+                    LogService.Instance.Warning(
+                        $"[编码器绑定] 记录滞后 {stalenessMs:F0}ms（阈值 {thresholdMs:F0}ms）——" +
+                        "编码器包可能丢失/断流，本帧 XY 与编码器对应关系错位约一个触发间隔");
+                }
+
                 return (closest.Encoder, closest.Time);
             }
         }

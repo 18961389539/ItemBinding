@@ -66,7 +66,31 @@ namespace MainAPP.Models
                 entity.Ignore(e => e.Color);
                 entity.Ignore(e => e.LevelDisplay);
                 entity.Ignore(e => e.LevelFullName);
+
+                // 2026-09-12: Timestamp 索引声明（实际创建见 EnsureTimestampIndexAsync）——
+                // Serilog Sink 建表只带 id 主键，无 Timestamp 索引；
+                // 保留期清理（DeleteOlderThanAsync）与时间范围查询在无索引时是全表扫描，
+                // 日志行数随保留期调大后（600 万行级）扫描会显著变慢。
+                entity.HasIndex(e => e.Timestamp)
+                    .HasDatabaseName("IX_Logs_Timestamp");
             });
+        }
+
+        /// <summary>
+        /// 确保 Logs 表存在 Timestamp 索引（幂等，IF NOT EXISTS）。
+        ///
+        /// <para>为什么需要：表结构由 Serilog Sink 维护（本上下文不调用 EnsureCreatedAsync），
+        /// Sink 建表只带 id 主键。保留期调大（7 天 @ 3 帧/s ≈ 日均 26 万行）后，
+        /// DataRetentionService 的按时间清理与本上下文的时间范围查询都是 Timestamp 上的
+        /// 全表扫描——索引将其降为索引范围扫描。EF 的 HasIndex 声明不会应用到已存在的库，
+        /// 故此方法在启动/清理前显式执行一次 CREATE INDEX IF NOT EXISTS。</para>
+        /// </summary>
+        public async System.Threading.Tasks.Task EnsureTimestampIndexAsync(
+            System.Threading.CancellationToken cancellationToken = default)
+        {
+            await Database.ExecuteSqlRawAsync(
+                "CREATE INDEX IF NOT EXISTS IX_Logs_Timestamp ON Logs (Timestamp);",
+                cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>

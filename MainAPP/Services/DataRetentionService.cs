@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Extensions;
 using MainAPP.Models;
 
 namespace MainAPP.Services
@@ -20,6 +21,17 @@ namespace MainAPP.Services
         {
             var result = new CleanupResult();
             var settings = Settings.Instance;
+
+            // 清理前确保日志时间索引存在（幂等）——按时间删除在无索引时是全表扫描，
+            // 日志量大后周期清理会明显变慢（2026-09-12 随保留期调大一并加固）
+            try
+            {
+                await new LogDbContext().EnsureTimestampIndexAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Warning($"确保 Logs.Timestamp 索引失败（不影响本轮清理）: {ex.Message}");
+            }
 
             // 条码数据库清理
             try
@@ -85,6 +97,21 @@ namespace MainAPP.Services
             catch (Exception ex)
             {
                 LogService.Instance.Error($"VACUUM 压缩失败: {ex}");
+            }
+
+            // 图片文件清理（2026-09-12 补）：此前仅在启动时执行一次（App fire-and-forget），
+            // 7×24 长运行的产线机图片持续累积（IsSaveDraw 开启时可达数十 GB/天），
+            // 直到下次重启才清理。挂入周期任务后与数据库清理同节奏，消除该缺口。
+            try
+            {
+                if (settings.MinRecentDays > 0)
+                {
+                    FileHelper.DeleteOldFiles(settings.MinRecentDays, settings.PicturesSaveFolder);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"清理旧图片失败: {ex}");
             }
 
             return result;

@@ -44,6 +44,38 @@
 		<PackageReference Include="Serilog.Sinks.SQLite" Version="6.0.0" />
 	</ItemGroup>
 
+	<!-- 2026-09-12: AI 对话模块（离线本地推理，全部开源组件，不自建轮子）。
+	     Microsoft.Extensions.AI → 模型访问抽象（IChatClient / AIFunction / 工具调用中间件），
+	       已由 LLamaSharp 传递引入，无需单独引用。
+	     LLamaSharp → 本地 GGUF 推理（llama.cpp 的 .NET 绑定），本机已实测 Qwen3.5-4B 可用。
+	     ★ 核心包与 backend 必须同版本，且<b>只能装一个 backend</b>：同时装 CPU 与 CUDA 会静默跑 CPU。
+	       这里选 Vulkan——只需显卡驱动；Cuda12 在缺 CUDA 运行时的机器上会静默回落 CPU（已实测）。
+	     下一步若需多智能体编排 / MCP 服务端，再引入 Microsoft.Agents.AI（MAF，SK 的继任者）。 -->
+	<ItemGroup>
+		<!-- 工具调用中间件（ChatClientBuilder.UseFunctionInvocation / FunctionInvokingChatClient）
+		     在 Microsoft.Extensions.AI 主包里，LLamaSharp 只传递引入 Abstractions。
+		     10.9.0 的 lib 含 net8.0，可安全用于本工程。 -->
+		<PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
+		<!-- OpenAI 协议适配器：把 llama-server 侧车（OpenAI 兼容 HTTP）包装成 IChatClient，
+		     MAF / 流式 / 工具调用代码零改动即可从进程内推理切到侧车。 -->
+		<PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+		<!-- 浏览器级对话 UI 的承载控件（A 部分）：WPF 内嵌 WebView2 跑 Deep Chat 页面。
+		     ★ 部署注意：目标机需有 WebView2 Runtime（Win11 自带；老旧 Win10 需装
+		        Evergreen Runtime 或随包带 Fixed Version，约 200MB）。 -->
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+		<!-- Agent 与工具调用编排（Semantic Kernel 的继任者，2026-04 GA）。
+		     1.21.0 的 lib 含 net8.0/net9.0/net10.0/net472，可安全用于本工程（已实测还原）。
+		     提供 AIAgent / AgentSession（多轮会话状态）/ 工具循环。 -->
+		<PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Deep Chat（MIT）官方单文件打包产物，随程序集内嵌，产线离线可用（378 KB）。
+		     来源：https://unpkg.com/deep-chat@2.5.1/dist/deepChat.bundle.js
+		     由 AiWebHost 以 /deepchat.js 路由对外提供，前端零 CDN 依赖。 -->
+		<EmbeddedResource Include="Services\AI\Resources\deepChat.bundle.js" />
+	</ItemGroup>
+
 	<ItemGroup>
 		<ProjectReference Include="..\CoordinateSystemMapping\CoordinateSystemMapping.csproj" />
 		<ProjectReference Include="..\Extensions\Extensions.csproj" />

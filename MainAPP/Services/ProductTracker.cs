@@ -35,11 +35,24 @@ namespace MainAPP.Services
 
         /// <summary>
         /// 已跟踪产品的过期时间（秒），超过此时间未被再次匹配的产品从跟踪列表移除。
+        /// 值来自设置（TrackerExpireSeconds，默认 60）——必须大于相邻两次触发的最大时间间隔，
+        /// 否则慢速产线会重复计数（判据详见 AlgorithmSettings.TrackerExpireSeconds）。
         /// </summary>
-        private const int ExpireSeconds = 5;
+        private int ExpireSeconds => Math.Max(1, _settings.TrackerExpireSeconds);
 
         /// <summary>编码器差分匹配的最小容差（counts），Δ̂ 自适应容差的下限。</summary>
         private const long MinEncoderTolerance = 20;
+
+        /// <summary>
+        /// 多假设匹配的最大帧间隔（k 上限）。k=1 为相邻触发帧，k≥2 表示中间有丢帧/跳帧。
+        /// 上限不宜过大：产品间距恰为 k×Δ̂ 整数倍时存在误匹配风险（与既有 k=1 方案同类风险），
+        /// 取 4 已覆盖视野内连续丢 3 帧的极端情况。
+        /// </summary>
+        private const int MaxEncoderFrameGap = 4;
+
+        /// <summary>编码器匹配连续失败的重置阈值（语义同 AngleTracker）。</summary>
+        private const int EncoderFailResetThreshold = 5;
+        private int _encoderFailStreak;
 
         /// <summary>
         /// 帧间编码器位移的平滑估计（Δ̂，counts/帧）。null 表示尚未建立。
@@ -84,6 +97,23 @@ namespace MainAPP.Services
                         // 编码器差分匹配（Δ̂ 未建立时先用位置匹配过渡并建立 Δ̂）
                         matched = TryMatchByEncoder(model, now, matchedInBatch,
                             posThreshold, angleThreshold, trackByX, barcodePosThreshold);
+                        if (matched)
+                        {
+                            _encoderFailStreak = 0;
+                        }
+                        else
+                        {
+                            // 连续失败达到阈值：触发间隔可能已变（换产线/编码器当量变化），
+                            // 重置 Δ̂ 让位置过渡重新自适应建立，避免编码器匹配永久退化
+                            _encoderFailStreak++;
+                            if (_encoderFailStreak >= EncoderFailResetThreshold && _deltaEstimator.HasValue)
+                            {
+                                LogService.Instance.Info(
+                                    $"[ProductTracker] 编码器匹配连续失败 {_encoderFailStreak} 次，重置 Δ̂ 重新自适应（触发间隔可能已变化）");
+                                _deltaEstimator = null;
+                                _encoderFailStreak = 0;
+                            }
+                        }
                     }
 
                     if (!matched)
@@ -137,6 +167,9 @@ namespace MainAPP.Services
                     trackByX, posThreshold, angleThreshold, barcodePosThreshold, ignoreAngle: true);
                 if (matchedIdx < 0)
                 {
+                    // 注：不做"唯一项编码器差建立 Δ̂"的兜底——同帧可能存在多个不同产品，
+                    // 唯一跟踪项未必与观测对应，贸然建立会误匹配（单测 SameProduct 第 1 帧
+                    // Expected 2/Actual 1 即此场景）。Δ̂ 建立以位置过渡成功为准。
                     return false;
                 }
 
@@ -152,8 +185,7 @@ namespace MainAPP.Services
             // 差分预测匹配：选偏差最小的候选
             int bestIdx = -1;
             long bestErr = long.MaxValue;
-            long predicted = (long)Math.Round(_deltaEstimator.Value);
-            var tol = Math.Max(MinEncoderTolerance, (long)Math.Round(_deltaEstimator.Value * 0.5));
+            int bestGap = 1;
 
             for (int i = 0; i < _items.Count; i++)
             {
@@ -169,23 +201,35 @@ namespace MainAPP.Services
                     continue; // 编码器倒退或异常跳变
                 }
 
-                long err = Math.Abs(fwd - predicted);
-                if (err < bestErr)
+                // 多假设匹配：硬触发间隔在 200mm 附近波动（产线无法严格等距），
+                // 且中间可能丢帧/跳帧 → 帧间隔假设为 k×Δ̂（k=1 正常，k≥2 丢帧）。
+                // 取误差最小的 (候选, k) 组合，而不是只按 k=1 预测——
+                // 否则丢帧时 fwd=2Δ̂ 会被容差拒绝，同一产品被误判为新品重复计数。
+                for (int gap = 1; gap <= MaxEncoderFrameGap; gap++)
                 {
-                    bestErr = err;
-                    bestIdx = i;
+                    long err = Math.Abs(fwd - (long)Math.Round(_deltaEstimator.Value * gap));
+                    if (err < bestErr)
+                    {
+                        bestErr = err;
+                        bestIdx = i;
+                        bestGap = gap;
+                    }
                 }
             }
 
+            // 容差覆盖触发波动（200mm 附近的 Δ 起伏），多假设已覆盖丢帧倍数
+            var tol = Math.Max(MinEncoderTolerance, (long)Math.Round(_deltaEstimator.Value * 0.5));
             if (bestIdx < 0 || bestErr > tol)
             {
                 return false;
             }
 
             var matched = _items[bestIdx];
-            // 指数平滑更新 Δ̂：新观测占 30%
-            long obs = (uint)(enc - matched.Encoder);
-            _deltaEstimator = _deltaEstimator.Value * 0.7 + obs * 0.3;
+            // ★ Δ̂ 按命中间隔归一化：Δ̂ 的语义是"单帧位移"，
+            //   丢帧时 fwd/bestGap 才是单帧观测——直接拿 fwd 平滑会把 Δ̂ 拉向 2Δ̂，
+            //   随后所有正常帧全部失配（形成隔帧匹配怪圈）。
+            long obsPerFrame = (long)Math.Round((double)(uint)(enc - matched.Encoder) / bestGap);
+            _deltaEstimator = _deltaEstimator.Value * 0.7 + obsPerFrame * 0.3;
             matched.Encoder = enc;
             matched.LastSeen = now;
             matched.MatchCoord = trackByX ? model.WorldX : model.WorldY;

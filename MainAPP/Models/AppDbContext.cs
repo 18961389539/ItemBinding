@@ -51,7 +51,9 @@ namespace MainAPP.Models
             modelBuilder.Entity<DbModel>()
                 .HasKey(m => m.Id);
 
-            // DetectTime 默认值为数据库服务器当前时间（本地时区）
+            // DetectTime 数据库列默认值（仅直接 SQL 插入且未指定该列时生效）。
+            // EF 落库时 DbModel.DetectTime 带 C# 初始化器 DateTime.Now，始终发送实体值，
+            // 数据库默认值实际不参与 EF 写入路径，见 DbModel.DetectTime 注释。
             modelBuilder.Entity<DbModel>()
                 .Property(m => m.DetectTime)
                 .HasDefaultValueSql("datetime('now', 'localtime')");
@@ -95,7 +97,30 @@ namespace MainAPP.Models
         /// </summary>
         public async Task EnsureBrightnessColumnsAsync(CancellationToken cancellationToken = default)
         {
-            // 读当前表结构：单行返回 "列名,类型,非空,默认值,主键"（PRAGMA 逗号分隔）
+            var cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+
+            // 缺哪列补哪列（double? → REAL 可空列，无需默认值；ALTER ADD COLUMN 对既有行自动为 NULL）
+            if (!cols.Contains("BrightMean"))
+            {
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightMean REAL NULL", cancellationToken).ConfigureAwait(false);
+            }
+            if (!cols.Contains("DarkMean"))
+            {
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN DarkMean REAL NULL", cancellationToken).ConfigureAwait(false);
+            }
+            if (!cols.Contains("BrightnessDiff"))
+            {
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightnessDiff REAL NULL", cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// 读取 BarcodeData 表当前列名集合（SQLite 用 PRAGMA table_info 探测）。
+        /// 抽出来供多个「幂等补列」方法复用。
+        /// </summary>
+        private async Task<HashSet<string>> GetBarcodeDataColumnsAsync(CancellationToken cancellationToken)
+        {
+            // 单行返回 "列名,类型,非空,默认值,主键"（PRAGMA 逗号分隔）
             var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var conn = Database.GetDbConnection();
             var wasClosed = conn.State != System.Data.ConnectionState.Open;
@@ -121,18 +146,31 @@ namespace MainAPP.Models
                 }
             }
 
-            // 缺哪列补哪列（double? → REAL 可空列，无需默认值；ALTER ADD COLUMN 对既有行自动为 NULL）
-            if (!cols.Contains("BrightMean"))
+            return cols;
+        }
+
+        /// <summary>
+        /// 2026-09-12: 为已存在的数据库幂等补充追溯列（RecipeName / Result / Station）。
+        /// 与 EnsureBrightnessColumnsAsync 同一套模式：EnsureCreated 不补列，既有库必须显式 ALTER。
+        /// 三列均为可空 TEXT——历史行自动为 NULL，表示「当时没记录」，语义上区别于空字符串。
+        /// 这是 AI 对话「自然语言查追溯数据」能力的数据基础：没有这三列，就回答不了
+        /// 「某配方的合格率」「某工位的过站记录」这类问题。
+        /// </summary>
+        public async Task EnsureTraceColumnsAsync(CancellationToken cancellationToken = default)
+        {
+            var cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+
+            if (!cols.Contains("RecipeName"))
             {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightMean REAL NULL", cancellationToken).ConfigureAwait(false);
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN RecipeName TEXT NULL", cancellationToken).ConfigureAwait(false);
             }
-            if (!cols.Contains("DarkMean"))
+            if (!cols.Contains("Result"))
             {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN DarkMean REAL NULL", cancellationToken).ConfigureAwait(false);
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN Result TEXT NULL", cancellationToken).ConfigureAwait(false);
             }
-            if (!cols.Contains("BrightnessDiff"))
+            if (!cols.Contains("Station"))
             {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightnessDiff REAL NULL", cancellationToken).ConfigureAwait(false);
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN Station TEXT NULL", cancellationToken).ConfigureAwait(false);
             }
         }
     }

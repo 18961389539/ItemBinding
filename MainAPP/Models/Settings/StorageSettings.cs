@@ -20,7 +20,7 @@ namespace MainAPP.Models
         /// <summary>
         /// 最近N天内保存的图片保留天数，超过此天数的图片将被自动清理
         /// </summary>
-        public int MinRecentDays { get; set; } = 10;
+        public int MinRecentDays { get; set; } = 3;
 
         /// <summary>
         /// 检测结果图像的保存目录

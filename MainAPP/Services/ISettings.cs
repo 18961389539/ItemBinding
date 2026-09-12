@@ -11,6 +11,14 @@ namespace MainAPP.Services
         string DedupTrackAxis { get; }
         double DedupPositionThreshold { get; }
         double DedupAngleThreshold { get; }
+
+        /// <summary>
+        /// 跟踪项过期时间（秒）：某产品最后一次成像后超过该时长未被再次拍到，跟踪状态即清除。
+        /// ★ 必须大于相邻两次触发的最大时间间隔 = 触发间隔(mm) ÷ 最慢线速(mm/s)，建议 3 倍余量。
+        ///   例：触发间隔 200mm、最慢线速 20mm/s → 间隔 10s → 本值至少 30。
+        ///   取小了慢速产线会重复计数（同一产品每帧被判新品）；取大了仅多占少量内存，无正确性风险。
+        /// </summary>
+        int TrackerExpireSeconds { get; }
     }
 
     /// <summary>

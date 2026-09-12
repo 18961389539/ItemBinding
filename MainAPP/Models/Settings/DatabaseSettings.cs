@@ -7,28 +7,28 @@ namespace MainAPP.Models
     {
         /// <summary>
         /// 条码数据库记录保留天数（按 DetectTime 清理）。0=永不清理。
-        /// 默认 90 天，超过此天数的记录将在周期清理时删除。
+        /// 默认 7 天，超过此天数的记录将在周期清理时删除。
         /// </summary>
-        public int BarcodeDataRetentionDays { get; set; } = 90;
+        public int BarcodeDataRetentionDays { get; set; } = 7;
 
         /// <summary>
         /// 条码数据库最大保留记录数。0=不限制。
-        /// 默认 500000 条，超出时按 DetectTime 从最旧开始删除。
+        /// 默认 2500000 条，超出时按 DetectTime 从最旧开始删除。
         /// </summary>
-        public int BarcodeDataMaxCount { get; set; } = 500_000;
+        public int BarcodeDataMaxCount { get; set; } = 2_500_000;
 
         /// <summary>
         /// 日志数据库记录保留天数（按 Timestamp 清理）。0=永不清理。
-        /// 默认 30 天，超过此天数的日志将在周期清理时删除。
+        /// 默认 7 天，超过此天数的日志将在周期清理时删除。
         /// 注意：此设置独立于 Serilog Sink 自身的保留期，两者取较小值生效。
         /// </summary>
-        public int LogRetentionDays { get; set; } = 30;
+        public int LogRetentionDays { get; set; } = 7;
 
         /// <summary>
         /// 日志数据库最大保留记录数。0=不限制。
-        /// 默认 200000 条，超出时按 Timestamp 从最旧开始删除。
+        /// 默认 6000000 条，超出时按 Timestamp 从最旧开始删除。
         /// </summary>
-        public int LogMaxCount { get; set; } = 200_000;
+        public int LogMaxCount { get; set; } = 6_000_000;
 
         /// <summary>
         /// 数据/日志清理周期（小时）。每次周期到达时执行一次清理。

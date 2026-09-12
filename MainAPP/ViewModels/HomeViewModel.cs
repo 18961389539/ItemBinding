@@ -5,6 +5,7 @@ using HikScannerType = HikScanner.HikScanner;
 using MainAPP.Application;
 using JinlongYolo.YoloSharp;
 using JinlongYolo.YoloSharp.Data;
+using System.Windows.Threading;
 using MainAPP.Models;
 using MainAPP.Services;
 using OpenCvSharp;
@@ -46,6 +47,32 @@ namespace MainAPP.ViewModels
         private int _activeInferenceCount;
         // L: 丢帧计数与通知节流计数器，用于状态栏显示与 Growl 节流提示
         private int _dropFrameCount;
+
+        // ── 采集健康监控（2026-09-12）：丢帧率趋势 + 编码器绑定延迟 + 编码器链路 ──
+        // 快照基线：DispatcherTimer 每秒取 (处理数, 丢帧数) 增量算丢帧率（不用时间戳队列，O(1)）
+        private long _lastHealthProcessed;
+        private long _lastHealthDropped;
+        private long _lastBindDelayMs;
+        private DateTime _lastBindDelayWarnAt = DateTime.MinValue;
+        private DateTime _lastDropRateWarnAt = DateTime.MinValue;
+        private DispatcherTimer? _healthTimer;
+
+        /// <summary>绑定延迟告警阈值（ms）：编码器记录时间与图像到达时刻的差超过该值，
+        /// 说明编码器上报断流/恢复或积压——位置与编码器的对应关系已系统性滞后该差值 × 线速。</summary>
+        private const int BindDelayWarnMs = 1000;
+
+        /// <summary>丢帧率告警阈值（0-100）：丢帧是处理过载的直接信号，
+        /// 过载反压会造成"旧图新编码器"的系统性绑定错位（详见 AlgorithmSettings.TrackerExpireSeconds 上下文）。</summary>
+        private const int DropRateWarnPercent = 5;
+
+        /// <summary>告警节流窗口（秒），避免持续过载时刷屏。</summary>
+        private const int HealthWarnThrottleSec = 30;
+
+        /// <summary>丢帧率采样窗口（秒）。</summary>
+        private const int HealthSampleWindowSec = 1;
+
+        /// <summary>窗口内最小样本数：低于该值不计算丢帧率（避免小样本误报）。</summary>
+        private const long MinSamplesForRate = 3;
         private int _dropNotifyCounter;
         private const int DropFrameNotifyInterval = 10;
         // 已处理帧计数（用于 FPS 计算），每处理完一帧递增，与检测结果无关
@@ -267,6 +294,11 @@ namespace MainAPP.ViewModels
             // 角度跨帧锁定同样按配方重置，避免沿用旧配方的锁定角度
             AngleTracker.Instance.Clear();
             _reloadPredictorTask = ReloadPredictorAsync(recipe);
+
+            // 采集健康监控：每秒刷新丢帧率/绑定延迟/编码器链路到状态栏（2026-09-12）
+            _healthTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(HealthSampleWindowSec) };
+            _healthTimer.Tick += OnHealthTick;
+            _healthTimer.Start();
         }
 
         /// <summary>
@@ -620,6 +652,91 @@ namespace MainAPP.ViewModels
 
     /// <summary>状态栏显示用的丢帧文本。</summary>
     public string DropFrameDisplay => $"丢帧: {_dropFrameCount}";
+
+    /// <summary>状态栏显示：丢帧率（HealthSampleWindowSec 滑动窗口）。</summary>
+    public string DropRateDisplay
+    {
+        get => _dropRateDisplay;
+        private set => SetProperty(ref _dropRateDisplay, value);
+    }
+    private string _dropRateDisplay = "丢帧率: --";
+
+    /// <summary>状态栏显示：编码器绑定延迟（最近一帧）。</summary>
+    public string BindDelayDisplay
+    {
+        get => _bindDelayDisplay;
+        private set => SetProperty(ref _bindDelayDisplay, value);
+    }
+    private string _bindDelayDisplay = "绑定延迟: --";
+
+    /// <summary>状态栏显示：编码器链路状态（数据新鲜度）。</summary>
+    public string EncoderLinkDisplay
+    {
+        get => _encoderLinkDisplay;
+        private set => SetProperty(ref _encoderLinkDisplay, value);
+    }
+    private string _encoderLinkDisplay = "编码器链路: --";
+
+    /// <summary>
+    /// 每秒健康巡检：丢帧率（处理/丢帧增量）、绑定延迟展示、编码器链路新鲜度。
+    /// 全部在 UI 线程执行（DispatcherTimer.Tick），只做轻量聚合与属性通知。
+    /// </summary>
+    private void OnHealthTick(object? sender, EventArgs e)
+    {
+        // 1) 编码器链路新鲜度
+        try
+        {
+            var last = _toVgtService.LastEncoderReceiveTime;
+            if (last is null)
+            {
+                EncoderLinkDisplay = "编码器链路: 无数据";
+            }
+            else
+            {
+                var ageSec = (DateTime.Now - last.Value).TotalSeconds;
+                EncoderLinkDisplay = ageSec > 5
+                    ? $"编码器链路: 超时 {ageSec:F0}s"
+                    : $"编码器链路: 正常({ageSec:F1}s 前)";
+            }
+        }
+        catch (Exception ex)
+        {
+            LogService.Instance.Warning($"编码器链路状态刷新失败: {ex.Message}");
+        }
+
+        // 2) 丢帧率（窗口 = HealthSampleWindowSec）
+        var processed = Interlocked.Read(ref _processedFrameCount);
+        var dropped = _dropFrameCount;
+        var dProcessed = processed - _lastHealthProcessed;
+        var dDropped = dropped - _lastHealthDropped;
+        _lastHealthProcessed = processed;
+        _lastHealthDropped = dropped;
+
+        if (dProcessed >= MinSamplesForRate)
+        {
+            var ratePercent = dDropped * 100.0 / dProcessed;
+            DropRateDisplay = $"丢帧率: {ratePercent:F1}% ({dDropped}/{dProcessed})";
+
+            if (ratePercent >= DropRateWarnPercent
+                && (DateTime.Now - _lastDropRateWarnAt).TotalSeconds >= HealthWarnThrottleSec)
+            {
+                _lastDropRateWarnAt = DateTime.Now;
+                LogService.Instance.Warning(
+                    $"[采集过载] 丢帧率 {ratePercent:F1}%（{dDropped}/{dProcessed}，窗口 {HealthSampleWindowSec}s）" +
+                    "——处理能力不足，存在绑定系统性错位风险，请扩容推理或降低触发频率");
+            }
+        }
+        else if (dProcessed == 0)
+        {
+            DropRateDisplay = "丢帧率: -- (无帧)";
+        }
+
+        // 3) 绑定延迟展示
+        var bindDelayMs = Volatile.Read(ref _lastBindDelayMs);
+        BindDelayDisplay = _lastBindDelayMs == 0
+            ? "绑定延迟: --"
+            : $"绑定延迟: {bindDelayMs:F0} ms";
+    }
 
     /// <summary>
     /// 已处理帧计数（用于 FPS 计算），每处理完一帧递增。
@@ -1776,6 +1893,22 @@ namespace MainAPP.ViewModels
             // 回退到 grabTime（图像采集时刻）保证时间戳始终有效。
             scanerResult.EncoderReceivedTime = time == DateTime.MinValue ? grabTime : time;
             scanerResult.EncoderValue = encoder;
+
+            // 绑定延迟诊断：编码器记录的到达时刻 → 图像到达时刻的时间差。
+            // 稳态 ≈ 编码器上报周期 + 图像传输延迟（几十 ms 级）；
+            // 持续增大 = 上报断流恢复或处理积压——此时 Encode 与 XY 的对应关系
+            // 已系统性滞后该差值 × 线速（详见 AlgorithmSettings.TrackerExpireSeconds 注释）。
+            if (time != DateTime.MinValue)
+            {
+                var bindDelayMs = (grabTime - time).TotalMilliseconds;
+                Volatile.Write(ref _lastBindDelayMs, (long)bindDelayMs);
+                if (bindDelayMs > BindDelayWarnMs && (DateTime.Now - _lastBindDelayWarnAt).TotalSeconds >= HealthWarnThrottleSec)
+                {
+                    _lastBindDelayWarnAt = DateTime.Now;
+                    LogService.Instance.Warning(
+                        $"[绑定延迟] {bindDelayMs:F0}ms 超过阈值 {BindDelayWarnMs}ms —— 位置与编码器对应关系已滞后约 {bindDelayMs * 0.2:F0}mm(按200mm/s)，请检查编码器上报链路");
+                }
+            }
             if (!_lastFrameNumber.HasValue)
             {
                 // 首次收到帧，只初始化，不判为丢包
@@ -2005,6 +2138,7 @@ namespace MainAPP.ViewModels
             {
                 RecipesManage.Instance.CurrentRecipeChanged -= OnCurrentRecipeChanged;
                 _cts.Cancel();
+                _healthTimer?.Stop();
                 if (_imageForShow is IDisposable disposable)
                 {
                     disposable.Dispose();

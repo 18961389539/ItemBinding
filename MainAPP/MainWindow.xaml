@@ -102,7 +102,7 @@
                     <!--  组间分隔线  -->
                     <Rectangle
                         Width="1" Height="20"
-                        Margin="20,0"
+                        Margin="12,0"
                         Fill="{StaticResource TechCardBorderBrush}" />
 
                     <!--  组2：设备（编码器指示灯）  -->
@@ -152,22 +152,30 @@
                     <!--  组间分隔线  -->
                     <Rectangle
                         Width="1" Height="20"
-                        Margin="20,0"
+                        Margin="12,0"
                         Fill="{StaticResource TechCardBorderBrush}" />
 
                     <!--  组3：用户登录状态  -->
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <icons:PackIconPhosphorIcons
                             Width="14" Height="14"
-                            Margin="0,0,6,0"
+                            Margin="0,0,4,0"
                             VerticalAlignment="Center"
-                            Foreground="{StaticResource NeonOrangeBrush}"
+                            Foreground="{Binding RoleBadgeBrush}"
                             Kind="UserCircle" />
                         <TextBlock
                             VerticalAlignment="Center"
                             FontSize="12"
                             Foreground="{StaticResource TechTextPrimaryBrush}"
                             Text="{Binding LoginStatusText}" />
+
+                        <!--  会话剩余时间（仅手动登录会话显示；自动登录会话不限时）  -->
+                        <TextBlock
+                            Margin="6,0,0,0"
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            Foreground="{Binding SessionRemainBrush}"
+                            Text="{Binding SessionRemainDisplay}" />
                     </StackPanel>
                 </StackPanel>
 
@@ -178,17 +186,17 @@
                     VerticalAlignment="Center"
                     Orientation="Horizontal">
                     <Button
-                        Margin="6,0"
-                        Padding="12,4"
+                        Margin="4,0"
+                        Padding="8,3"
                         Command="{Binding ResetCountCommand}"
-                        Content="清零计数"
+                        Content="清零"
                         Foreground="White"
                         Style="{StaticResource ButtonDanger}"
                         ToolTip="清零读码数量、识别数量和去重跟踪列表（换班/换产品场景）"
                         Visibility="{Binding CanResetCount, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <Button
-                        Margin="6,0"
-                        Padding="12,4"
+                        Margin="4,0"
+                        Padding="8,3"
                         Click="LoginButton_Click"
                         Content="{Binding LoginButtonText}"
                         Foreground="White"
@@ -504,6 +512,28 @@
                         <Border Margin="10" Background="Transparent">
                             <views:LogView />
                         </Border>
+                    </controls:TransitioningContentControl>
+                </TabItem>
+
+                <TabItem x:Name="AiChatTabItem">
+                    <TabItem.Header>
+                        <StackPanel
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Orientation="Vertical">
+                            <icons:PackIconPhosphorIcons
+                                Width="24"
+                                Height="24"
+                                Kind="Lightning" />
+                            <TextBlock
+                                Margin="0,4,0,0"
+                                HorizontalAlignment="Center"
+                                FontSize="11"
+                                Text="助手" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <controls:TransitioningContentControl>
+                        <views:AiChatView x:Name="AiChatViewControl" />
                     </controls:TransitioningContentControl>
                 </TabItem>
 

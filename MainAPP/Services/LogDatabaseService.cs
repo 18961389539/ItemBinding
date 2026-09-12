@@ -64,7 +64,8 @@ namespace MainAPP.Services
 
         /// <summary>
         /// 按时间范围与级别筛选异步加载日志记录，支持分页。
-        /// startTime/endTime 均为本地时间，endTime 含当天整天（加 1 天）。
+        /// startTime/endTime 均为本地时间，endTime 含当天整天（加 1 天）；
+        /// endTimeExclusive 非 null 时优先使用（精确到时刻的右开区间，供分布条点击小时筛选）。
         /// level 为空表示不按级别筛选。返回结果按 id 倒序排列。
         /// </summary>
         public async Task<IReadOnlyList<LogEntry>> LoadLogsFilteredAsync(
@@ -73,6 +74,7 @@ namespace MainAPP.Services
             string? level,
             int limit = 10000,
             int offset = 0,
+            DateTime? endTimeExclusive = null,
             CancellationToken cancellationToken = default)
         {
             if (!File.Exists(_databasePath)) return [];
@@ -86,7 +88,12 @@ namespace MainAPP.Services
                 {
                     query = query.Where(l => l.Timestamp >= startTime.Value);
                 }
-                if (endTime.HasValue)
+                if (endTimeExclusive.HasValue)
+                {
+                    // 精确时刻右开区间（小时筛选），优先于整天语义
+                    query = query.Where(l => l.Timestamp < endTimeExclusive.Value);
+                }
+                else if (endTime.HasValue)
                 {
                     // 结束日期包含整天，加 1 天
                     var endInclusive = endTime.Value.Date.AddDays(1);
@@ -154,6 +161,93 @@ namespace MainAPP.Services
             {
                 LogService.Instance.Error($"获取筛选日志总数失败: {ex}");
                 return 0;
+            }
+        }
+
+        /// <summary>
+        /// 统计时间范围内各级别的日志条数（不做级别筛选，供级别胶囊计数）。
+        /// 返回字典 key 为规范化级别名（ERROR/WARNING/INFO/DEBUG 等），失败返回空字典。
+        /// </summary>
+        public async Task<IReadOnlyDictionary<string, int>> GetLevelCountsAsync(
+            DateTime? startTime,
+            DateTime? endTime,
+            CancellationToken cancellationToken = default)
+        {
+            if (!File.Exists(_databasePath)) return new Dictionary<string, int>();
+
+            try
+            {
+                using var dbContext = CreateDbContext();
+                var query = dbContext.Logs.AsNoTracking().AsQueryable();
+
+                if (startTime.HasValue)
+                {
+                    query = query.Where(l => l.Timestamp >= startTime.Value);
+                }
+                if (endTime.HasValue)
+                {
+                    var endInclusive = endTime.Value.Date.AddDays(1);
+                    query = query.Where(l => l.Timestamp < endInclusive);
+                }
+
+                var groups = await query
+                    .GroupBy(l => l.Level)
+                    .Select(g => new { Level = g.Key, Count = g.Count() })
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                foreach (var g in groups)
+                {
+                    var key = NormalizeLevel(g.Level ?? string.Empty);
+                    if (key.Length == 0)
+                    {
+                        key = "OTHER";
+                    }
+
+                    result[key] = result.TryGetValue(key, out var existing) ? existing + g.Count : g.Count;
+                }
+
+                return result;
+            }
+            catch (SqliteException ex)
+            {
+                LogService.Instance.Error($"统计级别日志数失败: {ex}");
+                return new Dictionary<string, int>();
+            }
+        }
+
+        /// <summary>
+        /// 获取 cutoff 之后的日志（仅投影 Timestamp 与 Level 两列，供最近 24 小时分布条内存分组）。
+        /// 上限 maxRows 行防失控。失败返回空列表。
+        /// </summary>
+        public async Task<IReadOnlyList<(DateTime Timestamp, string Level)>> GetRecentTimestampsAsync(
+            DateTime cutoff,
+            int maxRows = 50000,
+            CancellationToken cancellationToken = default)
+        {
+            if (!File.Exists(_databasePath)) return [];
+
+            try
+            {
+                using var dbContext = CreateDbContext();
+                var rows = await dbContext.Logs
+                    .AsNoTracking()
+                    .Where(l => l.Timestamp >= cutoff)
+                    .OrderByDescending(l => l.Id)
+                    .Select(l => new { l.Timestamp, l.Level })
+                    .Take(maxRows)
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                return rows
+                    .Select(r => (r.Timestamp, NormalizeLevel(r.Level ?? string.Empty)))
+                    .ToList();
+            }
+            catch (SqliteException ex)
+            {
+                LogService.Instance.Error($"加载最近日志分布数据失败: {ex}");
+                return [];
             }
         }
 

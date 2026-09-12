@@ -33,6 +33,17 @@ namespace MainAPP.Models
         public double DedupAngleThreshold { get; set; } = 2.0;
 
         /// <summary>
+        /// 跟踪项过期时间（秒，默认 60）：某产品最后一次成像后超过该时长未被再次拍到，
+        /// 跟踪状态（条码/匹配坐标/编码器值/角度锁定）即从内存清除。
+        ///
+        /// ★ 取值判据：必须大于相邻两次触发的最大时间间隔 = 触发间隔(mm) ÷ 最慢线速(mm/s)，
+        ///   建议 3 倍余量。触发间隔 200mm、最慢线速 20mm/s → 间隔 10s → 本值至少 30。
+        ///   取小了慢速产线会重复计数（每帧被判新品，角度锁定也中断 → -9999 不发 VGT）；
+        ///   取大了仅多占少量内存（每项约百字节级），无正确性风险——宁大勿小。
+        /// </summary>
+        public int TrackerExpireSeconds { get; set; } = 60;
+
+        /// <summary>
         /// 检测框距图像左边缘的最小间距（像素）。
         /// <para>检测框左边距 ≥ 该值才判定为有效（否则过滤，不落库/不发 VGT/不抓取），
         /// 防止抓到画面边缘的半个产品。默认 10，可设为 0 允许贴边。</para>
@@ -120,5 +131,20 @@ namespace MainAPP.Models
         /// 对比度拉伸窗口的高分位（0~100，默认 99）。语义见 <see cref="BrightnessStretchLowPercentile"/>。
         /// </summary>
         public double BrightnessStretchHighPercentile { get; set; } = 99.0;
+
+        /// <summary>
+        /// 检测结果 OK/NG 判定阈值（<b>百分比 0~100</b>，默认 75）。
+        ///
+        /// 判定规则（2026-09-12 由用户定义）：
+        /// <c>条码读取成功 且 边缘检测置信度×100 ≥ 本阈值 → "OK"，否则 "NG"</c>。
+        ///
+        /// ★ 单位提醒：落库的 <c>DbModel.Score</c> 来自 <c>InferenceResultItem.Confidence</c>，
+        /// 其量纲是 <b>0~1</b>（见该类注释与 <c>ConfidencePercent => Confidence * 100</c>）。
+        /// 本配置沿用「百分比」是人类可读口径，比较时必须先乘 100，切勿直接与 Score 相比——
+        /// 直接比会让 Score(≤1) 永远小于 75，全部误判为 NG。
+        ///
+        /// 该值参与落库 <c>DbModel.Result</c>，是 AI 对话回答「合格率/过站」类问题的数据基础。
+        /// </summary>
+        public double ResultOkScorePercent { get; set; } = 75.0;
     }
 }

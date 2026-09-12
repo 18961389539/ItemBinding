@@ -46,6 +46,10 @@ namespace MainAPP.Models
         [JsonIgnore]
         public SecuritySettings Security { get; set; } = new();
 
+        /// <summary>AI 对话模块配置（2026-09-12 新增）</summary>
+        [JsonIgnore]
+        public AiSettings Ai { get; set; } = new();
+
         // ===== 转发属性（参与 JSON 序列化，保持扁平结构与向后兼容）=====
         // 所有 Settings.Instance.Xxx 调用与 _settings.Xxx 调用继续正常工作
 
@@ -86,6 +90,7 @@ namespace MainAPP.Models
         public string DedupTrackAxis { get => Algorithm.DedupTrackAxis; set => Algorithm.DedupTrackAxis = value; }
         public double DedupPositionThreshold { get => Algorithm.DedupPositionThreshold; set => Algorithm.DedupPositionThreshold = value; }
         public double DedupAngleThreshold { get => Algorithm.DedupAngleThreshold; set => Algorithm.DedupAngleThreshold = value; }
+        public int TrackerExpireSeconds { get => Algorithm.TrackerExpireSeconds; set => Algorithm.TrackerExpireSeconds = value; }
 
         // --- 四边独立边缘最小间距（2026-09-05 由单一 EdgeMinMarginPixels 拆分）---
         public double EdgeMarginLeftPixels { get => Algorithm.EdgeMarginLeftPixels; set => Algorithm.EdgeMarginLeftPixels = value; }
@@ -102,6 +107,22 @@ namespace MainAPP.Models
         public string Password { get => Security.Password; set => Security.Password = value; }
         public int ExistLoginTimeout { get => Security.ExistLoginTimeout; set => Security.ExistLoginTimeout = value; }
         public string CurrentRecipeName { get => Security.CurrentRecipeName; set => Security.CurrentRecipeName = value; }
+
+        // --- AI 对话模块（2026-09-12 新增，扁平转发以参与 JSON 序列化）---
+        public bool AiEnabled { get => Ai.Enabled; set => Ai.Enabled = value; }
+        public string AiModelPath { get => Ai.ModelPath; set => Ai.ModelPath = value; }
+        public string AiBackend { get => Ai.Backend; set => Ai.Backend = value; }
+        public int AiGpuLayers { get => Ai.GpuLayers; set => Ai.GpuLayers = value; }
+        public uint AiContextSize { get => Ai.ContextSize; set => Ai.ContextSize = value; }
+        public float AiTemperature { get => Ai.Temperature; set => Ai.Temperature = value; }
+        public int AiMaxTokens { get => Ai.MaxTokens; set => Ai.MaxTokens = value; }
+        public bool AiLoadOnDemand { get => Ai.LoadOnDemand; set => Ai.LoadOnDemand = value; }
+        public bool AiAllowWriteTools { get => Ai.AllowWriteTools; set => Ai.AllowWriteTools = value; }
+        public int AiMaxQueryRows { get => Ai.MaxQueryRows; set => Ai.MaxQueryRows = value; }
+        public int AiMaxQueryDays { get => Ai.MaxQueryDays; set => Ai.MaxQueryDays = value; }
+        public string AiLlamaServerExe { get => Ai.LlamaServerExe; set => Ai.LlamaServerExe = value; }
+        public int AiLlamaServerPort { get => Ai.LlamaServerPort; set => Ai.LlamaServerPort = value; }
+        public string AiKnowledgeDocsFolder { get => Ai.KnowledgeDocsFolder; set => Ai.KnowledgeDocsFolder = value; }
 
         /// <summary>
         /// 设置变更事件（弱事件模式，订阅者被 GC 回收时自动取消订阅，无内存泄漏风险）

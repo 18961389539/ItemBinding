@@ -74,9 +74,27 @@
                     BorderBrush="{StaticResource TechCardBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="6">
-                    <controls:ImageViewer
-                        x:Name="DisplayControl"
-                        ImageSource="{Binding ImageForShow}" />
+                    <Grid>
+                        <controls:ImageViewer
+                            x:Name="DisplayControl"
+                            ImageSource="{Binding ImageForShow}" />
+
+                        <!--  采集健康 HUD（叠加层，不挡鼠标操作）：丢帧率/绑定延迟/编码器链路  -->
+                        <Border
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="10"
+                            Padding="10,6"
+                            Background="#CC141414"
+                            CornerRadius="6"
+                            IsHitTestVisible="False">
+                            <StackPanel Orientation="Vertical">
+                                <TextBlock FontFamily="Consolas" FontSize="11" Foreground="#9FE1CB" Text="{Binding DropRateDisplay}" />
+                                <TextBlock FontFamily="Consolas" FontSize="11" Foreground="#B4B2A9" Text="{Binding BindDelayDisplay}" />
+                                <TextBlock FontFamily="Consolas" FontSize="11" Foreground="#85B7EB" Text="{Binding EncoderLinkDisplay}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
                 </Border>
             </Grid>
 

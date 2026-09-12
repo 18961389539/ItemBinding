@@ -159,5 +159,23 @@ namespace MainAPP.Models
         /// null 语义与口径同 <see cref="BrightMean"/>。
         /// </summary>
         public double? BrightnessDiff { get; set; }
+
+        /// <summary>
+        /// 检测时使用的配方名（2026-09-12 追溯补列）。null = 历史数据或配方未知。
+        /// 有了它才能回答「某个配方下的合格率/耗时」这类追溯问题。
+        /// </summary>
+        public string? RecipeName { get; set; }
+
+        /// <summary>
+        /// 检测结果判定（2026-09-12 追溯补列）。约定 "OK" / "NG"；null = 未判定（历史数据）。
+        /// 用字符串而非枚举：SQLite 存 TEXT，便于直接 SQL 过滤与导出 CSV 后人类可读。
+        /// </summary>
+        public string? Result { get; set; }
+
+        /// <summary>
+        /// 工位 / 过站标识（2026-09-12 追溯补列）。单机场景填工站名；多工位场景用于把同一件产品的
+        /// 各站记录串成过站链。null = 未配置工位。
+        /// </summary>
+        public string? Station { get; set; }
     }
 }

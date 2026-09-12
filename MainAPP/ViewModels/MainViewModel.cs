@@ -150,6 +150,8 @@ namespace MainAPP.ViewModels
                 OnPropertyChanged(nameof(LoginStatusText));
                 OnPropertyChanged(nameof(LoginButtonText));
                 OnPropertyChanged(nameof(CanAccessRecipes));
+                UpdateRoleBadge();
+                UpdateSessionRemainDisplay();
                 OnPropertyChanged(nameof(CanAccessDatabase));
                 OnPropertyChanged(nameof(CanAccessSettings));
                 OnPropertyChanged(nameof(CanAccessLogs));
@@ -178,7 +180,9 @@ namespace MainAPP.ViewModels
             }
         }
 
-        public string LoginStatusText => _currentUser is null ? "未登录" : $"已登录：{_currentUser.DisplayName}";
+        // 精简（2026-09-12）：登录态由图标颜色表达（橙=已登录角色/灰=未登录），
+        // "已登录："前缀冗余——文本只留身份，为主页标题栏省约 60px
+        public string LoginStatusText => _currentUser is null ? "未登录" : _currentUser.DisplayName;
 
         /// <summary>
         /// 编码器接收状态文本，供顶部状态栏展示。
@@ -244,7 +248,94 @@ namespace MainAPP.ViewModels
             private set => SetProperty(ref _dropFrameText, value);
         }
 
-        public string LoginButtonText => _currentUser is null ? "登录系统" : "退出登录";
+        public string LoginButtonText => _currentUser is null ? "登录" : "注销";
+
+        /// <summary>角色徽章文本（管理员/操作员/访客），未登录为空（徽章背景透明即不可见）。</summary>
+        public string RoleBadgeText
+        {
+            get => _roleBadgeText;
+            private set => SetProperty(ref _roleBadgeText, value);
+        }
+        private string _roleBadgeText = string.Empty;
+
+        /// <summary>角色徽章颜色：管理员橙（可切配方/改参数）、操作员青、访客灰。</summary>
+        public System.Windows.Media.Brush RoleBadgeBrush
+        {
+            get => _roleBadgeBrush;
+            private set => SetProperty(ref _roleBadgeBrush, value);
+        }
+        private System.Windows.Media.Brush _roleBadgeBrush = System.Windows.Media.Brushes.Transparent;
+
+        /// <summary>
+        /// 会话剩余时间文本。仅手动登录且 ExistLoginTimeout &gt; 0 时显示——
+        /// 产线自动登录会话不限时（_isStartupAutoLogin 不启动超时定时器），显示"剩余"反而误导。
+        /// </summary>
+        public string SessionRemainDisplay
+        {
+            get => _sessionRemainDisplay;
+            private set => SetProperty(ref _sessionRemainDisplay, value);
+        }
+        private string _sessionRemainDisplay = string.Empty;
+
+        /// <summary>
+        /// 会话剩余时间的显示颜色：充足时半透明灰（融入标题栏），
+        /// 最后 5 分钟转橙提醒——避免操作员在配料/调参中途被超时登出打断。
+        /// </summary>
+        public System.Windows.Media.Brush SessionRemainBrush
+        {
+            get => _sessionRemainBrush;
+            private set => SetProperty(ref _sessionRemainBrush, value);
+        }
+        private System.Windows.Media.Brush _sessionRemainBrush = System.Windows.Media.Brushes.Transparent;
+
+        /// <summary>会话剩余时间的更新节流由 _loginTimeoutTimer.Tick 驱动（间隔 min(30s, 超时/2)）。</summary>
+        private void UpdateSessionRemainDisplay()
+        {
+            if (_currentUser is null || !_loginStopwatch.IsRunning
+                || Settings.Instance.ExistLoginTimeout <= 0 || _isStartupAutoLogin)
+            {
+                SessionRemainDisplay = string.Empty;
+                SessionRemainBrush = System.Windows.Media.Brushes.Transparent;
+                return;
+            }
+
+            var remain = TimeSpan.FromMilliseconds(Settings.Instance.ExistLoginTimeout) - _loginStopwatch.Elapsed;
+            if (remain < TimeSpan.Zero) remain = TimeSpan.Zero;
+            SessionRemainDisplay = remain.TotalMinutes >= 1
+                ? $"会话剩余 {remain.Minutes} 分 {remain.Seconds:00} 秒"
+                : $"会话剩余 {remain.Seconds} 秒";
+            // 最后 5 分钟转橙提醒（贴合并入会话的黄色告警系）；
+            // 充足时半透明灰——融入标题栏底色，不与角色徽章争抢视觉
+            SessionRemainBrush = remain.TotalMinutes < 5
+                ? MakeFrozenBrush(0xFF, 0xFF, 0xB3, 0x47)
+                : MakeFrozenBrush(0x88, 0xB4, 0xB2, 0xA9);
+        }
+
+        /// <summary>角色徽章：按 Role 映射文本与颜色（冻结画刷，线程安全）。</summary>
+        private void UpdateRoleBadge()
+        {
+            if (_currentUser is null)
+            {
+                // 未登录：文字徽章清空（图标改灰色仍可见——当前无登录身份）
+                RoleBadgeText = string.Empty;
+                RoleBadgeBrush = MakeFrozenBrush(0xFF, 0xB4, 0xB2, 0xA9);
+                return;
+            }
+
+            (RoleBadgeText, RoleBadgeBrush) = _currentUser.Role switch
+            {
+                UserRole.Admin => ("管理员", MakeFrozenBrush(0xFF, 0xFF, 0xB3, 0x47)),
+                UserRole.Operator => ("操作员", MakeFrozenBrush(0xFF, 0x5D, 0xCA, 0xA5)),
+                _ => ("访客", MakeFrozenBrush(0xFF, 0xB4, 0xB2, 0xA9)),
+            };
+        }
+
+        private static System.Windows.Media.SolidColorBrush MakeFrozenBrush(byte a, byte r, byte g, byte b)
+        {
+            var brush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(a, r, g, b));
+            brush.Freeze();
+            return brush;
+        }
 
         public bool CanAccessHome => true;
 
@@ -522,6 +613,8 @@ namespace MainAPP.ViewModels
             {
                 Logout();
             }
+
+            UpdateSessionRemainDisplay();
         }
 
         private void AutoMinimizeTimer_Tick(object? sender, EventArgs e)

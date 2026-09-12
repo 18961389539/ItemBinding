@@ -54,6 +54,42 @@ public sealed class DetectionRecordService
     /// </summary>
     private static readonly YoloTool DefaultAngleTool = new();
 
+    /// <summary>
+    /// 工位标识（2026-09-12 新增，落库 <c>DbModel.Station</c>）＝ 本机机器码。
+    ///
+    /// <para>取值复用项目既有的机器身份：<see cref="LicenseService.MachineCodeText"/> —— 激活窗口里
+    /// 展示/可复制的那个「本机机器码」，由 CPU 标识 + 系统盘卷序列号 + 首个物理网卡 MAC + 机器名 + 用户名
+    /// 哈希而成（见 <c>LicenseCore.HardwareFingerprint</c>，零 WMI：注册表 + P/Invoke）。</para>
+    ///
+    /// <para>★ 必须缓存：采集含注册表读取、<c>GetVolumeInformation</c> P/Invoke 与网卡枚举，
+    /// 若写在每条检测记录的热路径上（每秒数十条）会拖慢产线。项目内既有先例——
+    /// <c>LicenseService.IsActivated</c> 的注释即为「缓存启动时结果，避免每帧采集硬件指纹」。</para>
+    ///
+    /// <para>⚠️ 注意：机器码参与了 <c>Environment.UserName</c>，因此<b>换 Windows 账户运行会使本值改变</b>，
+    /// 同一台机器在不同账户下会被记成不同工位。若需与账户无关的工位标识，应改用机器名等，
+    /// 但那会与授权指纹脱钩，需另行决策。</para>
+    /// </summary>
+    /// <summary>当前工位标识（本机机器码），供 AI 查询等跨类场景复用（采集逻辑见 StationCode）。</summary>
+    public static string? CurrentStation => StationCode.Value;
+
+    private static readonly Lazy<string?> StationCode = new(
+        static () =>
+        {
+            try
+            {
+                var code = LicenseService.MachineCodeText;
+                // 空串归一为 null：列可空，NULL 表示"未记录"，比空串更利于 SQL 过滤与导出可读
+                return string.IsNullOrWhiteSpace(code) ? null : code;
+            }
+            catch (Exception ex)
+            {
+                // 采集失败不应阻断检测与落库：Station 退化为 NULL（语义同"未记录"）
+                LogService.Instance.Warning($"采集本机机器码失败，Station 将写空: {ex.Message}");
+                return null;
+            }
+        },
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
     // 2026-09-05: 边缘最小间距已拆为四边独立（Settings.Algorithm.EdgeMargin{Left,Top,Right,Bottom}Pixels，设置页可编辑，默认各 10px）
 
     // REVIEW-FIX: long 乘积钳制到 int 范围，供 isResize 缩放后的 Bounds 使用，
@@ -399,6 +435,13 @@ public sealed class DetectionRecordService
                 }
             }
 
+            // 2026-09-12: 「条码读取成功」的判据提到这里，成为**单一来源**。
+            // 原先它声明在下方 if (useMaskAnglePath) 块内，只有走到掩码角度路径时才存在；
+            // 但 OK/NG 落库（Result 列）在块外执行，非掩码路径下也需要该判据，
+            // 且绝不能在两处各写一遍判据——否则日后改 "noread" 哨兵规则会漏改一处。
+            bool hasBarcode = !string.IsNullOrEmpty(barcode)
+                              && !string.Equals(barcode, "noread", StringComparison.OrdinalIgnoreCase);
+
             if (useMaskAnglePath)
             {
                 // REVIEW-FIX(需求 2026-08-05): 未启用角度检测时，直接用分割掩码最小外接旋转矩形主轴角度
@@ -429,8 +472,7 @@ public sealed class DetectionRecordService
                 // 必须换算到与 fallbackAngle 同一坐标系：已标定 → 世界 mm（角度即世界角）；
                 // 未标定 → 推理图坐标（此时角度退化为推理图主轴角，见 ComputeMaskAngleCalibrated）。
                 // 配方平移补偿 offsetX/offsetY 是常量偏移，取两点差时自动抵消，无需叠加。
-                bool hasBarcode = !string.IsNullOrEmpty(barcode)
-                                  && !string.Equals(barcode, "noread", StringComparison.OrdinalIgnoreCase);
+                // hasBarcode 见本方法上方（已提升为方法级，掩码路径与 OK/NG 落库共用同一判据）
                 double headOffsetPx = Math.Sqrt(
                     (imageBarcodeX - imageX) * (imageBarcodeX - imageX)
                     + (imageBarcodeY - imageY) * (imageBarcodeY - imageY));
@@ -489,6 +531,19 @@ public sealed class DetectionRecordService
                 BrightMean = brightnessStats?.MeanPlus,
                 DarkMean = brightnessStats?.MeanMinus,
                 BrightnessDiff = brightnessStats?.Diff,
+                // 2026-09-12: 追溯列——记录本帧检测时生效的配方名，使「某配方的合格率/耗时」
+                // 这类问题可被回答。取当前配方名，与界面/TCP 切配方同源（RecipesManage 单例）。
+                RecipeName = RecipesManage.Instance.CurrentRecipe?.Name,
+                // 2026-09-12: OK/NG 判定（用户定义的规则：条码读取成功 且 置信度 ≥ 阈值 → OK）。
+                // 判定与量纲换算统一由 DetectionResultEvaluator 承担（Score 是 0~1，阈值是百分比）。
+                // 「条码读取成功」复用上方方法级 hasBarcode（含 "noread" 哨兵排除），单一来源。
+                Result = DetectionResultEvaluator.Evaluate(
+                    hasBarcode,
+                    edgeResult.Confidence,
+                    Models.Settings.Instance.Algorithm.ResultOkScorePercent),
+                // 2026-09-12: 工位 = 本机机器码（见 StationCode 字段注释：进程内只采集一次并缓存）。
+                // 单机场景下"工位"即这台检测设备，用于把同一件产品的记录归到一条过站链上。
+                Station = StationCode.Value,
             };
 
             if (saveDraw && !string.IsNullOrEmpty(folder))

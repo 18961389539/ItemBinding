@@ -38,6 +38,15 @@ namespace MainAPP
             { "About", 5 },
         };
 
+        /// <summary>
+        /// 跳转到 AI 助手标签页（按命名元素定位，不依赖 TabItem 顺序索引）。
+        /// 调用方：日志页「问 AI 助手」按钮等场景。
+        /// </summary>
+        public void ActivateAiChatTab()
+        {
+            MainTabControl.SelectedItem = AiChatTabItem;
+        }
+
         public MainWindow()
         {
             // M128: 构造函数顶层 try-catch，防止初始化异常导致窗口处于不一致状态

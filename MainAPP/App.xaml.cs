@@ -2,6 +2,7 @@ using Extensions;
 using MainAPP.Application;
 using MainAPP.Models;
 using MainAPP.Services;
+using MainAPP.Services.AI;
 using MainAPP.Views;
 using MainAPP.ViewModels;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,10 @@ namespace MainAPP
         // 由原 WebLiveView 独立进程的能力移植而来，改为进程内托管以复用 Devices.Scanners 单例，
         // 避免两个进程争抢同一台 GigE 读码器；使用 HttpListener 而非 Kestrel，零新增框架依赖。
         private readonly CameraWebHost _cameraWebHost = new();
+        // 2026-09-12: AI 对话 Web 服务（浏览器级对话 UI，监听 5190 端口）。
+        // 内嵌页面跑 Deep Chat（MIT），C# 侧只提供 /ai/chat 端点桥接到 AiChatService。
+        // 同一份页面也暴露给手机浏览器，与 CameraWebHost（5188）同一模式、错开端口。
+        private readonly AiWebHost _aiWebHost = new();
         // L407b: OnExit 数据清理任务等待超时（秒）
         private const int OnExitDataCleanupWaitSec = 5;
         private const int OnExitDataCleanupFinalWaitSec = 1;
@@ -250,6 +255,14 @@ namespace MainAPP
             try { _cameraWebHost.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止相机调试 Web 服务失败: {ex}"); }
 
+            // 2026-09-12: 停止 AI 对话 Web 服务（与相机调试服务同一时序，须在扫码枪关闭之前）
+            try { _aiWebHost.Stop(); }
+            catch (Exception ex) { LogService.Instance.Error($"停止 AI 对话 Web 服务失败: {ex}"); }
+
+            // 2026-09-12: 停止 llama-server 侧车（进程内推理已退役，显存由侧车持有）
+            try { LlamaServerHost.Instance.Stop(); }
+            catch (Exception ex) { LogService.Instance.Error($"停止 llama-server 侧车失败: {ex}"); }
+
             // H64: 超时后 Cancel 并等待任务退出（带较短二次等待），再调用 Close()
             try { _scannerInitializeCts?.Cancel(); }
             catch (Exception ex) { LogService.Instance.Error($"取消扫码枪初始化 CTS 失败: {ex}"); }
@@ -353,7 +366,10 @@ namespace MainAPP
             Log.Logger = new LoggerConfiguration()
                 .MinimumLevel.Debug()
                 .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
-                .WriteTo.File(Path.Combine(logDirectory, "log-.txt"), rollingInterval: RollingInterval.Day)
+                // retainedFileCountLimit:32（约 1 个月）：3 帧/s 连续运行时 txt 日志约 150-170MB/天，
+                // 无上限会无限累积——SQLite 侧已有 retentionPeriod/maxDatabaseSize 双保留，txt 侧补齐。
+                .WriteTo.File(Path.Combine(logDirectory, "log-.txt"), rollingInterval: RollingInterval.Day,
+                    retainedFileCountLimit: 32)
                 .WriteTo.SQLite(sqliteDbPath: logDbPath,
                                     tableName: "Logs",
                                     storeTimestampInUtc: false,
@@ -519,6 +535,17 @@ namespace MainAPP
             {
                 LogService.Instance.Error($"启动相机调试 Web 服务失败: {ex}");
             }
+
+            // 2026-09-12: 启动 AI 对话 Web 服务（浏览器级对话 UI）。此处仅起监听，
+            // 真正加载模型发生在首个提问时（AiChatService 按需加载）。
+            try
+            {
+                _aiWebHost.Start();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"启动 AI 对话 Web 服务失败: {ex}");
+            }
         }
 
         private static async Task InitializeDatabaseAsync()
@@ -528,6 +555,8 @@ namespace MainAPP
             await db.EnsureIndexesAsync().ConfigureAwait(false);
             // 2026-09-08: 灰度判向统计列升级（既有库补列，幂等；EnsureCreated 不会给已存在库加列）
             await db.EnsureBrightnessColumnsAsync().ConfigureAwait(false);
+            // 2026-09-12: 追溯列升级（RecipeName / Result / Station），AI 对话查追溯数据的前提
+            await db.EnsureTraceColumnsAsync().ConfigureAwait(false);
             await MigrateLegacyAngleDomainAsync(db).ConfigureAwait(false);
             LogService.Instance.Info("应用程序启动");
         }

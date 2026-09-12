@@ -13,7 +13,6 @@
     <Project Path="ScottPlot5/ScottPlot.csproj" />
   </Folder>
   <Folder Name="/src/Tools/">
-    <Project Path="AIAgent/AIAgent.csproj" Id="2a7fab7d-829c-42ba-889d-216a389ded4a" />
   </Folder>
   <Folder Name="/src/LicenseSystem/">
     <Project Path="LicenseSystem/src/LicenseCore/LicenseCore.csproj" />

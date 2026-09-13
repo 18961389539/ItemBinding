@@ -1,4 +1,4 @@
-using MainAPP.Models;
+﻿using MainAPP.Models;
 using MainAPP.ViewModels;
 using OpenCvSharp;
 using System;
@@ -296,14 +296,39 @@ namespace MainAPP.Services
         // 路由实现
         // ─────────────────────────────────────────────────────────────
 
+        private const string IndexResourceName = "MainAPP.Web.CameraIndex.html";
+
         private static async Task WriteHtmlAsync(HttpListenerResponse response, CancellationToken ct)
         {
-            var bytes = Encoding.UTF8.GetBytes(IndexHtml);
+            var html = await ReadEmbeddedAsync(IndexResourceName, ct).ConfigureAwait(false) ?? "<h1>相机页面资源缺失</h1>";
+            var bytes = Encoding.UTF8.GetBytes(html);
             response.StatusCode = 200;
             response.ContentType = "text/html; charset=utf-8";
             response.ContentLength64 = bytes.Length;
             response.Headers["Cache-Control"] = "no-store";
             await response.OutputStream.WriteAsync(bytes, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>读取嵌入资源文本（2026-09-13 起页面为独立 Web/*.html 嵌入资源）。</summary>
+        private static async Task<string?> ReadEmbeddedAsync(string name, CancellationToken ct)
+        {
+            try
+            {
+                using var stream = typeof(CameraWebHost).Assembly.GetManifestResourceStream(name);
+                if (stream is null)
+                {
+                    LogService.Instance.Error($"未找到嵌入资源 {name}");
+                    return null;
+                }
+
+                using var reader = new System.IO.StreamReader(stream, Encoding.UTF8);
+                return await reader.ReadToEndAsync(ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"读取嵌入资源 {name} 失败: {ex.Message}");
+                return null;
+            }
         }
 
         private static async Task WriteTextAsync(HttpListenerResponse response, string text, CancellationToken ct)
@@ -800,160 +825,5 @@ namespace MainAPP.Services
         private readonly record struct FramePacket(int Version, byte[] Bytes);
 
         // ─────────────────────────────────────────────────────────────
-        // 内嵌前端（单文件，无外部依赖；手机原生浏览器直接可用）
-        // ─────────────────────────────────────────────────────────────
-
-        private const string IndexHtml = """
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>相机远程调试</title>
-<style>
-*{box-sizing:border-box}
-body{margin:0;background:#101014;color:#e8e8ec;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif}
-header{padding:12px 16px;border-bottom:1px solid #26262e;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
-h1{font-size:15px;font-weight:600;margin:0}
-#dot{width:9px;height:9px;border-radius:50%;background:#888;display:inline-block;vertical-align:middle;margin-right:7px}
-.meta{color:#8a8a96;font-size:12px}
-.wrap{padding:14px;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:14px}
-.card{background:#17171d;border:1px solid #26262e;border-radius:10px;padding:12px}
-.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:#9a9af0}
-img.video{width:100%;display:block;background:#000;border-radius:8px;min-height:140px}
-dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:13px}
-dt{color:#9a9aa8}
-dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
-.row{display:flex;align-items:center;gap:10px;margin:10px 0 14px}
-.row label{width:44px;color:#9a9aa8;font-size:13px}
-.row input[type=range]{flex:1}
-.row input[type=number]{width:86px;background:#101014;border:1px solid #33333d;color:#e8e8ec;border-radius:6px;padding:5px 8px;font-size:13px}
-.btn{background:#2a2a66;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
-.btn:hover{background:#33337e}
-.btn:disabled{background:#33333d;color:#777;cursor:not-allowed}
-#msg{min-height:20px;font-size:13px;color:#9adc9a;margin-top:4px}
-.dim{color:#66667a}
-table{width:100%;border-collapse:collapse;font-size:12.5px}
-th{color:#9a9aa8;text-align:left;padding:6px 8px;border-bottom:1px solid #26262e;font-weight:500;white-space:nowrap}
-td{padding:6px 8px;border-bottom:1px solid #20202a;font-variant-numeric:tabular-nums;white-space:nowrap}
-tr:hover td{background:#1c1c24}
-.ok{color:#3ddc84}.ng{color:#ff6b6b}
-.hint{color:#7d7d8e;font-size:12px;margin:10px 0 0;line-height:1.7}
-@media (max-width:760px){.wrap{grid-template-columns:1fr}}
-</style>
-</head>
-<body>
-<header><h1><span id="dot"></span>相机远程调试</h1><span class="meta" id="meta">—</span></header>
-<div class="wrap">
-
-  <div class="card">
-    <h2>实时画面</h2>
-    <img class="video" id="live" src="/mjpeg" alt="实时画面">
-    <p class="hint">接入期间主程序暂停取帧并切换软触发，全部页面关闭约 15 秒后自动恢复。画面长时间空白请确认读码器已连接且服务以管理员权限启动（否则仅本机可访问）。</p>
-  </div>
-
-  <div>
-    <div class="card" style="margin-bottom:14px">
-      <h2>设备状态</h2>
-      <dl>
-        <dt>连接状态</dt><dd id="s-conn">-</dd>
-        <dt>触发模式</dt><dd id="s-trig">-</dd>
-        <dt>设备型号</dt><dd id="s-model">-</dd>
-        <dt>序列号</dt><dd id="s-serial">-</dd>
-        <dt>IP 地址</dt><dd id="s-ip">-</dd>
-        <dt>刷新</dt><dd><span class="meta" id="meta2">-</span></dd>
-      </dl>
-    </div>
-
-    <div class="card">
-      <h2>参数调节</h2>
-      <div class="row">
-        <label>曝光</label>
-        <input type="range" id="sl-exp" min="0" max="100000" step="100">
-        <input type="number" id="in-exp" min="0" step="100">
-        <button class="btn" id="btn-exp">应用</button>
-      </div>
-      <div class="row">
-        <label>增益</label>
-        <input type="range" id="sl-gain" min="0" max="30" step="0.1">
-        <input type="number" id="in-gain" min="0" step="0.1">
-        <button class="btn" id="btn-gain">应用</button>
-      </div>
-      <div id="msg"></div>
-      <p class="hint">滑块/输入框显示当前值；拖动后点“应用”生效。写入走主循环互斥时序（写参数期间主循环暂短暂停）。</p>
-    </div>
-  </div>
-</div>
-
-<div class="wrap" style="padding-top:0">
-  <div class="card">
-    <h2>最近检测</h2>
-    <table>
-      <thead><tr><th>时间</th><th>条码</th><th>X</th><th>Y</th><th>角度</th><th>编码器</th><th>结果</th></tr></thead>
-      <tbody id="tbody"></tbody>
-    </table>
-  </div>
-</div>
-
-<script>
-var $=function(id){return document.getElementById(id);};
-function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
-function reconnect(){var img=$('live');img.src='/mjpeg?t='+Date.now();}
-$('live').onerror=function(){setTimeout(reconnect,2000);};
-
-function setSlider(which,val,min,max,dec){
-  var sl=$(which==='exp'?'sl-exp':'sl-gain'), iv=$(which==='exp'?'in-exp':'in-gain');
-  if(min!==undefined&&max!==undefined){sl.min=min;sl.max=max;}
-  if(document.activeElement!==sl&&val!=null){sl.value=val;}
-  if(document.activeElement!==iv&&val!=null){iv.value=parseFloat(val).toFixed(dec);}
-}
-async function tick(){
-  try{
-    var r=await fetch('/api/status',{cache:'no-store'});
-    var s=await r.json();
-    $('dot').style.background=s.connected?'#3ddc84':'#e05252';
-    $('s-conn').textContent=s.connected?'已连接':'未连接';
-    $('s-trig').textContent=s.triggerMode||'-';
-    $('s-model').textContent=s.model||'-';
-    $('s-serial').textContent=s.serial||'-';
-    $('s-ip').textContent=s.ip||'-';
-    $('meta').textContent='客户端 '+s.clients+(s.paused?' · 主循环已暂停':'');
-    $('meta2').textContent=new Date().toLocaleTimeString();
-    setSlider('exp',s.exposure,s.exposureMin,s.exposureMax,0);
-    setSlider('gain',s.gain,s.gainMin,s.gainMax,2);
-  }catch(e){$('dot').style.background='#888';}
-}
-function apply(which){
-  var p=$(which==='exp'?'in-exp':'in-gain').value;
-  var q=which==='exp'?'exposure='+encodeURIComponent(p):'gain='+encodeURIComponent(p);
-  fetch('/api/set?'+q,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
-    var ok=!!(j&&j.ok);
-    $('msg').textContent=(ok?'✓ 生效：':'✗ ')+(j&&j.msg||'失败');
-    $('msg').style.color=ok?'#9adc9a':'#ff6b6b';
-    if(ok)setTimeout(tick,600);
-  }).catch(function(){$('msg').textContent='✗ 请求失败';$('msg').style.color='#ff6b6b';});
-}
-async function recentTick(){
-  try{
-    var r=await fetch('/api/recent?count=8',{cache:'no-store'});
-    var rows=await r.json();
-    var h='';
-    if(!rows||rows.length===0)h='<tr><td colspan="7" class="dim">暂无检测记录</td></tr>';
-    else for(var i=0;i<rows.length;i++){
-      var m=rows[i];
-      h+='<tr><td>'+esc(m.time)+'</td><td>'+(m.barcode?esc(m.barcode):'<span class="dim">—</span>')+'</td><td>'+m.x+'</td><td>'+m.y+'</td><td>'+m.a+'</td><td>'+m.enc+'</td><td class="'+(m.result==='NG'?'ng':'ok')+'">'+esc(m.result)+'</td></tr>';
-    }
-    $('tbody').innerHTML=h;
-  }catch(e){}
-}
-$('btn-exp').onclick=function(){apply('exp');};
-$('btn-gain').onclick=function(){apply('gain');};
-setInterval(tick,1000);
-setInterval(recentTick,3000);
-tick();recentTick();
-</script>
-</body>
-</html>
-""";
     }
 }

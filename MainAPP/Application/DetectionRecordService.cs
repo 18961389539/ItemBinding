@@ -504,7 +504,9 @@ public sealed class DetectionRecordService
                     {
                         double radM = fallbackAngle * Math.PI / 180.0;
                         double cosM = (dxModel * Math.Cos(radM) + dyModel * Math.Sin(radM)) / modelLen;
-                        modelFlipAngle = cosM >= 0 ? fallbackAngle : fallbackAngle + 180.0;
+                        // 镜像标定下世界系 cos 与图像系相反，反转判定与特征池"大的一侧是头"对齐
+                        var effCosM = transformer.IsInitialized && transformer.IsMirrored ? -cosM : cosM;
+                        modelFlipAngle = effCosM >= 0 ? fallbackAngle : fallbackAngle + 180.0;
                     }
 
                     // 绘制信息：产品中心 → 特征中心连线（原图像素），供 UI 显示消歧信号来源
@@ -588,6 +590,7 @@ public sealed class DetectionRecordService
             // 特征池取首个出死区特征兜底；全部不可用则维持不带朝向的回退角。
             var barcodeAngle = TryApplyBarcodeHeadDirection(
                               fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx,
+                              invertForMirror: transformer.IsInitialized && transformer.IsMirrored,
                               out var barcodeTruthPositive);
             // 真值符号仅在有码且 QR 成功定头尾时有效；否则保持 null（语义区别于 false）
             headTruthPositive = barcodeAngle.HasValue ? barcodeTruthPositive : (bool?)null;
@@ -624,6 +627,8 @@ public sealed class DetectionRecordService
                 // L108: imageReceivedTime 与 detectTime 完全相同，直接使用 detectTime
                 ImageReceivedTime = detectTime,
                 Speed = speed,
+                // 2026-09-13: 标定标志（区分真 mm/世界角 与 未标定的像素/图像角兜底值）
+                IsCalibrated = transformer.IsInitialized,
                 Score = edgeResult.Confidence,
                 // 2026-09-08: 灰度判向统计随记录落库（仅无角度模型回退 + 判向实际统计完成时有值），
                 // 供现场标定/验证：头端明暗假设是否成立、死区阈值是否合适、判向方向一致性分析。
@@ -710,6 +715,7 @@ public sealed class DetectionRecordService
         double dyHead,
         double headOffsetPx,
         double longAxisPx,
+        bool invertForMirror,
         out bool truthPositive)
     {
         truthPositive = false;
@@ -732,9 +738,12 @@ public sealed class DetectionRecordService
         }
 
         // 真值符号：投影 ≥ 0 表示头端在角度正向半区（与后续"不翻转"分支同一判据）
-        truthPositive = cos >= 0;
+        // 2026-09-13: 镜像标定（transformer.IsMirrored）下反射使世界系 cos 符号与图像系相反，
+        // 反转判定以对齐特征池"数值大的一侧是头部"约定，避免 QR 一致率系统性反向。
+        var effCos = invertForMirror ? -cos : cos;
+        truthPositive = effCos >= 0;
         // 头端（二维码所在端）落在角度负向半区时翻转 180°，使其与角度正向对齐
-        return cos >= 0 ? baseAngle : baseAngle + 180.0;
+        return effCos >= 0 ? baseAngle : baseAngle + 180.0;
     }
 
     /// <summary>

@@ -134,6 +134,13 @@ namespace MainAPP.Models
             {
                 await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightnessDiff REAL NULL", cancellationToken).ConfigureAwait(false);
             }
+
+            // 2026-09-13: 标定标志列（IsCalibrated：WorldX/Y 与 Angle 是否标定坐标系下的真值；
+            // 未标定时 WorldX/Y 为像素、Angle 为图像角的兜底值，下游可据此区分真值与假数值）
+            if (!cols.Contains("IsCalibrated"))
+            {
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN IsCalibrated INTEGER NULL", cancellationToken).ConfigureAwait(false);
+            }
         }
 
         /// <summary>

@@ -194,6 +194,13 @@ namespace MainAPP.Models
         public string? Result { get; set; }
 
         /// <summary>
+        /// 本记录是否在"三点标定坐标系"下计算（2026-09-13）。
+        /// true = WorldX/Y 为真实 mm、Angle 为世界角；false = 未标定兜底（WorldX/Y 为像素、
+        /// Angle 为图像角），下游报表/去重可据此区分真值与假数值。
+        /// </summary>
+        public bool? IsCalibrated { get; set; }
+
+        /// <summary>
         /// 工位 / 过站标识（2026-09-12 追溯补列）。单机场景填工站名；多工位场景用于把同一件产品的
         /// 各站记录串成过站链。null = 未配置工位。
         /// </summary>

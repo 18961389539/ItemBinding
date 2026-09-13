@@ -71,65 +71,16 @@ namespace MainAPP.Services
 
     #endregion
 
-    #region ToVGT 静态门面（向后兼容桥接）
+    #region 角度域工具（原 ToVGT 静态门面的纯函数部分，2026-09-13 精简）
 
     /// <summary>
-    /// 与 VGT（视觉引导系统）通信的静态门面类。
-    /// 内部委托给 <see cref="ToVGTService"/> 实例。
-    ///
-    /// 此为过渡方案：所有新代码应通过 <see cref="IToVGTService"/> 接口使用。
-    /// 该类将在 DI 改造完成后的 Stage 4 中移除。
+    /// 角度域纯工具类。
+    /// <para>2026-09-13：移除 ToVGT 静态门面的"实例桥接"双轨（Start/Stop/SendTo/状态委托
+    /// 全部删除，无实际调用方）——通信一律走 DI 注入的 <see cref="IToVGTService"/>；
+    /// 此处仅保留无副作用的 <see cref="ToRobotAngle"/> 纯函数，供全链路角度归一化共用。</para>
     /// </summary>
     public static class ToVGT
     {
-        private static volatile ToVGTService? _service;
-
-        /// <summary>
-        /// 设置底层服务实例（由 DI/App 启动时调用）。
-        /// 仅在服务为 null 时设置，防止被覆盖。
-        /// </summary>
-        internal static void SetService(ToVGTService service)
-        {
-            ArgumentNullException.ThrowIfNull(service);
-            Interlocked.CompareExchange(ref _service, service, null);
-        }
-
-        private static ToVGTService Service =>
-            _service ?? throw new InvalidOperationException("ToVGT 尚未初始化，请先调用 ToVGT.SetService() 。");
-
-        /// <summary>表示机器人是否可达（Ping 成功）。</summary>
-        public static bool IsRobotOnLive => Service.IsRobotOnLive;
-
-        /// <summary>表示 VGT 是否可达（Ping 成功）。</summary>
-        public static bool IsVGTOnLive => Service.IsVGTOnLive;
-
-        /// <summary>相邻两次收到编码器报文的时间间隔（毫秒）。</summary>
-        public static long Speed => Service.Speed;
-
-        /// <summary>最近一次成功接收编码器报文的时间（本地时间）。</summary>
-        public static DateTime? LastEncoderReceiveTime => Service.LastEncoderReceiveTime;
-
-        /// <summary>启动 ToVGT 服务。</summary>
-        public static void Start()
-        {
-            // 同步包装异步 StartAsync，使用 GetAwaiter().GetResult() 避免 sync-over-async 死锁
-            // 该方法在 App.OnStartup 的同步阶段调用，UI 线程无其他 async 操作，安全
-#pragma warning disable VSTHRD002
-            Service.StartAsync().GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
-        }
-
-        /// <summary>异步停止 ToVGT 服务。</summary>
-        public static Task StopAsync() => Service.DisposeAsync().AsTask();
-
-        /// <summary>查找并移除最接近但不晚于指定时间点的编码器记录。</summary>
-        public static (uint Encoder, DateTime Time) MostRecentDateEncode(DateTime searchTime)
-            => Service.MostRecentDateEncode(searchTime);
-
-        /// <summary>将检测结果发送给 VGT。</summary>
-        public static void SendTo(IEnumerable<DbModel> models, FrameResult scannerResult, string receiver = "LL")
-            => Service.SendTo(models, scannerResult, receiver);
-
         /// <summary>
         /// 把任意来源的角度归一化到系统规范域/机器人协议域 (-180,180]。
         /// 2026-09-05 起 DbModel.Angle 落库已直接为此域，本方法为幂等换算，

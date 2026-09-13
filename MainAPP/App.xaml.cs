@@ -400,11 +400,9 @@ namespace MainAPP
             services.AddSingleton<AuthService>(AuthService.Instance);
             services.AddSingleton<LogDatabaseService>(LogDatabaseService.Instance);
 
-            // IToVGTService：通过 INetworkSettings 接口注入网络参数，替代原 ToVGT 静态类
+            // IToVGTService：通过 Settings 注入网络参数（2026-09-13：ToVGT 静态桥接已移除，仅此一处入口）
             var toVgtService = new ToVGTService(Settings.Instance);
             services.AddSingleton<IToVGTService>(toVgtService);
-            // 桥接：让旧代码中的 ToVGT.Xxx 静态调用继续工作
-            ToVGT.SetService(toVgtService);
 
             // ModelLoaderService：负责 YOLO 模型加载（三级回退策略）
             services.AddSingleton<ModelLoaderService>();

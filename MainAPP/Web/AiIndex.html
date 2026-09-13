@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>AI 检测助手</title>
+<script type="module" src="/deepchat.js"></script>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#101014;color:#e8e8ec;
+  font:14px/1.6 -apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif}
+header{padding:10px 14px;border-bottom:1px solid #26262e;display:flex;
+  justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:600;margin:0}
+.hint{color:#8a8a96;font-size:12px}
+.panel{display:flex;gap:24px;padding:8px 14px;background:#17171d;
+  border-bottom:1px solid #26262e;font-size:12px;overflow-x:auto;align-items:center}
+.panel .k{color:#8a8a96;margin-right:6px}
+.panel .v{font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px}
+.badge.on{background:#173c2c;color:#3ddc84}
+.badge.off{background:#3c1a1a;color:#ff6b6b}
+.badge.idle{background:#26262e;color:#9a9aa8}
+#clearBtn{background:#2a2a66;border:none;color:#fff;border-radius:6px;
+  padding:3px 12px;cursor:pointer;font-size:12px}
+#clearBtn:hover{background:#33337e}
+deep-chat{width:100%;height:calc(100% - 92px);display:block}
+@media (max-width:700px){.panel{flex-direction:column;gap:6px;align-items:flex-start}}
+</style>
+</head>
+<body>
+<header><h1>AI 检测助手</h1><span class="hint" id="meta">—</span>
+<button id="clearBtn">清空会话</button></header>
+<div class="panel">
+  <span class="item"><span class="k">模型</span><span class="v" id="i-model">-</span></span>
+  <span class="item"><span class="k">后端</span><span class="v" id="i-backend">-</span></span>
+  <span class="item"><span class="k">上下文</span><span class="v" id="i-ctx">-</span></span>
+  <span class="item"><span class="k">加载</span><span id="i-loaded">-</span></span>
+  <span class="item"><span class="k">写工具</span><span id="i-write">-</span></span>
+  <span class="item"><span class="k">待确认写入</span><span id="i-pending">-</span></span>
+  <span class="item"><span class="k">知识库</span><span class="v" id="i-kb">-</span></span>
+</div>
+<deep-chat
+  connect='{"url":"/ai/chat/stream","method":"POST","stream":true}'
+  history='[{"text":"你好，我是检测系统的 AI 助手。可以问我：某个条码的检测记录、最近几小时的统计、当前相机参数。","role":"ai"}]'
+  textInput='{"placeholder":{"text":"问点什么…（例如：查一下条码 ABC123）"}}'
+  chatStyle='{"border":"none","fontFamily":"inherit"}'
+  messageStyle='{"default":{"backgroundColor":"transparent","fontSize":"14px"}}'
+></deep-chat>
+<script>
+var $=function(id){return document.getElementById(id);};
+function badge(el,on,onTxt,offTxt){el.className=on?'badge on':'badge off';el.textContent=on?onTxt:offTxt;}
+async function infoTick(){
+  try{
+    var r=await fetch('/ai/info',{cache:'no-store'});
+    var s=await r.json();
+    $('i-model').textContent=s.model||'(未配置)';
+    $('i-backend').textContent=s.backend||'-';
+    $('i-ctx').textContent=(s.contextSize?Math.round(s.contextSize/1024)+' K':'?')+' / 回复 '+s.maxTokens;
+    badge($('i-loaded'),!!s.loaded,'已加载','未加载');
+    badge($('i-write'),!!s.allowWriteTools,'开启','关闭');
+    badge($('i-pending'),!!s.pendingWrite,'有','无');
+    $('i-kb').textContent=(s.knowledgeCount||0)+' 篇'+(s.knowledge&&s.knowledge.length?('：'+s.knowledge.join('、')):'');
+    $('meta').textContent='更新于 '+new Date().toLocaleTimeString();
+  }catch(e){}
+}
+$('clearBtn').onclick=function(){
+  $('clearBtn').disabled=true;
+  fetch('/ai/clear',{method:'POST',cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    alert(j&&j.ok?'已开启新会话，刷新页面可见新的对话记录。':'清空失败：'+(j&&j.msg||'未知错误'));
+    infoTick();
+  }).finally(function(){ $('clearBtn').disabled=false; });
+};
+setInterval(infoTick,5000);
+infoTick();
+</script>
+</body>
+</html>

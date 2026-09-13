@@ -50,6 +50,13 @@ namespace CoordinateSystemMapping
         public bool IsInitialized { get; set; } = false;
 
         /// <summary>
+        /// 标定构图为镜像（2026-09-13）：X/Y 轴单位向量叉积 &lt; 0 表示三点标定构成反射（图像系与
+        /// 机器人系存在镜像）。反射会把夹角/点积整体变号 → 二维码投影（世界系）与特征池（图像系）
+        /// 的"头向"约定系统性相反，QR 一致率自检会被误导；由调用方按本标志翻转 cos 判定对齐。
+        /// </summary>
+        public bool IsMirrored { get; private set; }
+
+        /// <summary>
         /// 根据三个图像标定点和对应的物理距离建立坐标系映射。
         /// </summary>
         /// <param name="po">原点（图像坐标，像素）</param>
@@ -91,6 +98,8 @@ namespace CoordinateSystemMapping
             // 计算单位向量（图像坐标系中的归一化方向）
             _unitX = new Point2f((float)(dxX / pixelDistX), (float)(dyX / pixelDistX));
             _unitY = new Point2f((float)(dxY / pixelDistY), (float)(dyY / pixelDistY));
+            // 镜像检测（2026-09-13）：X/Y 轴单位向量叉积 < 0 = 反射构图，见 IsMirrored 注释
+            IsMirrored = (_unitX.X * _unitY.Y - _unitX.Y * _unitY.X) < 0;
             IsInitialized = true;
         }
 

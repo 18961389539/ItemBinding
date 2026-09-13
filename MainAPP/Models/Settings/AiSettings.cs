@@ -65,10 +65,11 @@ namespace MainAPP.Models
 
         /// <summary>
         /// RAG 语料根目录（递归扫描 .md/.txt/.docx，目录黑名单剪枝）。
-        /// 默认工作区根 —— 覆盖 docs/ 下两份手册与根目录的说明文档。
-        /// 生产部署时指向随应用分发的 docs 目录。
+        /// 默认空 = 只用随应用分发的 <c>BaseDirectory/Saves/Knowledge/</c>；
+        /// 需要额外语料时在设置页/配置里显式填写。
+        /// （2026-09-13 起不再硬编码本机路径，避免换机部署即失效。）
         /// </summary>
-        public string KnowledgeDocsFolder { get; set; } = "D:/code/物码绑定";
+        public string KnowledgeDocsFolder { get; set; } = string.Empty;
 
         /// <summary>
         /// 是否允许 AI 调用「写」类工具（调曝光/切配方等）。

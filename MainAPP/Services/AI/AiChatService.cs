@@ -284,7 +284,7 @@ namespace MainAPP.Services.AI
                         type = "object",
                         properties = new
                         {
-                            intent = new { type = "string", @enum = new[] { "by_barcode", "by_time_range", "aggregate", "camera_settings", "by_result", "get_image", "by_recipe", "by_station", "compare_periods", "switch_recipe", "daily_report", "search_knowledge", "search_logs", "get_settings", "get_recipes", "save_case", "unknown" } },
+                            intent = new { type = "string", @enum = new[] { "by_barcode", "by_time_range", "aggregate", "camera_settings", "by_result", "get_image", "by_recipe", "by_station", "compare_periods", "switch_recipe", "daily_report", "search_knowledge", "search_logs", "get_settings", "get_recipes", "headtail_audit", "save_case", "unknown" } },
                             barcode = new { type = "string" },
                             hours = new { type = "integer" },
                             period_hours = new { type = "integer" },
@@ -481,6 +481,76 @@ namespace MainAPP.Services.AI
             }, JsonOpts);
         }
 
+        /// <summary>
+        /// 头尾特征池自检：回答「哪个特征对区分头尾有决定性作用」。
+        /// <para>数据源：<c>HeadFeatures</c>（每帧判定轨迹）+ <c>HeadTruthPositive</c>（QR 真值符号）。
+        /// 输出三个指标——出死区率（有无区分力）/ 裁决占比（谁在干活）/ QR 一致率（判得对不对），
+        /// 以及一句综合诊断。三者缺一不可：只看前两个会把"常出死区但判错"误当主力特征。</para>
+        /// </summary>
+        /// <param name="hours">回溯小时数。</param>
+        /// <param name="recipe">限定配方名；空 = 全部配方混合统计。</param>
+        private async Task<string> BuildHeadTailAuditAsync(int hours, string? recipe)
+        {
+            hours = ClampHours(hours);
+            var since = DateTime.Now.AddHours(-hours);
+            var recipeFilter = string.IsNullOrWhiteSpace(recipe) ? null : recipe.Trim();
+
+            await using var db = new AppDbContext();
+            var query = db.BarcodeData.AsNoTracking()
+                .Where(x => x.DetectTime >= since && x.HeadFeatures != null);
+            if (recipeFilter is not null)
+            {
+                query = query.Where(x => x.RecipeName == recipeFilter);
+            }
+
+            var rows = await query
+                .OrderByDescending(x => x.DetectTime)
+                .Select(x => new { x.HeadFeatures, x.HeadTruthPositive })
+                .ToListAsync().ConfigureAwait(false);
+
+            if (rows.Count == 0)
+            {
+                return JsonSerializer.Serialize(new
+                {
+                    since, hours, recipe = recipeFilter,
+                    totalFrames = 0,
+                    note = "该时段内没有特征池判定记录（可能未启用特征池开关，或本时段无检测）",
+                }, JsonOpts);
+            }
+
+            var audit = Application.HeadTailFeatureAudit.Build(
+                rows.Select(r => r.HeadFeatures).ToList(),
+                rows.Select(r => r.HeadTruthPositive).ToList());
+
+            var stats = audit.Stats.Select(s => new
+            {
+                name = s.Name,
+                samples = s.TotalSamples,
+                decisiveRate = Math.Round(s.DecisiveRate * 100, 1),
+                adjudicatedRate = Math.Round(s.AdjudicatedRate * 100, 1),
+                truthSamples = s.TruthComparedCount,
+                agreeRate = s.TruthComparedCount > 0 ? Math.Round(s.AgreeRate * 100, 1) : (double?)null,
+                diagnosis = s.Diagnosis(),
+            }).ToList();
+
+            // 按裁决占比降序——直接回答"谁在干活"；一致率与样本量作为可信度依据一并给出
+            var ranked = stats.OrderByDescending(s => s.adjudicatedRate).ToList();
+
+            return JsonSerializer.Serialize(new
+            {
+                since,
+                hours,
+                recipe = recipeFilter,
+                totalFrames = audit.TotalFrames,
+                framesWithQrTruth = audit.FramesWithTruth,
+                allDeadbandRate = Math.Round(audit.AllDeadbandRate * 100, 1),
+                malformedFrames = audit.MalformedFrames,
+                byAdjudication = ranked,
+                note = "agreeRate 的分母是该特征出死区且有 QR 真值的帧数；" +
+                       "truthSamples 低于 30 时一致率仅供参考。decidableRate 低 = 该特征对本产品无区分力。",
+            }, JsonOpts);
+        }
+
         /// <summary>工位/过站：station 为空时取当前机器码（本机）。</summary>
         private async Task<string> QueryByStationAsync(string station, int hours, int limit)
         {
@@ -658,6 +728,9 @@ namespace MainAPP.Services.AI
                     GetSettingsSnapshot(GetStr(intent, "group") ?? "all")).ConfigureAwait(false),
                 "get_recipes" => await Task.FromResult(
                     GetRecipesSnapshot()).ConfigureAwait(false),
+                "headtail_audit" => await BuildHeadTailAuditAsync(
+                    GetInt(intent, "hours", 24),
+                    GetStr(intent, "recipe")).ConfigureAwait(false),
                 "save_case" => await SaveCaseAsync(
                     GetStr(intent, "title") ?? string.Empty,
                     GetStr(intent, "symptom") ?? string.Empty,
@@ -960,6 +1033,7 @@ intent 与字段：
 - get_settings: {"group":"algorithm或storage或database，省略=全部"}   ← 问"某设置/参数是多少、图片保留几天"
 - save_case: {"title":"标题","symptom":"症状","cause":"原因","solution":"解法","keywords":"关键词1,关键词2"}   ← 用户描述了一次异常的处理过程并要求记录/沉淀为案例
 - get_recipes: {}   ← 用户问"有哪些配方/当前是什么配方/当前配方的参数"（返回配方清单+当前配方参数快照）
+- headtail_audit: {"hours":24,"recipe":"配方B"}   ← 用户问"头尾判定靠哪个特征/哪个特征最有用/特征池效果/判得准不准/某特征有没有用"。返回逐特征三指标：出死区率（有无区分力）、裁决占比（谁在干活）、QR一致率（判得对不对）
 - unknown: {}
 hours 用整数小时数表示时间范围（例如"今天"按 24，"最近一小时"按 1）。
 示例：{"intent":"by_barcode","barcode":"ABC123","limit":20}

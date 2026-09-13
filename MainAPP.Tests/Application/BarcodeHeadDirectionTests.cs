@@ -32,7 +32,7 @@ public class BarcodeHeadDirectionTests
         double dy = Math.Sin(rad) * FarOffsetPx;
 
         double? result = DetectionRecordService.TryApplyBarcodeHeadDirection(
-            baseAngle, hasBarcode: true, dx, dy, FarOffsetPx, LongAxisPx);
+            baseAngle, hasBarcode: true, dx, dy, FarOffsetPx, LongAxisPx, out _);
 
         Assert.NotNull(result);
         Assert.Equal(baseAngle, result!.Value, 6);
@@ -52,7 +52,7 @@ public class BarcodeHeadDirectionTests
         double dy = -Math.Sin(rad) * FarOffsetPx;
 
         double? result = DetectionRecordService.TryApplyBarcodeHeadDirection(
-            baseAngle, hasBarcode: true, dx, dy, FarOffsetPx, LongAxisPx);
+            baseAngle, hasBarcode: true, dx, dy, FarOffsetPx, LongAxisPx, out _);
 
         Assert.NotNull(result);
         Assert.Equal(baseAngle + 180.0, result!.Value, 6);
@@ -70,7 +70,7 @@ public class BarcodeHeadDirectionTests
             double dy = Math.Sin(rad + 0.4) * FarOffsetPx;
 
             double? result = DetectionRecordService.TryApplyBarcodeHeadDirection(
-                deg, hasBarcode: true, dx, dy, FarOffsetPx, LongAxisPx);
+                deg, hasBarcode: true, dx, dy, FarOffsetPx, LongAxisPx, out _);
             if (result is null)
             {
                 continue; // 几何上不可判（|cos| 太小）时返回 null，由调用方回退灰度
@@ -87,7 +87,7 @@ public class BarcodeHeadDirectionTests
     public void NoBarcode_ReturnsNull()
     {
         Assert.Null(DetectionRecordService.TryApplyBarcodeHeadDirection(
-            0.0, hasBarcode: false, FarOffsetPx, 0.0, FarOffsetPx, LongAxisPx));
+            0.0, hasBarcode: false, FarOffsetPx, 0.0, FarOffsetPx, LongAxisPx, out _));
     }
 
     /// <summary>二维码离产品质心过近时（相对长轴不足 5%）返回 null——此时"在哪一端"由噪声决定。</summary>
@@ -96,7 +96,7 @@ public class BarcodeHeadDirectionTests
     {
         // 长轴 1000px → 下限 50px；此处仅偏移 30px
         double? result = DetectionRecordService.TryApplyBarcodeHeadDirection(
-            0.0, hasBarcode: true, dxHead: 30.0, dyHead: 0.0, headOffsetPx: 30.0, longAxisPx: LongAxisPx);
+            0.0, hasBarcode: true, dxHead: 30.0, dyHead: 0.0, headOffsetPx: 30.0, longAxisPx: LongAxisPx, out _);
 
         Assert.Null(result);
     }
@@ -108,7 +108,7 @@ public class BarcodeHeadDirectionTests
         // 头端向量 (10, 200) 与长轴 (1, 0) 的 cos ≈ 0.05 < 0.30
         double offsetPx = Math.Sqrt(10.0 * 10.0 + 200.0 * 200.0);
         double? result = DetectionRecordService.TryApplyBarcodeHeadDirection(
-            0.0, hasBarcode: true, dxHead: 10.0, dyHead: 200.0, headOffsetPx: offsetPx, longAxisPx: 500.0);
+            0.0, hasBarcode: true, dxHead: 10.0, dyHead: 200.0, headOffsetPx: offsetPx, longAxisPx: 500.0, out _);
 
         Assert.Null(result);
     }
@@ -177,10 +177,10 @@ public class BarcodeHeadDirectionTests
 
         double? negative = DetectionRecordService.TryApplyBarcodeHeadDirection(
             baseAngle, hasBarcode: true, -Math.Cos(rad) * FarOffsetPx, -Math.Sin(rad) * FarOffsetPx,
-            FarOffsetPx, LongAxisPx);
+            FarOffsetPx, LongAxisPx, out _);
         double? positive = DetectionRecordService.TryApplyBarcodeHeadDirection(
             baseAngle, hasBarcode: true, Math.Cos(rad) * FarOffsetPx, Math.Sin(rad) * FarOffsetPx,
-            FarOffsetPx, LongAxisPx);
+            FarOffsetPx, LongAxisPx, out _);
 
         Assert.NotNull(negative);
         Assert.NotNull(positive);

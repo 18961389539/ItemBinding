@@ -168,6 +168,20 @@ namespace MainAPP.Models
         public string? HeadFeatures { get; set; }
 
         /// <summary>
+        /// 头尾真值符号（2026-09-13，特征池自检专用）：条码中心相对产品质心的位移在掩码主轴
+        /// u 上的投影是否 ≥ 0。<c>true</c> = 条码（头端）落在 +u 正向半区；<c>false</c> = 落在 −u 侧。
+        /// <para><b>为什么单存一个符号</b>：这是"QR 一致率"自检唯一需要的外部真值（有码帧占现网 99.9%）。
+        /// 有了它，无需重算投影即可在离线 SQL/Python 侧统计"各特征符号与真值的一致率"，
+        /// 从而分辨"常出死区但判得对"与"常出死区但判错了"这两种出死区率相同的情形。</para>
+        /// <para>null = 本帧无真值：无码 / 条码绑定未命中 / 条码离产品质心过近（
+        /// <see cref="DetectionRecordService.IsBarcodeFarEnoughForHeadDecision"/> 不满足）/
+        /// 条码方向几乎垂直于长轴（|cos| &lt; MinBarcodeHeadCos）/ 特征池未运行。</para>
+        /// <para>与 <see cref="HeadFeatures"/> 的符号约定同源：两者都是"数值大 = 头在 +u 侧"，
+        /// 故一致率计算即"符号相等"的直接比较。</para>
+        /// </summary>
+        public bool? HeadTruthPositive { get; set; }
+
+        /// <summary>
         /// 检测时使用的配方名（2026-09-12 追溯补列）。null = 历史数据或配方未知。
         /// 有了它才能回答「某个配方下的合格率/耗时」这类追溯问题。
         /// </summary>

@@ -176,6 +176,12 @@ namespace MainAPP.Models
             {
                 await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN HeadFeatures TEXT NULL", cancellationToken).ConfigureAwait(false);
             }
+            // 2026-09-13: 头尾真值符号（特征池自检）。可空 INTEGER——SQLite 布尔以 0/1 存储，
+            // NULL 表示本帧无真值（无码/码过近/码垂直于长轴/特征池未运行），语义上区别于 false。
+            if (!cols.Contains("HeadTruthPositive"))
+            {
+                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN HeadTruthPositive INTEGER NULL", cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 }

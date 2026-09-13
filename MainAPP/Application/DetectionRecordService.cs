@@ -440,6 +440,10 @@ public sealed class DetectionRecordService
             // 2026-09-13: 特征池判定结果（声明在方法级——DbModel 落库在 if 块外引用）
             HeadTailPoolDecision? poolDecision = null;
 
+            // 2026-09-13: 头尾真值符号（QR 一致率自检用），由 TryApplyBarcodeHeadDirection 顺带输出。
+            // 同样声明在方法级——DbModel 落库在 if 块外引用。null = 本帧无真值（无码/码过近/码垂直于长轴）。
+            bool? headTruthPositive = null;
+
             if (useMaskAnglePath)
             {
                 // REVIEW-FIX(需求 2026-08-05): 未启用角度检测时，直接用分割掩码最小外接旋转矩形主轴角度
@@ -511,8 +515,12 @@ public sealed class DetectionRecordService
                     }
                 }
 
-                modelAngle = TryApplyBarcodeHeadDirection(
-                                  fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx)
+                var barcodeAngle = TryApplyBarcodeHeadDirection(
+                                  fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx,
+                                  out var barcodeTruthPositive);
+                // 真值符号仅在有码且 QR 成功定头尾时有效；否则保持 null（语义区别于 false）
+                headTruthPositive = barcodeAngle.HasValue ? barcodeTruthPositive : (bool?)null;
+                modelAngle = barcodeAngle
                               ?? (poolDecision is { Decisive: true } ? (double?)poolDecision.Angle : null)
                               ?? fallbackAngle;
                 // 头尾翻转标记：与实发角完全同源（二维码优先 → 特征池），供 UI 箭头复现朝向
@@ -553,6 +561,9 @@ public sealed class DetectionRecordService
                 BrightnessDiff = brightnessStats?.Diff,
                 // 2026-09-13: 头尾特征池判定轨迹（JSON），诊断特征池在现网产品的区分度与"大=头"约定一致性。
                 HeadFeatures = HeadTailFeaturePool.SerializeTrace(poolDecision),
+                // 2026-09-13: 头尾真值符号（QR 一致率自检）。与 HeadFeatures 同约定，
+                // 使「各特征判得对不对」可在离线侧直接算（无需重算投影）。
+                HeadTruthPositive = headTruthPositive,
                 // 2026-09-12: 追溯列——记录本帧检测时生效的配方名，使「某配方的合格率/耗时」
                 // 这类问题可被回答。取当前配方名，与界面/TCP 切配方同源（RecipesManage 单例）。
                 RecipeName = RecipesManage.Instance.CurrentRecipe?.Name,
@@ -617,6 +628,9 @@ public sealed class DetectionRecordService
     /// <param name="dyHead">产品质心 → 二维码中心的向量 Y（与 baseAngle 同坐标系）。</param>
     /// <param name="headOffsetPx">二维码中心到产品质心的距离（原图像素，仅用于几何保护）。</param>
     /// <param name="longAxisPx">产品长轴长度（原图像素，仅用于几何保护）。</param>
+    /// <param name="truthPositive">输出：条码（头端）是否落在 +u 正向半区（proj ≥ 0）。
+    /// <b>仅在返回非 null 时有意义</b>（返回 null 时置 false）——它是特征池自检所需的"头尾真值符号"，
+    /// 与 <see cref="HeadTailFeaturePool"/> 的"数值大的一侧是头部"同约定，故可直接与各特征符号比一致率。</param>
     /// <returns>校正后的角度；无法判定时返回 null。</returns>
     internal static double? TryApplyBarcodeHeadDirection(
         double baseAngle,
@@ -624,8 +638,10 @@ public sealed class DetectionRecordService
         double dxHead,
         double dyHead,
         double headOffsetPx,
-        double longAxisPx)
+        double longAxisPx,
+        out bool truthPositive)
     {
+        truthPositive = false;
         if (!hasBarcode || !IsBarcodeFarEnoughForHeadDecision(headOffsetPx, longAxisPx))
         {
             return null;
@@ -644,6 +660,8 @@ public sealed class DetectionRecordService
             return null; // 二维码几乎垂直于长轴，前后投影没有区分度
         }
 
+        // 真值符号：投影 ≥ 0 表示头端在角度正向半区（与后续"不翻转"分支同一判据）
+        truthPositive = cos >= 0;
         // 头端（二维码所在端）落在角度负向半区时翻转 180°，使其与角度正向对齐
         return cos >= 0 ? baseAngle : baseAngle + 180.0;
     }

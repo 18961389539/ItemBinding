@@ -1357,7 +1357,19 @@ namespace MainAPP.ViewModels
                         var brightnessOverride = CurrentRecipe?.YoloTool?.IsBrightnessDirectionEnabled;
                         bool grayDirectionEnabled = !angleEnabled
                             && (brightnessOverride ?? Settings.Instance.Algorithm.BrightnessDirectionEnabled);
-                        using var angleMat = (angleEnabled || grayDirectionEnabled) ? sourceImg.ToMat() : null;
+                        // 2026-09-13: 特征池同样吃这张 Mat（作为其掩码回退路径的图像输入），故它的
+                        // 开关也必须参与 gate。此前只看 angleEnabled || grayDirectionEnabled，导致
+                        // 「开特征池 + 关亮度判向」时 angleMat=null → Evaluate 因 bgrImage is null
+                        // 静默返回 null → 7 个特征全不算、头尾退化为掩码主轴角且无日志。
+                        // 注意语义分层：featurePoolEnabled 只决定"要不要给特征池喂图"；
+                        // 其中的亮度特征 ④ 仍由 brightnessDirectionEnabled 单独把守
+                        // （DetectionRecordService 传参 brightnessEnabled），关亮度判向只关那一个特征。
+                        // 契约与回归测试见 AngleMatGate（勿在此内联展开条件）。
+                        var featurePoolEnabled = Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled;
+                        using var angleMat = Application.AngleMatGate.ShouldCreate(
+                            angleEnabled, grayDirectionEnabled, featurePoolEnabled)
+                            ? sourceImg.ToMat()
+                            : null;
                         var buildResult = await _detectionRecord.BuildAndSaveAsync(
                             scanerResult,
                             edgeResults!,

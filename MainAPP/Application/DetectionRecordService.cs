@@ -496,22 +496,35 @@ public sealed class DetectionRecordService
                 // 码位置三用：变体分流（codePresent）/光度特征码区剔除/（有码帧）头尾真值。
                 if (Models.Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled)
                 {
-                    var alg = Models.Settings.Instance.Algorithm;
-                    var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
-                    poolDecision = HeadTailFeaturePool.Evaluate(
-                        fallbackAngle, angleSourceImage, edgeResult,
-                        maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
-                        longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
-                        alg.HeadTailFeatureDeadband,
-                        brightnessDirectionEnabled,
-                        alg.BrightnessContrastStretchEnabled,
-                        alg.BrightnessStretchLowPercentile,
-                        alg.BrightnessStretchHighPercentile,
-                        out brightnessStats);
-                    if (poolDecision is { Decisive: true })
+                    // 2026-09-13: 画像缺失必须显式告警。曾因 HomeViewModel 的 angleMat gate 漏了
+                    // 特征池开关，导致「开特征池 + 关亮度判向」时 angleMat 恒为 null，特征池每帧
+                    // 静默跳过（7 个特征全不算且无任何日志）。这条 Warning 是防回归的哨兵——
+                    // 若上线后出现，说明上游又有人在 gate 里漏了 featurePoolEnabled。
+                    if (angleSourceImage is null)
                     {
-                        LogService.Instance.Debug(
-                            $"[特征池判向] {poolDecision.SourceFeature} 定头尾: 角度 {fallbackAngle:F1}°→{poolDecision.Angle:F1}°（翻转={poolDecision.Flipped}）");
+                        LogService.Instance.Warning(
+                            "[特征池] 已启用但本帧无 Mat 源图（上游 angleMat 为 null）——本帧不做头尾判向。" +
+                            "请检查 HomeViewModel 的 angleMat 创建条件是否仍包含 HeadTailFeaturePoolEnabled");
+                    }
+                    else
+                    {
+                        var alg = Models.Settings.Instance.Algorithm;
+                        var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
+                        poolDecision = HeadTailFeaturePool.Evaluate(
+                            fallbackAngle, angleSourceImage, edgeResult,
+                            maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
+                            longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
+                            alg.HeadTailFeatureDeadband,
+                            brightnessDirectionEnabled,
+                            alg.BrightnessContrastStretchEnabled,
+                            alg.BrightnessStretchLowPercentile,
+                            alg.BrightnessStretchHighPercentile,
+                            out brightnessStats);
+                        if (poolDecision is { Decisive: true })
+                        {
+                            LogService.Instance.Debug(
+                                $"[特征池判向] {poolDecision.SourceFeature} 定头尾: 角度 {fallbackAngle:F1}°→{poolDecision.Angle:F1}°（翻转={poolDecision.Flipped}）");
+                        }
                     }
                 }
 

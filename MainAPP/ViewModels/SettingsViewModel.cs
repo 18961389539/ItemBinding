@@ -138,6 +138,9 @@ namespace MainAPP.ViewModels
             _isLoading = false;
         }
 
+        /// <summary>自定义通讯协议配置（2026-09-13）。</summary>
+        public ProtocolSettingsViewModel ProtocolVM { get; } = new();
+
         #region Properties
 
         /// <summary>设置是否有未保存的修改，用于保存按钮 dirty 提示。</summary>

@@ -262,6 +262,12 @@ namespace MainAPP.Services
                     case "/api/status":
                         await WriteStatusAsync(context.Response, ct).ConfigureAwait(false);
                         break;
+                    case "/api/recent":
+                        await WriteRecentAsync(context, ct).ConfigureAwait(false);
+                        break;
+                    case "/api/set":
+                        await WriteSetAsync(context, ct).ConfigureAwait(false);
+                        break;
                     default:
                         context.Response.StatusCode = 404;
                         await WriteTextAsync(context.Response, "404 not found", ct).ConfigureAwait(false);
@@ -357,6 +363,111 @@ namespace MainAPP.Services
             }
 
             return status;
+        }
+
+        /// <summary>
+        /// 最近检测概览：GET /api/recent?count=N（默认 10，上限 50）。
+        /// 取落库最近 N 条（BarcodeDataService），供网页端仪表盘实时展示。
+        /// </summary>
+        private static async Task WriteRecentAsync(HttpListenerContext context, CancellationToken ct)
+        {
+            var q = context.Request.QueryString;
+            int count = int.TryParse(q["count"], out var c) ? Math.Clamp(c, 1, 50) : 10;
+            var items = await BarcodeDataService.Instance.GetRecentAsync(count, ct).ConfigureAwait(false);
+            var payload = items.Select(m => new
+            {
+                time = m.DetectTime.ToString("HH:mm:ss.fff"),
+                barcode = string.IsNullOrEmpty(m.Barcode) ? "" : m.Barcode,
+                x = Math.Round(m.WorldX, 2),
+                y = Math.Round(m.WorldY, 2),
+                a = Math.Round(m.Angle, 2),
+                enc = m.Encode,
+                result = m.Result ?? "",
+            });
+
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            context.Response.ContentLength64 = bytes.Length;
+            context.Response.Headers["Cache-Control"] = "no-store";
+            await context.Response.OutputStream.WriteAsync(bytes, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 相机参数写入：GET /api/set?exposure=&lt;us&gt;&amp;gain=&lt;dB&gt;（可选，至少一个）。
+        /// 沿用既有互斥时序（与 AI 审计同源）：主循环未暂停时先暂停 → 排空在途推理 → 写参数 → 恢复；
+        /// 本宿主接管中（主循环已暂停）则直接写、不触碰主循环状态。
+        /// </summary>
+        private static async Task WriteSetAsync(HttpListenerContext context, CancellationToken ct)
+        {
+            var q = context.Request.QueryString;
+            var exposureRaw = q["exposure"];
+            var gainRaw = q["gain"];
+            if (string.IsNullOrEmpty(exposureRaw) && string.IsNullOrEmpty(gainRaw))
+            {
+                await WriteJsonAsync(context.Response, new { ok = false, msg = "参数缺失：应提供 exposure 或 gain" }, 400, ct).ConfigureAwait(false);
+                return;
+            }
+
+            var connected = Devices.Scanners.HikScaner?.IsConnected ?? false;
+            if (!connected)
+            {
+                await WriteJsonAsync(context.Response, new { ok = false, msg = "读码器未连接" }, 409, ct).ConfigureAwait(false);
+                return;
+            }
+
+            float? exposure = float.TryParse(exposureRaw, System.Globalization.CultureInfo.InvariantCulture, out var e) ? e : null;
+            float? gain = float.TryParse(gainRaw, System.Globalization.CultureInfo.InvariantCulture, out var g) ? g : null;
+
+            var wasPaused = HomeViewModel.IsLoopPaused;
+            if (!wasPaused)
+            {
+                HomeViewModel.PauseLoop();
+            }
+
+            try
+            {
+                var drained = await HomeViewModel.WaitForMainLoopDrainAsync(TimeSpan.FromSeconds(12)).ConfigureAwait(false);
+                if (!drained)
+                {
+                    LogService.Instance.Warning("[相机调试 Web] 参数写入前排空主循环超时，仍继续");
+                }
+
+                var service = new RecipeScannerService();
+                if (exposure is not null)
+                {
+                    await service.SetExposureTimeAsync(exposure.Value, ct).ConfigureAwait(false);
+                }
+
+                if (gain is not null)
+                {
+                    await service.SetGainAsync(gain.Value, ct).ConfigureAwait(false);
+                }
+
+                await WriteJsonAsync(context.Response, new { ok = true, msg = "参数已生效" }, 200, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Warning($"[相机调试 Web] 参数写入失败: {ex.Message}");
+                await WriteJsonAsync(context.Response, new { ok = false, msg = ex.Message }, 500, ct).ConfigureAwait(false);
+            }
+            finally
+            {
+                if (!wasPaused)
+                {
+                    HomeViewModel.ResumeLoop();
+                }
+            }
+        }
+
+        private static async Task WriteJsonAsync(HttpListenerResponse response, object payload, int status, CancellationToken ct)
+        {
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
+            response.StatusCode = status;
+            response.ContentType = "application/json; charset=utf-8";
+            response.ContentLength64 = bytes.Length;
+            response.Headers["Cache-Control"] = "no-store";
+            await response.OutputStream.WriteAsync(bytes, ct).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -701,38 +812,101 @@ namespace MainAPP.Services
 <title>相机远程调试</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#141414;color:#ececec;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif}
-header{padding:10px 14px;border-bottom:1px solid #2b2b2b;display:flex;justify-content:space-between;align-items:center}
-h1{font-size:15px;font-weight:500;margin:0}
-#dot{width:8px;height:8px;border-radius:50%;background:#888;display:inline-block;vertical-align:middle;margin-right:6px}
-.wrap{padding:12px}
-img{width:100%;display:block;background:#000;border-radius:8px;min-height:140px}
-dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:14px 0 0;font-size:13px}
-dt{color:#9a9a9a}
+body{margin:0;background:#101014;color:#e8e8ec;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif}
+header{padding:12px 16px;border-bottom:1px solid #26262e;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:600;margin:0}
+#dot{width:9px;height:9px;border-radius:50%;background:#888;display:inline-block;vertical-align:middle;margin-right:7px}
+.meta{color:#8a8a96;font-size:12px}
+.wrap{padding:14px;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr);gap:14px}
+.card{background:#17171d;border:1px solid #26262e;border-radius:10px;padding:12px}
+.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:#9a9af0}
+img.video{width:100%;display:block;background:#000;border-radius:8px;min-height:140px}
+dl{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:13px}
+dt{color:#9a9aa8}
 dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
-.hint{color:#7d7d7d;font-size:12px;margin-top:16px;line-height:1.7}
+.row{display:flex;align-items:center;gap:10px;margin:10px 0 14px}
+.row label{width:44px;color:#9a9aa8;font-size:13px}
+.row input[type=range]{flex:1}
+.row input[type=number]{width:86px;background:#101014;border:1px solid #33333d;color:#e8e8ec;border-radius:6px;padding:5px 8px;font-size:13px}
+.btn{background:#2a2a66;color:#fff;border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+.btn:hover{background:#33337e}
+.btn:disabled{background:#33333d;color:#777;cursor:not-allowed}
+#msg{min-height:20px;font-size:13px;color:#9adc9a;margin-top:4px}
+.dim{color:#66667a}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{color:#9a9aa8;text-align:left;padding:6px 8px;border-bottom:1px solid #26262e;font-weight:500;white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid #20202a;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:hover td{background:#1c1c24}
+.ok{color:#3ddc84}.ng{color:#ff6b6b}
+.hint{color:#7d7d8e;font-size:12px;margin:10px 0 0;line-height:1.7}
+@media (max-width:760px){.wrap{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
-<header><h1><span id="dot"></span>相机远程调试</h1><span id="meta" style="color:#8a8a8a;font-size:12px"></span></header>
+<header><h1><span id="dot"></span>相机远程调试</h1><span class="meta" id="meta">—</span></header>
 <div class="wrap">
-  <img id="live" src="/mjpeg" alt="实时画面">
-  <dl>
-    <dt>连接状态</dt><dd id="s-conn">-</dd>
-    <dt>触发模式</dt><dd id="s-trig">-</dd>
-    <dt>曝光时间</dt><dd id="s-exp">-</dd>
-    <dt>增益</dt><dd id="s-gain">-</dd>
-    <dt>设备型号</dt><dd id="s-model">-</dd>
-    <dt>序列号</dt><dd id="s-serial">-</dd>
-    <dt>IP 地址</dt><dd id="s-ip">-</dd>
-  </dl>
-  <p class="hint">本页为只读实时预览。接入期间主程序暂停取帧并切换为软触发，全部页面关闭约 15 秒后自动恢复。若画面长时间空白，请确认读码器已连接、且服务以管理员权限启动（否则仅本机可访问）。</p>
+
+  <div class="card">
+    <h2>实时画面</h2>
+    <img class="video" id="live" src="/mjpeg" alt="实时画面">
+    <p class="hint">接入期间主程序暂停取帧并切换软触发，全部页面关闭约 15 秒后自动恢复。画面长时间空白请确认读码器已连接且服务以管理员权限启动（否则仅本机可访问）。</p>
+  </div>
+
+  <div>
+    <div class="card" style="margin-bottom:14px">
+      <h2>设备状态</h2>
+      <dl>
+        <dt>连接状态</dt><dd id="s-conn">-</dd>
+        <dt>触发模式</dt><dd id="s-trig">-</dd>
+        <dt>设备型号</dt><dd id="s-model">-</dd>
+        <dt>序列号</dt><dd id="s-serial">-</dd>
+        <dt>IP 地址</dt><dd id="s-ip">-</dd>
+        <dt>刷新</dt><dd><span class="meta" id="meta2">-</span></dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>参数调节</h2>
+      <div class="row">
+        <label>曝光</label>
+        <input type="range" id="sl-exp" min="0" max="100000" step="100">
+        <input type="number" id="in-exp" min="0" step="100">
+        <button class="btn" id="btn-exp">应用</button>
+      </div>
+      <div class="row">
+        <label>增益</label>
+        <input type="range" id="sl-gain" min="0" max="30" step="0.1">
+        <input type="number" id="in-gain" min="0" step="0.1">
+        <button class="btn" id="btn-gain">应用</button>
+      </div>
+      <div id="msg"></div>
+      <p class="hint">滑块/输入框显示当前值；拖动后点“应用”生效。写入走主循环互斥时序（写参数期间主循环暂短暂停）。</p>
+    </div>
+  </div>
 </div>
+
+<div class="wrap" style="padding-top:0">
+  <div class="card">
+    <h2>最近检测</h2>
+    <table>
+      <thead><tr><th>时间</th><th>条码</th><th>X</th><th>Y</th><th>角度</th><th>编码器</th><th>结果</th></tr></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
 <script>
 var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 function reconnect(){var img=$('live');img.src='/mjpeg?t='+Date.now();}
 $('live').onerror=function(){setTimeout(reconnect,2000);};
-function fmt(v,u,d){return v===null||v===undefined?'-':Number(v).toFixed(d)+' '+u;}
+
+function setSlider(which,val,min,max,dec){
+  var sl=$(which==='exp'?'sl-exp':'sl-gain'), iv=$(which==='exp'?'in-exp':'in-gain');
+  if(min!==undefined&&max!==undefined){sl.min=min;sl.max=max;}
+  if(document.activeElement!==sl&&val!=null){sl.value=val;}
+  if(document.activeElement!==iv&&val!=null){iv.value=parseFloat(val).toFixed(dec);}
+}
 async function tick(){
   try{
     var r=await fetch('/api/status',{cache:'no-store'});
@@ -740,16 +914,43 @@ async function tick(){
     $('dot').style.background=s.connected?'#3ddc84':'#e05252';
     $('s-conn').textContent=s.connected?'已连接':'未连接';
     $('s-trig').textContent=s.triggerMode||'-';
-    $('s-exp').textContent=fmt(s.exposure,'us',0);
-    $('s-gain').textContent=fmt(s.gain,'dB',2);
     $('s-model').textContent=s.model||'-';
     $('s-serial').textContent=s.serial||'-';
     $('s-ip').textContent=s.ip||'-';
     $('meta').textContent='客户端 '+s.clients+(s.paused?' · 主循环已暂停':'');
+    $('meta2').textContent=new Date().toLocaleTimeString();
+    setSlider('exp',s.exposure,s.exposureMin,s.exposureMax,0);
+    setSlider('gain',s.gain,s.gainMin,s.gainMax,2);
   }catch(e){$('dot').style.background='#888';}
 }
+function apply(which){
+  var p=$(which==='exp'?'in-exp':'in-gain').value;
+  var q=which==='exp'?'exposure='+encodeURIComponent(p):'gain='+encodeURIComponent(p);
+  fetch('/api/set?'+q,{cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    var ok=!!(j&&j.ok);
+    $('msg').textContent=(ok?'✓ 生效：':'✗ ')+(j&&j.msg||'失败');
+    $('msg').style.color=ok?'#9adc9a':'#ff6b6b';
+    if(ok)setTimeout(tick,600);
+  }).catch(function(){$('msg').textContent='✗ 请求失败';$('msg').style.color='#ff6b6b';});
+}
+async function recentTick(){
+  try{
+    var r=await fetch('/api/recent?count=8',{cache:'no-store'});
+    var rows=await r.json();
+    var h='';
+    if(!rows||rows.length===0)h='<tr><td colspan="7" class="dim">暂无检测记录</td></tr>';
+    else for(var i=0;i<rows.length;i++){
+      var m=rows[i];
+      h+='<tr><td>'+esc(m.time)+'</td><td>'+(m.barcode?esc(m.barcode):'<span class="dim">—</span>')+'</td><td>'+m.x+'</td><td>'+m.y+'</td><td>'+m.a+'</td><td>'+m.enc+'</td><td class="'+(m.result==='NG'?'ng':'ok')+'">'+esc(m.result)+'</td></tr>';
+    }
+    $('tbody').innerHTML=h;
+  }catch(e){}
+}
+$('btn-exp').onclick=function(){apply('exp');};
+$('btn-gain').onclick=function(){apply('gain');};
 setInterval(tick,1000);
-tick();
+setInterval(recentTick,3000);
+tick();recentTick();
 </script>
 </body>
 </html>

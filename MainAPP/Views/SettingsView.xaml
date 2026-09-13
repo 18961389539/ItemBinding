@@ -705,6 +705,250 @@
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
+
+                <!--  Tab: 通讯协议（2026-09-13 自定义模板协议）  -->
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock VerticalAlignment="Center" Text="通讯协议" />
+                            <Button
+                                Margin="6,0,0,0"
+                                Padding="4,0"
+                                VerticalAlignment="Center"
+                                Click="ProtocolTabHelp_Click"
+                                Content="?"
+                                FontWeight="Bold"
+                                ToolTip="查看自定义通讯协议说明" />
+                        </StackPanel>
+                    </TabItem.Header>
+                    <Grid Margin="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="340" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 左：协议列表（搜索 + 启用置顶）+ 当前接收方 -->
+                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                <TextBlock Style="{StaticResource TechMetricLabel}" VerticalAlignment="Center" Text="接收方协议：" />
+                                <TextBlock VerticalAlignment="Center" Text="{Binding ProtocolVM.CurrentReceiver}" />
+                            </StackPanel>
+                            <TextBox Margin="0,0,0,6" Text="{Binding ProtocolVM.SearchText, UpdateSourceTrigger=PropertyChanged}"
+                                     ToolTip="按名称过滤协议" />
+                            <DataGrid
+                                Height="300"
+                                AutoGenerateColumns="False"
+                                HeadersVisibility="Column"
+                                ItemsSource="{Binding ProtocolVM.ProtocolsView}"
+                                SelectedItem="{Binding ProtocolVM.Selected, Mode=TwoWay}">
+                                <DataGrid.Columns>
+                                    <DataGridCheckBoxColumn Width="50" Header="启用" Binding="{Binding Enabled}" />
+                                    <DataGridTextColumn Width="*" Header="名称" Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                                    <DataGridTextColumn Width="*" Header="端点 ip:port" Binding="{Binding EndPoint, UpdateSourceTrigger=PropertyChanged}" />
+                                </DataGrid.Columns>
+                            </DataGrid>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button Content="＋ 新增" Margin="0,0,8,0" Command="{Binding ProtocolVM.AddProtocolCommand}" />
+                                <Button Content="删除" Margin="0,0,8,0" Command="{Binding ProtocolVM.DeleteProtocolCommand}" />
+                                <Button Content="保存" Margin="0,0,0,0" Command="{Binding ProtocolVM.SaveCommand}" FontWeight="Bold" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource TechMetricLabel}" Margin="0,8,0,0" TextWrapping="Wrap"
+                                       Text="把主页「接收方协议」填成协议名即切换；保存后启用项自动置顶。" />
+                        </StackPanel>
+
+                        <!-- 右：详情（选中协议） -->
+                        <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="0">
+                                <DockPanel Margin="0,0,0,8">
+                                    <TextBlock Style="{StaticResource TechMetricLabel}" FontWeight="Bold" VerticalAlignment="Center" Text="协议详情" />
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding ProtocolVM.InUseBadgeText}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="#9a9aa8" />
+                                                        <Setter Property="FontSize" Value="12" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ProtocolVM.IsCurrentInUse}" Value="True">
+                                                                <Setter Property="Foreground" Value="#3ddc84" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DockPanel>
+
+                                <!-- 基本信息 -->
+                                <Border Background="{StaticResource TechCardBgBrush}" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Style="{StaticResource TechMetricLabel}" Margin="5" Text="名称:" />
+                                        <TextBox Grid.Column="1" Margin="5" Text="{Binding ProtocolVM.Selected.Name, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Grid.Column="2" Style="{StaticResource TechMetricLabel}" Margin="5" Text="端点:" />
+                                        <TextBox Grid.Column="3" Margin="5" Text="{Binding ProtocolVM.Selected.EndPoint, UpdateSourceTrigger=PropertyChanged}" />
+                                        <TextBlock Grid.Column="4" Style="{StaticResource TechMetricLabel}" Margin="5" Text="传输:" />
+                                        <TextBox Grid.Column="5" Margin="5" Text="{Binding ProtocolVM.Selected.Transport, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- 策略分组：发送行为 / 无码策略 -->
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Background="{StaticResource TechCardBgBrush}" CornerRadius="4" Padding="8" Margin="0,0,4,0">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TechMetricLabel}" FontWeight="Bold" Margin="0,0,0,6" Text="发送行为" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                <TextBlock Style="{StaticResource TechMetricLabel}" Margin="5,0" Text="行尾:" />
+                                                <ComboBox SelectedValue="{Binding ProtocolVM.Selected.LineEnding}"
+                                                          ItemsSource="{Binding Source={x:Static vm:ProtocolSettingsViewModel.LineEndings}}" />
+                                            </StackPanel>
+                                            <CheckBox Margin="5,6,0,0" Content="角度未知拒发（-9999）"
+                                                      IsChecked="{Binding ProtocolVM.Selected.RejectWhenAngleUnknown}" />
+                                        </StackPanel>
+                                    </Border>
+                                    <Border Grid.Column="1" Background="{StaticResource TechCardBgBrush}" CornerRadius="4" Padding="8" Margin="4,0,0,0">
+                                        <StackPanel>
+                                            <TextBlock Style="{StaticResource TechMetricLabel}" FontWeight="Bold" Margin="0,0,0,6" Text="无码策略" />
+                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                <TextBlock Style="{StaticResource TechMetricLabel}" Margin="5,0" Text="行为:" />
+                                                <ComboBox Width="130" SelectedValue="{Binding ProtocolVM.Selected.NoBarcodeBehavior}"
+                                                          ItemsSource="{Binding Source={x:Static vm:ProtocolSettingsViewModel.NoBarcodeBehaviors}}" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2">
+                                                <TextBlock Style="{StaticResource TechMetricLabel}" Margin="5,0" Text="占位:" />
+                                                <TextBox Width="130" Text="{Binding ProtocolVM.Selected.NoBarcodePlaceholder, UpdateSourceTrigger=PropertyChanged}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </Grid>
+
+                                <!-- 段编辑（↑↓ 调整顺序，绿色=命中，灰色=条件未满足跳过） -->
+                                <Border Background="{StaticResource TechCardBgBrush}" CornerRadius="4" Padding="8" Margin="0,0,0,8">
+                                    <StackPanel>
+                                        <DockPanel Margin="0,0,0,4">
+                                            <Button DockPanel.Dock="Right" Content="＋ 追加段" Command="{Binding ProtocolVM.AddSegmentCommand}" />
+                                            <TextBlock Style="{StaticResource TechMetricLabel}" VerticalAlignment="Center"
+                                                       Text="模板段（按顺序拼接；绿色=命中，灰色=条件未满足跳过）" />
+                                        </DockPanel>
+                                        <ItemsControl ItemsSource="{Binding ProtocolVM.SegmentPreviews}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Border Margin="0,2" Padding="4">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="BorderBrush" Value="#33333d" />
+                                                                <Setter Property="BorderThickness" Value="1" />
+                                                                <Setter Property="CornerRadius" Value="4" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Matched}" Value="True">
+                                                                        <Setter Property="BorderBrush" Value="#3ddc84" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Matched}" Value="False">
+                                                                        <Setter Property="BorderBrush" Value="#7d7d8e" />
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="150" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Grid.Column="0" Style="{StaticResource TechMetricLabel}" Margin="4,0" VerticalAlignment="Center"
+                                                                       Text="{Binding Index}" />
+                                                            <ComboBox Grid.Column="1" Margin="4,0" VerticalAlignment="Center"
+                                                                      SelectedValue="{Binding Segment.Condition}"
+                                                                      ItemsSource="{Binding Source={x:Static vm:ProtocolSettingsViewModel.SegmentConditions}}" />
+                                                            <TextBox Grid.Column="2" Margin="4,0" VerticalAlignment="Center"
+                                                                     Text="{Binding Segment.Text, UpdateSourceTrigger=PropertyChanged}" />
+                                                            <Button Grid.Column="3" Margin="4,0" Content="↑" Padding="2,0"
+                                                                    Command="{Binding DataContext.ProtocolVM.MoveSegmentUpCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                    CommandParameter="{Binding Segment}" ToolTip="上移" />
+                                                            <Button Grid.Column="4" Margin="4,0" Content="↓" Padding="2,0"
+                                                                    Command="{Binding DataContext.ProtocolVM.MoveSegmentDownCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                    CommandParameter="{Binding Segment}" ToolTip="下移" />
+                                                            <Button Grid.Column="5" Margin="4,0" Content="×" Padding="2,0"
+                                                                    Command="{Binding DataContext.ProtocolVM.RemoveSegmentCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                                    CommandParameter="{Binding Segment}" ToolTip="删除段" />
+                                                            <TextBlock Grid.Column="6" Margin="4,0" VerticalAlignment="Center" FontSize="11"
+                                                                       Text="{Binding Status}">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="#7d7d8e" />
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Matched}" Value="True">
+                                                                                <Setter Property="Foreground" Value="#3ddc84" />
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </Grid>
+                                                    </Border>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- 试算预览 + 发送测试 -->
+                                <Border Background="{StaticResource TechCardBgBrush}" CornerRadius="4" Padding="8">
+                                    <StackPanel>
+                                        <TextBlock Style="{StaticResource TechMetricLabel}" FontWeight="Bold" Margin="0,0,0,4"
+                                                   Text="试算预览（改样例即刷新；与生产同一渲染实现）" />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" /><ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox Grid.Column="0" Margin="0,0,4,0" Text="{Binding ProtocolVM.SampleX, UpdateSourceTrigger=PropertyChanged}" ToolTip="X (mm)" />
+                                            <TextBox Grid.Column="1" Margin="0,0,4,0" Text="{Binding ProtocolVM.SampleY, UpdateSourceTrigger=PropertyChanged}" ToolTip="Y (mm)" />
+                                            <TextBox Grid.Column="2" Margin="0,0,4,0" Text="{Binding ProtocolVM.SampleRz, UpdateSourceTrigger=PropertyChanged}" ToolTip="RZ (度)" />
+                                            <TextBox Grid.Column="3" Margin="0,0,4,0" Text="{Binding ProtocolVM.SampleBarcode, UpdateSourceTrigger=PropertyChanged}" ToolTip="条码（清空=无码）" />
+                                            <TextBox Grid.Column="4" Text="{Binding ProtocolVM.SampleEncoder, UpdateSourceTrigger=PropertyChanged}" ToolTip="编码器（留空=未收到）" />
+                                        </Grid>
+                                        <TextBlock Margin="0,8,0,0" TextWrapping="Wrap" FontFamily="Consolas"
+                                                   Text="{Binding ProtocolVM.PreviewText}" />
+                                        <DockPanel Margin="0,8,0,0">
+                                            <Button DockPanel.Dock="Left" Content="发送测试报文（UDP）" Command="{Binding ProtocolVM.SendTestCommand}" />
+                                            <TextBlock Margin="10,4,0,0" VerticalAlignment="Center" Text="{Binding ProtocolVM.TestSendResult}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#9a9aa8" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ProtocolVM.TestSendOk}" Value="True">
+                                                                <Setter Property="Foreground" Value="#3ddc84" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding ProtocolVM.TestSendOk}" Value="False">
+                                                                <Setter Property="Foreground" Value="#ff6b6b" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </DockPanel>
+                                        <TextBlock Margin="0,4,0,0" Style="{StaticResource TechMetricLabel}" Foreground="#888888"
+                                                   Text="{Binding ProtocolVM.PreviewNote}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+                    </Grid>
+                </TabItem>
             </TabControl>
         </DockPanel>
     </Grid>

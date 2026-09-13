@@ -49,6 +49,20 @@ namespace MainAPP.Services.AI
             _builtAtUtc = DateTime.MinValue;
         }
 
+        /// <summary>
+        /// 当前语料文档清单（递归枚举 + 按文件名去重，不建索引，供网页端信息展示）。
+        /// </summary>
+        public static IReadOnlyList<string> ListDocumentSources()
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var file in EnumerateDocuments())
+            {
+                names.Add(Path.GetFileName(file));
+            }
+
+            return names.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
         /// <summary>检索文档语料，返回最相关的 topK 个片段。</summary>
         public static async Task<IReadOnlyList<KnowledgeHit>> SearchAsync(
             string query, int topK = 4, CancellationToken cancellationToken = default)
@@ -222,6 +236,18 @@ namespace MainAPP.Services.AI
                 "BenchmarkDotNet.Artifacts", "Models", "ScottPlot5", "ImageViewerControl",
             };
             var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".md", ".txt", ".docx" };
+            // 2026-09-13: 语料噪声排除（文件级精确匹配，不删文件本身）——
+            // 构建清单/临时导出/第三方包说明/过程性评审与诊断报告对现场问答无价值，过滤避免脏语料。
+            // 保留 docs/ 下的手册与 docs/knowledge/ 知识文档（现走 KnowledgeDocsFolder 工作区根扫描）。
+            var excludedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "cuda_runtime_dlls_SHA256.txt",
+                "nuget-readme.md",
+                "_v25.txt",
+                "CodeReviewReport-2026-08-04.md",
+                "灰度判向诊断报告-2026-09-11.md",
+                "灰度判向_回放验证报告.md",
+            };
 
             foreach (var root in roots)
             {
@@ -233,6 +259,7 @@ namespace MainAPP.Services.AI
                 foreach (var file in Walk(root, excluded))
                 {
                     if (extensions.Contains(Path.GetExtension(file)) &&
+                        !excludedFiles.Contains(Path.GetFileName(file)) &&
                         new FileInfo(file).Length is > 0 and < 5 * 1024 * 1024)
                     {
                         yield return file;

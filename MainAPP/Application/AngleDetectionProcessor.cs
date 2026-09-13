@@ -12,13 +12,13 @@ using OpenCvSharp;
 namespace MainAPP.Application
 {
     /// <summary>
-    /// 角度模型计算结果：绝对角度 + 用于绘制的两个质心点（原图像素坐标）+ 方向可信度。
+    /// 角度模型计算结果：绝对角度 + 用于绘制的两个中心点（原图像素坐标）+ 方向可信度。
     /// </summary>
     /// <param name="Angle">角度原始输出（世界 atan2 绝对角 [0,360) + OffsetAngle，可能越界/为负；
     /// 未归一化，由调用方 AngleTracker.Normalize 或 ToRobotAngle 落域 (-180,180]）。</param>
-    /// <param name="FeatureCentroidImage">角度模型推理中心（特征掩码质心，原图像素坐标）。</param>
-    /// <param name="ProductCentroidImage">产品分割质心（原图像素坐标）。</param>
-    /// <param name="DirectionOffsetRatio">方向可信度 = |特征质心 − 产品质心| / 产品长轴长度（原图像素口径）。
+    /// <param name="FeatureCentroidImage">角度模型推理中心（特征掩码最小外接旋转矩形中心，原图像素坐标）。</param>
+    /// <param name="ProductCentroidImage">产品中心点（产品掩码最小外接旋转矩形中心，原图像素坐标）。</param>
+    /// <param name="DirectionOffsetRatio">方向可信度 = |特征中心点 − 产品中心点| / 产品长轴长度（原图像素口径）。
     /// 该向量正是角度的来源；比值趋近 0（特征居中/对称）时 atan2 分子分母同时趋零、角度由噪声决定，
     /// 调用方应比对本值是否低于 <see cref="YoloTool.MinCentroidOffsetRatio"/> 再决定是否采信模型角度。
     /// 2026-09-11 新增，用于修复"方向退化帧静默通过并输出无效角度"。</param>
@@ -29,16 +29,20 @@ namespace MainAPP.Application
         double DirectionOffsetRatio);
 
     /// <summary>
-    /// 角度检测处理器：基于"分割 + 分割"两级模型计算产品绝对角度。
+    /// 角度检测处理器：分割 - 分割两级模型，为角度提供**头尾翻转信号**。
     /// 流程：产品分割结果 → OBB 摆正裁剪 → 角度模型（分割）输出方向特征掩码
-    /// → 特征质心（推理中心）→ 逆变换回推理图坐标 → ×缩放还原原图像素
-    /// → 三点标定转世界坐标 → atan2(特征质心 − 产品质心) → [0,360) + OffsetAngle（未归一化，
+    /// → 特征中心（特征掩码 OBB 中心）→ 逆变换回推理图坐标 → ×缩放还原原图像素
+    /// → 三点标定转世界坐标 → atan2(特征 OBB 中心 − 产品 OBB 中心) → [0,360) + OffsetAngle（未归一化，
     /// 由调用方 AngleTracker.Normalize / ToRobotAngle 统一落域 (-180,180]）。
+    /// <para>2026-09-13：生产主链路（DetectionRecordService）已改为"基础角 = 掩码主轴世界角"，
+    /// 本处理器输出的 <see cref="AngleDetectionResult.Angle"/> 不再作为最终角度被直接采信——
+    /// 仅提供特征中心/产品中心（OBB 中心）作翻转信号来源 + <see cref="AngleDetectionResult.DirectionOffsetRatio"/>
+    /// 判方向可信度；Angle 字段保留供绘制/诊断/配方页展示。</para>
     /// 任一环节失败/质量门不过返回 null，由调用方回退（跨帧锁定/未知哨兵 -9999）。
     /// 质量门参数来自配方 AngleDetection 配置（YoloTool），见
     /// <see cref="YoloTool.CropPaddingRatio"/> / <see cref="YoloTool.MinMaskFillRatio"/> / <see cref="YoloTool.MinFeatureAreaRatio"/>。
     /// <para>2026-09-11 起另输出 <see cref="AngleDetectionResult.DirectionOffsetRatio"/>（方向可信度）：
-    /// 上面三道门只管"能不能算"，不看"算出来的方向可不可信"。特征居中/对称时两个质心几乎重合，
+    /// 上面三道门只管"能不能算"，不看"算出来的方向可不可信"。特征居中/对称时两个中心点几乎重合，
     /// 方向向量趋近 0，角度由噪声决定却能通过全部门限。调用方应比对该比值与
     /// <see cref="YoloTool.MinCentroidOffsetRatio"/>，低于阈值时改用"掩码主轴角 + 灰度判向"兜底。</para>
     /// </summary>
@@ -51,7 +55,7 @@ namespace MainAPP.Application
         /// 使用 ToVGT.ToRobotAngle 归一化到全系统规范域 (-180,180]。
         /// </summary>
         /// <param name="sourceImage">推理图（与产品分割结果同一坐标系）。</param>
-        /// <param name="product">产品分割结果（掩码/质心均在推理图坐标系）。</param>
+        /// <param name="product">产品分割结果（掩码/OBB 均在推理图坐标系）。</param>
         /// <param name="transformer">三点标定变换器（图像像素 → 世界 mm）。</param>
         /// <param name="isResize">是否缩放推理（坐标还原系数）。</param>
         /// <param name="resizeWidth">X 方向缩放系数。</param>
@@ -140,12 +144,17 @@ namespace MainAPP.Application
                 return null;
             }
 
-            // 6. 特征质心（裁剪图坐标）→ 逆变换 → 推理图坐标
-            var cfCrop = best.GetMaskCentroid();
+            // 6. 特征中心（裁剪图坐标）= 特征掩码最小外接旋转矩形（OBB）中心，逆变换 → 推理图坐标。
+            //    2026-09-13: 由灰度加权质心 GetMaskCentroid 改为 OBB 中心——与系统主口径（落库/发送坐标
+            //    maskMinAreaRect.Center、特征池扫描中心、UI 箭头起点）统一，消除"角度路径用质心、
+            //    其余全用 OBB 中心"的口径分叉。OBB 中心 = 凸包包围框几何中心，不含置信度软信息，
+            //    理想矩形成品上与质心近似重合；异形/毛边产品的抗噪性略降，换取全链路口径一致可核对。
+            var cfFeatureRect = best.GetMaskMinAreaRect();
+            var cfCrop = cfFeatureRect.Center;
             var cfInfer = toSource.Apply(cfCrop.X, cfCrop.Y);
 
-            // 7. 产品质心（推理图坐标）
-            var cpInfer = product.GetMaskCentroid();
+            // 7. 产品中心（推理图坐标）= 产品掩码最小外接旋转矩形中心（rect 已在质量门处取得，同上统一 OBB 口径）
+            var cpInfer = rect.Center;
 
             // 8. 还原到原图像素坐标（推理图坐标 × 缩放系数）
             var cfImg = new Point2f(
@@ -175,8 +184,12 @@ namespace MainAPP.Application
             }
             else
             {
-                dx = cfImg.X - cpImg.X;
-                dy = cfImg.Y - cpImg.Y;
+                // 2026-09-13: 未标定统一回推理图坐标系取像素角——此前直接用原图像素差 atan2，
+                // 而掩码路径未标定返回的是推理图系主轴角（rectAngleDeg）；X/Y 不等比缩放时两个
+                // "图像角"不相等，配方页无标定联调会在两路径间看到角度差。此处分轴还原到推理图系，
+                // 与 TryApplyBarcodeHeadDirection 的未标定分支预处理一致，两路径联调口径统一。
+                dx = (cfImg.X - cpImg.X) / (isResize ? resizeWidth : 1);
+                dy = (cfImg.Y - cpImg.Y) / (isResize ? resizeHeight : 1);
             }
             var rad = Math.Atan2(dy, dx);
             var angle = rad * 180.0 / Math.PI + offsetAngle;
@@ -190,13 +203,13 @@ namespace MainAPP.Application
         }
 
         /// <summary>
-        /// 方向可信度 = |特征质心 − 产品质心| / 产品长轴长度（两个输入必须同处一个坐标系，通常为原图像素）。
+        /// 方向可信度 = |特征中心点 − 产品中心点| / 产品长轴长度（两个输入必须同处一个坐标系，通常为原图像素）。
         /// 这条向量就是角度的来源：比值越大方向越稳，趋近 0（特征居中/对称）时 atan2 的分子分母同时趋零，
         /// 角度将由噪声决定。调用方按 <see cref="YoloTool.MinCentroidOffsetRatio"/> 判定是否采信模型角度。
         /// </summary>
-        /// <param name="featureCentroid">特征掩码质心。</param>
-        /// <param name="productCentroid">产品分割质心。</param>
-        /// <param name="longAxisLength">产品长轴长度（与质心同坐标系）。</param>
+        /// <param name="featureCentroid">特征中心点（特征掩码 OBB 中心）。</param>
+        /// <param name="productCentroid">产品中心点（产品掩码 OBB 中心）。</param>
+        /// <param name="longAxisLength">产品长轴长度（与中心点同坐标系）。</param>
         /// <returns>偏移比（无量纲）；长轴长度无效（≤1）时返回 0，由调用方按"方向退化"处理。</returns>
         internal static double ComputeDirectionOffsetRatio(
             Point2f featureCentroid, Point2f productCentroid, double longAxisLength)

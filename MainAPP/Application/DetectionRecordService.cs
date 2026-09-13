@@ -337,7 +337,24 @@ public sealed class DetectionRecordService
                 imageY = maskMinAreaRect.Center.Y;
             }
 
-            var (contourWorldX, contourWorldY) = transformer.ImageToPhysical(imageX, imageY);
+            double contourWorldX, contourWorldY;
+            if (!transformer.IsInitialized)
+            {
+                // 2026-09-13: 未标定守卫——CoordinateTransformer 未初始化时 _scaleX=0，
+                // ImageToPhysical 除零返回 NaN/Infinity，会静默污染落库/发送/跟踪匹配。
+                // 显式回退原图像素坐标并告警（与 ComputeMaskAngleCalibrated 未标定回退
+                // 图像主轴角的处置对称），联调场景可用、且能第一时间发现"没标定就上线"。
+                contourWorldX = imageX;
+                contourWorldY = imageY;
+                LogService.Instance.Warning(
+                    $"[识别][未标定] 帧={detectLogFrame} #{edgeIdx} 三点标定未初始化，" +
+                    "WorldX/WorldY 回退原图像素坐标（仅供联调，非真实 mm 值），请完成标定后上线。");
+            }
+            else
+            {
+                (contourWorldX, contourWorldY) = transformer.ImageToPhysical(imageX, imageY);
+            }
+
             // REVIEW(2026-08-05): 配方平移补偿（OffsetX/OffsetY，mm），加在图像→世界坐标转换之后、落库/发送之前。
             // 全局常量偏移属同构变换，不影响位置/角度去重匹配（相对差不变）。
             contourWorldX += offsetX;
@@ -398,40 +415,12 @@ public sealed class DetectionRecordService
             // 特征居中/对称时两质心几乎重合，atan2 分子分母同时趋零 → 角度由噪声决定，却能通过原有三道
             // 质量门。此时改走"未启用角度模型"的路径重算：掩码主轴角（三点标定换算世界角）+ 灰度判向定头尾。
             // 只换"方向的判据"，几何、坐标系与输出域完全不变。
-            bool useMaskAnglePath = !(angleDetectionEnabled && anglePredictorPool != null && angleSourceImage != null);
-            if (!useMaskAnglePath)
-            {
-                // 上面的条件已保证三者非空，但编译器无法从布尔标志反推收窄，此处显式断言
-                // （否则 CS8604：可能传入 null 引用实参）
-                var modelSourceImage = angleSourceImage!;
-                var modelPool = anglePredictorPool!;
-                var angleResult = await TryComputeAngleWithModelAsync(
-                                      modelSourceImage, edgeResult, transformer,
-                                      isResize, resizeWidth, resizeHeight,
-                                      modelPool, angleTool, offsetAngle, cancellationToken)
-                                  ?? null;
-                float minOffsetRatio = (angleTool ?? DefaultAngleTool).MinCentroidOffsetRatio;
-                if (angleResult is not null && angleResult.DirectionOffsetRatio >= minOffsetRatio)
-                {
-                    modelAngle = angleResult.Angle;
-                    // 2026-09-05: 绘制信息角度同步换算到 (-180,180]，与 DbModel.Angle 同域，
-                    // 供 HomeView 直接显示（避免画面/表格/发送三处域不一致）
-                    angleDrawInfo = new AngleDrawInfo(
-                        ToVGT.ToRobotAngle(angleResult.Angle),
-                        angleResult.FeatureCentroidImage.X, angleResult.FeatureCentroidImage.Y,
-                        angleResult.ProductCentroidImage.X, angleResult.ProductCentroidImage.Y);
-                }
-                else if (angleResult is not null)
-                {
-                    // 方向退化：模型给了轴但给不出可信朝向 → 回落灰度判向定头尾（只改方向，不改几何）
-                    useMaskAnglePath = true;
-                    RecordAngleReject(
-                        $"方向退化（特征质心偏移比 {angleResult.DirectionOffsetRatio:F4} < {minOffsetRatio:F4}），改用掩码主轴角 + 灰度判向兜底");
-                }
-            }
+            // 2026-09-13: 角度口径统一（不再分"角度模型路径 / 掩码回退路径"）——
+            // 基础角恒为掩码主轴世界角（fallbackAngle），角度模型与二维码/特征池一样，
+            // 只产出"哪端是头"的翻转信号；统一消歧链：二维码 → 模型翻转 → 特征池 → 无向回退角。
 
             // 2026-09-12: 「条码读取成功」的判据提到这里，成为**单一来源**。
-            // 原先它声明在下方 if (useMaskAnglePath) 块内，只有走到掩码角度路径时才存在；
+            // 原先它声明在下方的回退块内，只有走到掩码角度路径时才存在；
             // 但 OK/NG 落库（Result 列）在块外执行，非掩码路径下也需要该判据，
             // 且绝不能在两处各写一遍判据——否则日后改 "noread" 哨兵规则会漏改一处。
             bool hasBarcode = !string.IsNullOrEmpty(barcode)
@@ -444,101 +433,170 @@ public sealed class DetectionRecordService
             // 同样声明在方法级——DbModel 落库在 if 块外引用。null = 本帧无真值（无码/码过近/码垂直于长轴）。
             bool? headTruthPositive = null;
 
-            if (useMaskAnglePath)
+            // ==== 唯一基础角：掩码主轴世界角 + OffsetAngle（2026-09-13 两路径合一） ====
+            // 主轴角经三点标定换算为世界坐标系角度（ComputeMaskAngleCalibrated，主轴两端点
+            // ImageToPhysical 后 atan2），未标定时回退推理图主轴角；OffsetAngle 对所有路径有效。
+            // 头尾歧义（180° 方向）由下方消歧链裁决：二维码位置 → 模型翻转 → 特征池 → 无向回退角。
+            var fallbackAngle = ComputeMaskAngleCalibrated(
+                maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle,
+                maskMinAreaRect.Width, maskMinAreaRect.MaskArea,
+                transformer, isResize, resizeWidth, resizeHeight) + offsetAngle;
+
+            double longAxisPx = isResize ? maskMinAreaRect.Width * (double)resizeWidth : maskMinAreaRect.Width;
+
+            // 头端向量：产品中心（OBB 中心，原图像素）→ 二维码中心（原图像素）。
+            // 必须换算到与 fallbackAngle 同一坐标系：已标定 → 世界 mm（角度即世界角）；
+            // 未标定 → 推理图坐标（此时角度退化为推理图主轴角，见 ComputeMaskAngleCalibrated）。
+            // 配方平移补偿 offsetX/offsetY 是常量偏移，取两点差时自动抵消，无需叠加。
+            double headOffsetPx = Math.Sqrt(
+                (imageBarcodeX - imageX) * (imageBarcodeX - imageX)
+                + (imageBarcodeY - imageY) * (imageBarcodeY - imageY));
+            double dxHead, dyHead;
+            if (transformer.IsInitialized)
             {
-                // REVIEW-FIX(需求 2026-08-05): 未启用角度检测时，直接用分割掩码最小外接旋转矩形主轴角度
-                // 作为产品方向角（不做质心方向判定），由 AngleTracker.Normalize 归一化到 (-180,180]。
-                // 2026-09-08: 主轴角经三点标定换算为世界坐标系角度（ComputeMaskAngleCalibrated，
-                // 主轴两端点 ImageToPhysical 后 atan2，与角度模型路径同口径），不再把图像系角直接当世界角用。
-                // REVIEW(2026-08-05): OffsetAngle 对所有角度路径有效——掩码角度也加配方角度补偿。
-                // REVIEW(2026-09-08): 灰度判向——启用时按"矩形宽度轴两侧平均灰度"定产品头尾（头端偏亮约定），
-                // 消除 180° 方向歧义，使回退角度扩展为唯一朝向；仍由 AngleTracker 归一化到 (-180,180]。
-                var fallbackAngle = ComputeMaskAngleCalibrated(
-                    maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle,
-                    maskMinAreaRect.Width, maskMinAreaRect.MaskArea,
-                    transformer, isResize, resizeWidth, resizeHeight) + offsetAngle;
+                var (pwX, pwY) = transformer.ImageToPhysical(imageX, imageY);
+                var (bwX, bwY) = transformer.ImageToPhysical(imageBarcodeX, imageBarcodeY);
+                dxHead = bwX - pwX;
+                dyHead = bwY - pwY;
+            }
+            else
+            {
+                dxHead = (imageBarcodeX - imageX) / (isResize ? resizeWidth : 1);
+                dyHead = (imageBarcodeY - imageY) / (isResize ? resizeHeight : 1);
+            }
 
-                // 头尾（180° 方向）判定，优先级：**二维码位置 → 特征池级联**。
-                // 二维码是产品上的物理地标，位置固定，可用时以它为准。
-                // 2026-09-13: 灰度判向已**并入特征池**（成为级联中的 "BrightnessDiff" 特征，
-                // 排在几何特征之后、梯度/纹理之前），不再作为独立兜底路径——理由：
-                //   ① 原级联"几何 → 结构 → 纹理"中间空了一档，而亮度恰是信噪比高于梯度/纹理的产品固有属性；
-                //   ② 原灰度兜底在级联全死区时才执行，等于把它排在纹理之后，与其实测判别力不符；
-                //   ③ 两套判据（"头端偏亮" vs "数值大=头"）合并为单一约定，消除语义分叉。
-                // 特征池**始终执行**（即使二维码能定头尾），以产出 BrightMean/DarkMean/BrightnessDiff
-                // 统计落库，供现场标定与离线比对。
-                double longAxisPx = isResize ? maskMinAreaRect.Width * (double)resizeWidth : maskMinAreaRect.Width;
-
-                // 头端向量：产品质心（OBB 中心，原图像素）→ 二维码中心（原图像素）。
-                // 必须换算到与 fallbackAngle 同一坐标系：已标定 → 世界 mm（角度即世界角）；
-                // 未标定 → 推理图坐标（此时角度退化为推理图主轴角，见 ComputeMaskAngleCalibrated）。
-                // 配方平移补偿 offsetX/offsetY 是常量偏移，取两点差时自动抵消，无需叠加。
-                // hasBarcode 见本方法上方（已提升为方法级，掩码路径与 OK/NG 落库共用同一判据）
-                double headOffsetPx = Math.Sqrt(
-                    (imageBarcodeX - imageX) * (imageBarcodeX - imageX)
-                    + (imageBarcodeY - imageY) * (imageBarcodeY - imageY));
-                double dxHead, dyHead;
-                if (transformer.IsInitialized)
+            // —— 角度模型：只产出翻转信号（2026-09-13，不再提供完整角度）——
+            // 特征端向量（特征中心 − 产品中心）投影到主轴 u：≥ 0 = 特征端在 +u 半球 → 头在 +u
+            // → 不翻转；< 0 → 头在 −u → fallbackAngle + 180°。与二维码头向量同坐标系处理。
+            double? modelFlipAngle = null;
+            if (angleDetectionEnabled && anglePredictorPool != null && angleSourceImage != null)
+            {
+                var modelSourceImage = angleSourceImage!;
+                var modelPool = anglePredictorPool!;
+                var angleResult = await TryComputeAngleWithModelAsync(
+                                      modelSourceImage, edgeResult, transformer,
+                                      isResize, resizeWidth, resizeHeight,
+                                      modelPool, angleTool, offsetAngle, cancellationToken)
+                                  ?? null;
+                float minOffsetRatio = (angleTool ?? DefaultAngleTool).MinCentroidOffsetRatio;
+                if (angleResult is not null && angleResult.DirectionOffsetRatio >= minOffsetRatio)
                 {
-                    var (pwX, pwY) = transformer.ImageToPhysical(imageX, imageY);
-                    var (bwX, bwY) = transformer.ImageToPhysical(imageBarcodeX, imageBarcodeY);
-                    dxHead = bwX - pwX;
-                    dyHead = bwY - pwY;
-                }
-                else
-                {
-                    dxHead = (imageBarcodeX - imageX) / (isResize ? resizeWidth : 1);
-                    dyHead = (imageBarcodeY - imageY) / (isResize ? resizeHeight : 1);
-                }
-
-                // 2026-09-13: 特征池头尾判定——"数值大的一侧是头部"零定标级联。
-                // 顺序：二维码位置（QR 真值，99.9% 有码）→ 特征池（几何 → 亮度 → 结构 → 纹理）→ 全死区则不判。
-                // 码位置三用：变体分流（codePresent）/光度特征码区剔除/（有码帧）头尾真值。
-                if (Models.Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled)
-                {
-                    // 2026-09-13: 画像缺失必须显式告警。曾因 HomeViewModel 的 angleMat gate 漏了
-                    // 特征池开关，导致「开特征池 + 关亮度判向」时 angleMat 恒为 null，特征池每帧
-                    // 静默跳过（7 个特征全不算且无任何日志）。这条 Warning 是防回归的哨兵——
-                    // 若上线后出现，说明上游又有人在 gate 里漏了 featurePoolEnabled。
-                    if (angleSourceImage is null)
+                    double dxModel, dyModel;
+                    if (transformer.IsInitialized)
                     {
-                        LogService.Instance.Warning(
-                            "[特征池] 已启用但本帧无 Mat 源图（上游 angleMat 为 null）——本帧不做头尾判向。" +
-                            "请检查 HomeViewModel 的 angleMat 创建条件是否仍包含 HeadTailFeaturePoolEnabled");
+                        var (fx, fy) = transformer.ImageToPhysical(
+                            angleResult.FeatureCentroidImage.X, angleResult.FeatureCentroidImage.Y);
+                        var (px, py) = transformer.ImageToPhysical(
+                            angleResult.ProductCentroidImage.X, angleResult.ProductCentroidImage.Y);
+                        dxModel = fx - px;
+                        dyModel = fy - py;
                     }
                     else
                     {
-                        var alg = Models.Settings.Instance.Algorithm;
-                        var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
-                        poolDecision = HeadTailFeaturePool.Evaluate(
-                            fallbackAngle, angleSourceImage, edgeResult,
-                            maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
-                            longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
-                            alg.HeadTailFeatureDeadband,
-                            brightnessDirectionEnabled,
-                            alg.BrightnessContrastStretchEnabled,
-                            alg.BrightnessStretchLowPercentile,
-                            alg.BrightnessStretchHighPercentile,
-                            out brightnessStats);
-                        if (poolDecision is { Decisive: true })
+                        dxModel = (angleResult.FeatureCentroidImage.X - angleResult.ProductCentroidImage.X)
+                                  / (isResize ? resizeWidth : 1);
+                        dyModel = (angleResult.FeatureCentroidImage.Y - angleResult.ProductCentroidImage.Y)
+                                  / (isResize ? resizeHeight : 1);
+                    }
+
+                    double modelLen = Math.Sqrt(dxModel * dxModel + dyModel * dyModel);
+                    if (modelLen > 1e-9)
+                    {
+                        double radM = fallbackAngle * Math.PI / 180.0;
+                        double cosM = (dxModel * Math.Cos(radM) + dyModel * Math.Sin(radM)) / modelLen;
+                        modelFlipAngle = cosM >= 0 ? fallbackAngle : fallbackAngle + 180.0;
+                    }
+
+                    // 绘制信息：产品中心 → 特征中心连线（原图像素），供 UI 显示消歧信号来源
+                    angleDrawInfo = new AngleDrawInfo(
+                        ToVGT.ToRobotAngle(modelFlipAngle ?? fallbackAngle),
+                        angleResult.FeatureCentroidImage.X, angleResult.FeatureCentroidImage.Y,
+                        angleResult.ProductCentroidImage.X, angleResult.ProductCentroidImage.Y);
+                }
+                else if (angleResult is not null)
+                {
+                    // 方向退化（特征居中）：仅丢失模型的消歧信号，基础角照常，顺延特征池定头尾
+                    RecordAngleReject(
+                        $"模型方向退化（偏移比 {angleResult.DirectionOffsetRatio:F4} < {minOffsetRatio:F4}），丢消歧信号，顺延特征池定头尾");
+                }
+            }
+
+            // —— 特征池"数值大的一侧是头部"级联（几何 → 亮度 → 结构 → 纹理）——
+            // 仅在模型翻转信号不可用时才需要它定头尾（模型可用帧跳过，算力与旧模型路径持平）；
+            // 灰度判向已并入特征池成为 BrightnessDiff 特征（排在几何之后、梯度/纹理之前），
+            // 不再作为独立兜底路径；特征池此处照常产出 BrightMean/DarkMean/BrightnessDiff 统计。
+            if (Models.Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled && modelFlipAngle is null)
+            {
+                // 2026-09-13: 画像缺失必须显式告警。曾因 HomeViewModel 的 angleMat gate 漏了
+                // 特征池开关，导致「开特征池 + 关亮度判向」时 angleMat 恒为 null，特征池每帧
+                // 静默跳过（7 个特征全不算且无任何日志）。这条 Warning 是防回归的哨兵——
+                // 若上线后出现，说明上游又有人在 gate 里漏了 featurePoolEnabled。
+                if (angleSourceImage is null)
+                {
+                    LogService.Instance.Warning(
+                        "[特征池] 已启用但本帧无 Mat 源图（上游 angleMat 为 null）——本帧不做头尾判向。" +
+                        "请检查 HomeViewModel 的 angleMat 创建条件是否仍包含 HeadTailFeaturePoolEnabled");
+                }
+                else
+                {
+                    var alg = Models.Settings.Instance.Algorithm;
+
+                    // 2026-09-13: 自适应死区——读窗口取本帧基准（按配方分桶，窗口未满回退固定值），
+                    // 判定后把本帧各特征的 |v| 回写窗口（★全帧记录，无论是否出死区，防自锁闭环）。
+                    // 读取发生在记录之前，故本帧死区由"此前 30 帧"决定，不存在自我影响。
+                    var adaptiveEnabled = alg.HeadTailAdaptiveDeadbandEnabled;
+                    var recipeKey = RecipesManage.Instance.CurrentRecipe?.Name ?? "(无配方)";
+                    Func<string, double>? adaptiveBase = null;
+                    if (adaptiveEnabled)
+                    {
+                        adaptiveBase = name => HeadTailAdaptiveDeadband.Instance.GetBaseDeadband(
+                            recipeKey, name, alg.HeadTailFeatureDeadband, alg.HeadTailAdaptiveDeadbandK);
+                    }
+
+                    var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
+                    poolDecision = HeadTailFeaturePool.Evaluate(
+                        fallbackAngle, angleSourceImage, edgeResult,
+                        maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
+                        longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
+                        alg.HeadTailFeatureDeadband,
+                        brightnessDirectionEnabled,
+                        alg.BrightnessContrastStretchEnabled,
+                        alg.BrightnessStretchLowPercentile,
+                        alg.BrightnessStretchHighPercentile,
+                        out brightnessStats,
+                        adaptiveBaseDeadband: adaptiveBase);
+
+                    if (adaptiveEnabled && poolDecision is not null)
+                    {
+                        foreach (var f in poolDecision.Features)
                         {
-                            LogService.Instance.Debug(
-                                $"[特征池判向] {poolDecision.SourceFeature} 定头尾: 角度 {fallbackAngle:F1}°→{poolDecision.Angle:F1}°（翻转={poolDecision.Flipped}）");
+                            HeadTailAdaptiveDeadband.Instance.Record(
+                                recipeKey, f.Name, Math.Abs(f.SignedValue));
                         }
                     }
-                }
 
-                var barcodeAngle = TryApplyBarcodeHeadDirection(
-                                  fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx,
-                                  out var barcodeTruthPositive);
-                // 真值符号仅在有码且 QR 成功定头尾时有效；否则保持 null（语义区别于 false）
-                headTruthPositive = barcodeAngle.HasValue ? barcodeTruthPositive : (bool?)null;
-                modelAngle = barcodeAngle
-                              ?? (poolDecision is { Decisive: true } ? (double?)poolDecision.Angle : null)
-                              ?? fallbackAngle;
-                // 头尾翻转标记：与实发角完全同源（二维码优先 → 特征池），供 UI 箭头复现朝向
-                headFlipped = IsHeadOppositeDegrees(modelAngle.Value, fallbackAngle);
+                    if (poolDecision is { Decisive: true })
+                    {
+                        LogService.Instance.Debug(
+                            $"[特征池判向] {poolDecision.SourceFeature} 定头尾: 角度 {fallbackAngle:F1}°→{poolDecision.Angle:F1}°（翻转={poolDecision.Flipped}）");
+                    }
+                }
             }
+
+            // —— 消歧链收口：二维码位置 → 模型翻转 → 特征池 → 无向回退角 ——
+            // 二维码是产品上的物理地标、位置固定，可用时以它为准；模型是强方向信号次之；
+            // 特征池取首个出死区特征兜底；全部不可用则维持不带朝向的回退角。
+            var barcodeAngle = TryApplyBarcodeHeadDirection(
+                              fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx,
+                              out var barcodeTruthPositive);
+            // 真值符号仅在有码且 QR 成功定头尾时有效；否则保持 null（语义区别于 false）
+            headTruthPositive = barcodeAngle.HasValue ? barcodeTruthPositive : (bool?)null;
+            modelAngle = barcodeAngle
+                          ?? modelFlipAngle
+                          ?? (poolDecision is { Decisive: true } ? (double?)poolDecision.Angle : null)
+                          ?? fallbackAngle;
+            // 头尾翻转标记：与实发角完全同源（二维码 → 模型 → 特征池），供 UI 箭头复现朝向
+            headFlipped = IsHeadOppositeDegrees(modelAngle.Value, fallbackAngle);
             angle = _angleTracker.Resolve(
                 scanerResult.EncoderValue, contourWorldX, contourWorldY, modelAngle);
             angleDrawInfos.Add(angleDrawInfo);

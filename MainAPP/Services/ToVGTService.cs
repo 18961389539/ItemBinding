@@ -454,7 +454,18 @@ namespace MainAPP.Services
             }
             else
             {
-                LogService.Instance.Warning($"ToVGTService.SendTo: 未知的接收方 '{receiver}'，未发送消息。");
+                // 2026-09-13: 自定义通讯协议——receiver 非内置 VGT/LL 时按名称匹配启用协议，
+                // 逐条走模板渲染（ProtocolTemplateRenderer），复用同一帧编码器，向配置端点发送。
+                var proto = FindCustomProtocol(receiver);
+                if (proto is not null)
+                {
+                    SendCustomProtocol(models, proto, scannerResult);
+                    sent = true;
+                }
+                else
+                {
+                    LogService.Instance.Warning($"ToVGTService.SendTo: 未知的接收方 '{receiver}'，未发送消息。");
+                }
             }
 
             if (sent)
@@ -467,6 +478,106 @@ namespace MainAPP.Services
                 LogService.Instance.Info(
                     $"[UDP→{receiver}] 帧={scannerResult.FrameNumber} 编码器={scannerResult.EncoderValue} 条目数={messages.Count} | {detail}");
             }
+        }
+
+        /// <summary>
+        /// 按名称查找启用的自定义协议（2026-09-13）。非内置 VGT/LL 的 receiver 即协议名。
+        /// </summary>
+        private static ProtocolTemplateConfig? FindCustomProtocol(string receiver)
+        {
+            if (string.IsNullOrWhiteSpace(receiver))
+            {
+                return null;
+            }
+
+            var list = MainAPP.Models.Settings.Instance.Protocol?.Protocols;
+            if (list is null)
+            {
+                return null;
+            }
+
+            foreach (var p in list)
+            {
+                if (p.Enabled && string.Equals(p.Name, receiver, StringComparison.OrdinalIgnoreCase))
+                {
+                    return p;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 按自定义协议模板渲染并发送本帧全部记录（2026-09-13）。
+        /// 每条产品一行（行分隔按协议 LineEnding），逐条经 <see cref="ProtocolTemplateRenderer.Render"/>
+        /// 决定是否拒发（角度未知 / 无码 RejectMessage）；整帧一条 UDP 报文发向配置端点。
+        /// </summary>
+        private void SendCustomProtocol(IEnumerable<DbModel> models, ProtocolTemplateConfig proto, FrameResult scannerResult)
+        {
+            if (models is null)
+            {
+                LogService.Instance.Warning("[自定义协议] 模型列表为 null。");
+                return;
+            }
+
+            var lineEnding = ProtocolTemplateRenderer.FrameLineEnding(proto);
+            var parts = new List<string>();
+            foreach (var m in models)
+            {
+                var s = ProtocolTemplateRenderer.Render(m, proto);
+                if (s is not null)
+                {
+                    parts.Add(s);
+                }
+            }
+
+            if (parts.Count == 0)
+            {
+                LogService.Instance.Debug($"[自定义协议] {proto.Name}: 帧={scannerResult.FrameNumber} 无可发记录（拒发策略过滤）。");
+                return;
+            }
+
+            var endpoint = ParseEndPoint(proto.EndPoint);
+            if (endpoint is null)
+            {
+                LogService.Instance.Warning($"[自定义协议] {proto.Name}: 端点 '{proto.EndPoint}' 无法解析，未发送。");
+                return;
+            }
+
+            var content = string.Join(lineEnding, parts);
+            byte[] data = Encoding.UTF8.GetBytes(content);
+            try
+            {
+                using var client = new UdpClient();
+                // UDP 无连接发送：每次向目标端点发一帧，不占端口/不复用（帧频低，创建开销可忽略）
+                client.Send(data, data.Length, endpoint);
+                LogService.Instance.Info(
+                    $"[自定义协议] {proto.Name}: 帧={scannerResult.FrameNumber} 编码器={scannerResult.EncoderValue} 条目数={parts.Count} → {proto.EndPoint} | {content}");
+            }
+            catch (ObjectDisposedException) { /* 发送期间被释放，吞掉异常 */ }
+            catch (SocketException ex)
+            {
+                LogService.Instance.Warning($"[自定义协议] {proto.Name} 发送失败: {ex.Message}");
+            }
+        }
+
+        /// <summary>"ip:port" → IPEndPoint；解析失败返回 null。</summary>
+        private static System.Net.IPEndPoint? ParseEndPoint(string ep)
+        {
+            if (string.IsNullOrWhiteSpace(ep))
+            {
+                return null;
+            }
+
+            var idx = ep.LastIndexOf(':');
+            if (idx <= 0 || idx == ep.Length - 1 || !ushort.TryParse(ep[(idx + 1)..], out var port))
+            {
+                return null;
+            }
+
+            return System.Net.IPAddress.TryParse(ep[..idx], out var ip)
+                ? new System.Net.IPEndPoint(ip, port)
+                : null;
         }
 
         #endregion

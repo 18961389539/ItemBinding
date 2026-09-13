@@ -184,7 +184,8 @@ namespace MainAPP.Application
             bool stretchEnabled,
             double stretchLowPercentile,
             double stretchHighPercentile,
-            out BrightnessDirectionStats? brightnessStats)
+            out BrightnessDirectionStats? brightnessStats,
+            Func<string, double>? adaptiveBaseDeadband = null)
         {
             brightnessStats = null;
             if (bgrImage is null || bgrImage.Empty() || maskArea <= 0)
@@ -386,7 +387,7 @@ namespace MainAPP.Application
             var features = BuildFeatures(
                 aggregates, longAxisPx, deadband,
                 stretchEnabled, stretchLowPercentile, stretchHighPercentile,
-                out brightnessStats);
+                out brightnessStats, adaptiveBaseDeadband);
             return BuildDecision(fallbackAngle, features);
         }
 
@@ -578,21 +579,30 @@ namespace MainAPP.Application
         /// <param name="stretchLowPercentile">拉伸窗口低分位（0~100）。</param>
         /// <param name="stretchHighPercentile">拉伸窗口高分位（0~100）。</param>
         /// <param name="brightnessStats">输出：亮度统计快照（供落库/配方页显示）；不可统计时 null。</param>
+        /// <param name="adaptiveBaseDeadband">
+        /// 可选的逐特征自适应基准死区（2026-09-13，按特征名查询；null = 统一用 <paramref name="deadband"/>）。
+        /// 由 <c>HeadTailAdaptiveDeadband</c> 提供（k × median(|v|)，按配方分桶）。
+        /// <b>只替换"基准"，量纲缩放系数仍由本方法乘上</b>（偏度 ×2、亮度 ×510）——
+        /// 让位机制的 conf 按固定 ConfReference 归一化，不受此处影响。
+        /// 置于 out 参数之后是为了不搅动二十余处既有调用点（生产路径之外均传 null）。</param>
         internal static IReadOnlyList<HeadTailFeatureSample> BuildFeatures(
             HeadTailAggregates a, double longAxisPx, double deadband,
             bool stretchEnabled,
             double stretchLowPercentile,
             double stretchHighPercentile,
-            out BrightnessDirectionStats? brightnessStats)
+            out BrightnessDirectionStats? brightnessStats,
+            Func<string, double>? adaptiveBaseDeadband = null)
         {
             brightnessStats = null;
             var list = new List<HeadTailFeatureSample>(7);
 
             // 统一入口：调用方只给"相对基准死区的缩放系数"（量纲换算），
-            // 实际死区 = 基准死区 × 系数。这样基准死区将来可自适应，而系数保持恒定。
+            // 实际死区 = 基准死区 × 系数。基准死区可来自自适应（按特征名查询），
+            // 也可回退统一固定值；系数恒定，故 conf 语义不受自适应影响。
             void Add(string name, double value, double scale = 1.0)
             {
-                var db = deadband * scale;
+                var baseDb = adaptiveBaseDeadband?.Invoke(name) ?? deadband;
+                var db = baseDb * scale;
                 list.Add(new HeadTailFeatureSample(name, value, db, Math.Abs(value) >= db, scale));
             }
 
@@ -633,7 +643,7 @@ namespace MainAPP.Application
             if (a.HasHistograms)
             {
                 AddBrightnessFeature(a, list, deadband, stretchEnabled, stretchLowPercentile, stretchHighPercentile,
-                    out brightnessStats);
+                    out brightnessStats, adaptiveBaseDeadband);
             }
 
             if (a.PhotoCountPlus > 0 && a.PhotoCountMinus > 0)
@@ -686,7 +696,8 @@ namespace MainAPP.Application
             bool stretchEnabled,
             double lowPercentile,
             double highPercentile,
-            out BrightnessDirectionStats? stats)
+            out BrightnessDirectionStats? stats,
+            Func<string, double>? adaptiveBaseDeadband = null)
         {
             stats = null;
             var histPlus = a.HistPlus!;
@@ -758,10 +769,11 @@ namespace MainAPP.Application
                 stretch ? hi : double.NaN);
 
             // 量纲换算：绝对灰度差 → 相对差量纲，与其它特征在级联内可比。
-            // 记下缩放系数而非常量积——基准死区将来可自适应，而该系数恒定，
+            // 基准死区同样走自适应（按特征名查询），缩放系数恒定——
             // 使 ConfidenceOf 能用固定 ConfReference 算出跨产品可比的置信度。
+            var brightnessBase = adaptiveBaseDeadband?.Invoke("BrightnessDiff") ?? deadband;
             var brightnessScale = BrightnessDeadbandScale;
-            var brightnessDb = deadband * brightnessScale;
+            var brightnessDb = brightnessBase * brightnessScale;
             list.Add(new HeadTailFeatureSample(
                 "BrightnessDiff",
                 diff,

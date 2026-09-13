@@ -1056,10 +1056,10 @@ namespace MainAPP.ViewModels
                 double? worldX = null, worldY = null;
                 if (segmentation is { Count: > 0 })
                 {
-                    var calibTf = BuildCalibratedTransformer();
-                    if (calibTf is not null)
+                    var protoCalibTf = BuildCalibratedTransformer();
+                    if (protoCalibTf is not null)
                     {
-                        var phys = calibTf.ImageToPhysical(productPixel);
+                        var phys = protoCalibTf.ImageToPhysical(productPixel);
                         double wx = phys.X + OffsetX;
                         double wy = phys.Y + OffsetY;
                         worldX = wx;
@@ -1072,36 +1072,65 @@ namespace MainAPP.ViewModels
                     }
                 }
 
-                // 2026-09-05: 最终角度统一为"发送给机器人的域值"(-180..180]，与生产链路一致：
-                // - 角度模型成功 → angleResult.Angle（已在上面换算为 ToRobotAngle 域）；
-                // - 角度未启用/勾选但模型文件缺失 → 回退掩码最小外接矩形主轴角 + OffsetAngle，
-                //   并应用灰度判向消除 180° 歧义（生产在模型池加载失败时同走此回退）；
-                // - 启用但模型无输出 → 视为无角度（对应生产锁定缺失帧，不作为真实角度）。
-                double? sendAngle = angleResult?.Angle;
+                // 2026-09-13: 角度口径与生产 BuildAndSaveAsync 统一——基础角恒为掩码主轴世界角 + OffsetAngle，
+                // 角度模型只产出翻转信号（不再直接采信其角度数值）；sendAngle = 基础角 ± 180°（哪端是头）。
+                double? sendAngle = null;
                 bool angleFromMaskFallback = false;
-                // 2026-09-08: 与生产主链路（DetectionRecordService.BuildAndSaveAsync 回退分支）行为一致——
-                // 掩码回退角度同样应用灰度判向（配方级 IsBrightnessDirectionEnabled ?? 全局 Algorithm
-                // .BrightnessDirectionEnabled），消除 180° 方向歧义，测试推理显示值 = 生产实发值（所见即所发）。
                 bool brightnessDirectionTried = false;
-                // 2026-09-08: 判向亮度统计随测试推理展示（与生产落库同一 out 数据），供标定 OffsetAngle/
-                // 死区阈值时核对"正/负半区灰度差"是否稳定；声明在外层便于汇总文案引用。
-                // 2026-09-13: 判据已由独立"灰度判向"并入特征池（HeadTailFeaturePool），此处改走特征池
-                // 统一入口，保证测试推理显示值 = 生产实发值（所见即所发）这一不变式继续成立。
                 BrightnessDirectionStats? brightnessStats = null;
                 HeadTailPoolDecision? testPoolDecision = null;
-                if (sendAngle is null && (!wantAngle || angleDirectionDegenerate))
+
+                // ---- 唯一基础角：掩码主轴世界角 + OffsetAngle（与生产 ComputeMaskAngleCalibrated 同口径）----
+                // 主轴两端点 ImageToPhysical 后 atan2，未标定时退回图像角（同生产行为，仅供联调）。
+                var calibForAngle = BuildCalibratedTransformer();
+                double maskWorldAngle = calibForAngle is not null && maskArea > 0
+                    ? DetectionRecordService.ComputeMaskAngleCalibrated(
+                        maskRectCenterX, maskRectCenterY, maskRectAngleDeg, maskRectWidth, maskArea,
+                        calibForAngle, edgeTool.IsResize, edgeTool.ResizeScale, edgeTool.ResizeScaleY)
+                    : maskFallbackAngleDeg;
+                var fallbackAngle = maskWorldAngle + (double)OffsetAngle;
+
+                // ---- 模型翻转信号（2026-09-13：只判头尾，不提供角度数值）----
+                // 特征端向量（特征中心 − 产品中心）投影到主轴 u；与 fallbackAngle 同坐标系。
+                double? modelFlipAngle = null;
+                if (angleResult is not null && !angleDirectionDegenerate)
                 {
-                    // 2026-09-08: 掩码回退角度经三点标定换算为世界坐标系角度（与生产 BuildAndSaveAsync
-                    // 回退分支 ComputeMaskAngleCalibrated 同口径）——图像系主轴角直接当世界角用在
-                    // 图像Y/机器人Y镜像时会整体反号，此处先取主轴两端点 ImageToPhysical 后 atan2，
-                    // 未标定时退回图像角（同旧行为，仅供联调）。再叠加 OffsetAngle 与生产一致。
-                    var calibTf = BuildCalibratedTransformer();
-                    double maskWorldAngle = calibTf is not null && maskArea > 0
-                        ? DetectionRecordService.ComputeMaskAngleCalibrated(
-                            maskRectCenterX, maskRectCenterY, maskRectAngleDeg, maskRectWidth, maskArea,
-                            calibTf, edgeTool.IsResize, edgeTool.ResizeScale, edgeTool.ResizeScaleY)
-                        : maskFallbackAngleDeg;
-                    var fallbackAngle = maskWorldAngle + (double)OffsetAngle;
+                    double dxModel, dyModel;
+                    if (calibForAngle is not null)
+                    {
+                        var (cfx, cfy) = calibForAngle.ImageToPhysical(
+                            angleResult.FeatureCentroidImage.X, angleResult.FeatureCentroidImage.Y);
+                        var (cpx, cpy) = calibForAngle.ImageToPhysical(
+                            angleResult.ProductCentroidImage.X, angleResult.ProductCentroidImage.Y);
+                        dxModel = cfx - cpx;
+                        dyModel = cfy - cpy;
+                    }
+                    else
+                    {
+                        double sx = edgeTool.IsResize ? edgeTool.ResizeScale : 1.0;
+                        double sy = edgeTool.IsResize ? edgeTool.ResizeScaleY : 1.0;
+                        dxModel = (angleResult.FeatureCentroidImage.X - angleResult.ProductCentroidImage.X) / sx;
+                        dyModel = (angleResult.FeatureCentroidImage.Y - angleResult.ProductCentroidImage.Y) / sy;
+                    }
+
+                    double modelLen = Math.Sqrt(dxModel * dxModel + dyModel * dyModel);
+                    if (modelLen > 1e-9)
+                    {
+                        double radM = fallbackAngle * Math.PI / 180.0;
+                        double cosM = (dxModel * Math.Cos(radM) + dyModel * Math.Sin(radM)) / modelLen;
+                        modelFlipAngle = cosM >= 0 ? fallbackAngle : fallbackAngle + 180.0;
+                    }
+                }
+
+                if (modelFlipAngle is not null)
+                {
+                    sendAngle = ToVGT.ToRobotAngle(modelFlipAngle.Value);
+                }
+                else
+                {
+                    // 模型信号不可用（未启用/方向退化/无输出）→ 特征池/亮度兜底（与生产消歧链同构）。
+                    // 灰度判向已并入特征池成为 BrightnessDiff 特征（2026-09-13），不再独立兜底；
+                    // 测试推理显示值 = 生产实发值（所见即所发）这一不变式继续成立。
                     bool brightnessEnabled = this.YoloTool?.IsBrightnessDirectionEnabled
                         ?? Models.Settings.Instance.Algorithm.BrightnessDirectionEnabled;
                     if (product is not null && maskArea > 0)
@@ -1150,8 +1179,15 @@ namespace MainAPP.ViewModels
                               ? $"掩码主轴角+brightness特征{brightnessDetail}"
                               : "掩码主轴角")
                     : string.Empty;
+                // 2026-09-13: 模型翻转路径（角度=掩码主轴角 ± 180°）单独标注，与回退链路区分
+                string modelFlipDesc = modelFlipAngle is not null ? "掩码主轴角+模型翻转" : string.Empty;
                 string angleText = sendAngle is not null
-                    ? $"\n角度: {sendAngle:F1}°" + (angleFromMaskFallback ? $"（{fallbackAngleDesc}）" : string.Empty)
+                    ? $"\n角度: {sendAngle:F1}°"
+                      + (modelFlipAngle is not null
+                          ? $"（{modelFlipDesc}）"
+                          : angleFromMaskFallback
+                              ? $"（{fallbackAngleDesc}）"
+                              : string.Empty)
                     : wantAngle
                         ? "\n角度: 无（角度模型未输出有效结果，详见日志质量门原因）"
                         : string.Empty;

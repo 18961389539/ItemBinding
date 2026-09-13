@@ -50,6 +50,10 @@ namespace MainAPP.Models
         [JsonIgnore]
         public AiSettings Ai { get; set; } = new();
 
+        /// <summary>自定义通讯协议配置（2026-09-13 新增，模板段方式定义输出格式）</summary>
+        [JsonIgnore]
+        public ProtocolSettings Protocol { get; set; } = new();
+
         // ===== 转发属性（参与 JSON 序列化，保持扁平结构与向后兼容）=====
         // 所有 Settings.Instance.Xxx 调用与 _settings.Xxx 调用继续正常工作
 
@@ -123,6 +127,9 @@ namespace MainAPP.Models
         public string AiLlamaServerExe { get => Ai.LlamaServerExe; set => Ai.LlamaServerExe = value; }
         public int AiLlamaServerPort { get => Ai.LlamaServerPort; set => Ai.LlamaServerPort = value; }
         public string AiKnowledgeDocsFolder { get => Ai.KnowledgeDocsFolder; set => Ai.KnowledgeDocsFolder = value; }
+
+        // --- 自定义通讯协议（2026-09-13 新增，扁平转发参与 JSON 序列化）---
+        public List<ProtocolTemplateConfig> ProtocolTemplates { get => Protocol.Protocols; set => Protocol.Protocols = value; }
 
         /// <summary>
         /// 设置变更事件（弱事件模式，订阅者被 GC 回收时自动取消订阅，无内存泄漏风险）

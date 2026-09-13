@@ -128,6 +128,27 @@ namespace MainAPP.Models
         public double HeadTailFeatureDeadband { get; set; } = 0.10;
 
         /// <summary>
+        /// 2026-09-13: 自适应死区总开关（<b>默认关</b>）。开启后，每个特征的实际死区改为
+        /// <c>k × median(|v|)</c>（按配方维护 30 帧滑动窗口），自动适配不同产品的不对称量级——
+        /// 这是"兼容更多产品"的主要手段（固定 0.10 对强不对称产品形同虚设、对弱不对称产品永不裁决）。
+        /// <para><b>为什么默认关</b>：启用前应先经 <c>headtail_audit</c> 拿到固定死区下的基线
+        /// （一致率/自洽性指标），否则改了行为却没有对照。开启后的副作用需要监控
+        /// <c>takeOverRate</c>：死区变小会抬高所有 conf（conf 按固定 ConfReference 归一化，不随死区漂移），
+        /// 若 takeOverRate 掉到 0 说明死区过小、让位机制失效，应调大 k。</para>
+        /// <para>冷启动：窗口未满 30 帧时逐帧回退到 <see cref="HeadTailFeatureDeadband"/>（即现状行为），
+        /// 故重启/换配方的过渡是安全降级而非不可预测行为。窗口不持久化——重启即重新冷启动。</para>
+        /// </summary>
+        public bool HeadTailAdaptiveDeadbandEnabled { get; set; } = false;
+
+        /// <summary>
+        /// 自适应死区系数 k（默认 0.5）：实际死区 = k × median(|v|)。
+        /// <para><b>k 的真实语义是"设定出死区率"而非"灵敏度"</b>——k=0.5 时约 70-75% 的帧出死区
+        /// （median 是 |v| 分布的中位）。k 越小越多弱信号发言（配合让位机制消化），越大越保守。
+        /// 调整后观察 headtail_audit 的出死区率与 takeOverRate 交叉校验。</para>
+        /// </summary>
+        public double HeadTailAdaptiveDeadbandK { get; set; } = 0.5;
+
+        /// <summary>
         /// 是否启用"掩码内对比度拉伸"（默认 true）：灰度判向前，把掩码内灰度的
         /// [<see cref="BrightnessStretchLowPercentile"/>, <see cref="BrightnessStretchHighPercentile"/>]
         /// 分位窗口线性映射到 [0,255]（超界截断），再统计两侧平均值与差值。

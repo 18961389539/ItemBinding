@@ -42,6 +42,21 @@
 		<PackageReference Include="Serilog" Version="4.3.0" />
 		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
 		<PackageReference Include="Serilog.Sinks.SQLite" Version="6.0.0" />
+		<!-- 2026-09-13: 覆盖传递依赖 System.Collections.Immutable 6.0.0（其旧版 targets 在新 SDK 上
+		     对 net8.0-windows 误报 "doesn't support"，阻断构建）。8.0.0 与 .NET 8 运行时内置版本同源，
+		     API 向后兼容，只升 targets 兼容性，不影响任何行为。 -->
+		<PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
+		<!-- 同 2026-09-13：System.Composition.Runtime 6.0.0 旧版 targets 误报（该程序集 .NET 6+ 运行时内置），
+		     9.0.0 消除误报。System.Composition.* 为 SQLite/分析器链的传递依赖，API 兼容。 -->
+		<PackageReference Include="System.Composition.Runtime" Version="9.0.0" />
+		<!-- 同族覆盖：System.Composition.Hosting / AttributedModel / TypedParts / Convention
+		     6.0.0 旧 targets 对 net8.0-windows 报错（9.0.0 仅警告），一次覆盖收敛。 -->
+		<PackageReference Include="System.Composition.Hosting" Version="9.0.0" />
+		<PackageReference Include="System.Composition.AttributedModel" Version="9.0.0" />
+		<PackageReference Include="System.Composition.TypedParts" Version="9.0.0" />
+		<PackageReference Include="System.Composition.Convention" Version="9.0.0" />
+		<!-- System.Composition 聚合元包 6.0.0 同因报错，一并覆盖到 9.0.0。 -->
+		<PackageReference Include="System.Composition" Version="9.0.0" />
 	</ItemGroup>
 
 	<!-- 2026-09-12: AI 对话模块（离线本地推理，全部开源组件，不自建轮子）。

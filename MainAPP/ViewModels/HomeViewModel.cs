@@ -1508,8 +1508,9 @@ namespace MainAPP.ViewModels
                     AngleDrawInfo? angleInfo = angleDrawInfos is not null && edgeIdx < angleDrawInfos.Count
                         ? angleDrawInfos[edgeIdx]
                         : null;
-                    // 2026-09-11: 服务端下发的"头尾是否翻转 180°"（掩码角度路径专用，其余为 null）。
-                    // 画面方向箭头据此复现实发朝向，不再自行按灰度统计判定（见下方箭头段注释）。
+                    // 2026-09-11: 服务端下发的"头尾是否翻转 180°"。2026-09-13 起全路径有值
+                    // （含模型翻转——模型只产翻转信号、不再直接采信其角度），画面方向箭头统一据此复现实发朝向，
+                    // 不再自行按灰度统计判定（见下方箭头段注释）。
                     bool? headFlip = headFlips is not null && edgeIdx < headFlips.Count
                         ? headFlips[edgeIdx]
                         : null;
@@ -1532,7 +1533,9 @@ namespace MainAPP.ViewModels
                         x.DrawPolygon(SixLabors.ImageSharp.Color.Red, 2f, Square(featureCentroid));
                         // 2026-09-09: 不绘制角度数值文本（现场无需画面核对角度值，仅保留方向连线/质心标记）
                     }
-                    else if (isRecorded && maskRect.MaskArea > 0 && headFlip is not null)
+                    // 2026-09-13: 方向箭头与上面的"质心→特征"连线并存（不再互斥）——
+                    // 箭头指示实发朝向（=掩码主轴角 + 服务端翻转），连线示模型消歧信号来源，可对照核对。
+                    if (isRecorded && maskRect.MaskArea > 0 && headFlip is not null)
                     {
                         // 2026-09-09: "发送位置 + 发送角度"向量箭头（掩码角度路径：未启用角度模型，或其方向退化回落）。
                         // 起点 = 掩码最小外接旋转矩形中心（正是落库/发送 X/Y 的图像对应点），

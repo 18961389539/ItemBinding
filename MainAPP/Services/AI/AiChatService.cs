@@ -284,7 +284,7 @@ namespace MainAPP.Services.AI
                         type = "object",
                         properties = new
                         {
-                            intent = new { type = "string", @enum = new[] { "by_barcode", "by_time_range", "aggregate", "camera_settings", "by_result", "get_image", "by_recipe", "by_station", "compare_periods", "switch_recipe", "daily_report", "search_knowledge", "search_logs", "get_settings", "get_recipes", "headtail_audit", "save_case", "unknown" } },
+                            intent = new { type = "string", @enum = new[] { "by_barcode", "by_time_range", "aggregate", "camera_settings", "by_result", "get_image", "by_recipe", "by_station", "compare_periods", "switch_recipe", "daily_report", "search_knowledge", "search_logs", "get_settings", "get_recipes", "headtail_audit", "save_case", "encode_range", "alert_summary", "no_barcode_rate", "unknown" } },
                             barcode = new { type = "string" },
                             hours = new { type = "integer" },
                             period_hours = new { type = "integer" },
@@ -300,6 +300,8 @@ namespace MainAPP.Services.AI
                             station = new { type = new[] { "string", "null" } },
                             min_score = new { type = new[] { "number", "null" } },
                             limit = new { type = "integer" },
+                            min_encode = new { type = "integer" },
+                            max_encode = new { type = "integer" },
                         },
                         required = new[] { "intent" },
                     },
@@ -764,6 +766,17 @@ namespace MainAPP.Services.AI
                     GetStr(intent, "cause") ?? string.Empty,
                     GetStr(intent, "solution") ?? string.Empty,
                     GetStr(intent, "keywords") ?? string.Empty).ConfigureAwait(false),
+                "encode_range" => await QueryByEncodeRangeAsync(
+                    GetLong(intent, "min_encode", 0),
+                    GetLong(intent, "max_encode", 0),
+                    GetInt(intent, "limit", 20),
+                    cancellationToken).ConfigureAwait(false),
+                "alert_summary" => await BuildAlertSummaryAsync(
+                    GetInt(intent, "hours", 24),
+                    cancellationToken).ConfigureAwait(false),
+                "no_barcode_rate" => await BuildNoBarcodeRateAsync(
+                    GetInt(intent, "hours", 24),
+                    cancellationToken).ConfigureAwait(false),
                 _ => null,
             };
         }
@@ -1004,6 +1017,98 @@ namespace MainAPP.Services.AI
         private static double GetDbl(JsonElement e, string name, double fallback) =>
             e.TryGetProperty(name, out var v) && v.TryGetDouble(out var d) ? d : fallback;
 
+        private static long GetLong(JsonElement e, string name, long fallback) =>
+            e.TryGetProperty(name, out var v) && v.TryGetInt64(out var n) ? n : fallback;
+
+        // ─────────────────────────────────────────────────────────────
+        // 2026-09-13: 高频动态意图——编码器区间 / 告警摘要 / 无码率
+        // ─────────────────────────────────────────────────────────────
+
+        /// <summary>编码器区间查询（encode_range）：返回区间内记录数与最近若干条的条码/坐标/角度/结果。</summary>
+        private static async Task<string> QueryByEncodeRangeAsync(long minEncode, long maxEncode, int limit, CancellationToken ct)
+        {
+            if (maxEncode <= minEncode)
+            {
+                return "参数错误：max_encode 应大于 min_encode";
+            }
+
+            limit = Math.Clamp(limit <= 0 ? 20 : limit, 1, 50);
+            var rows = await BarcodeDataService.Instance.GetByEncodeRangeAsync(minEncode, maxEncode, ct).ConfigureAwait(false);
+            if (rows.Count == 0)
+            {
+                return $"编码器 {minEncode}~{maxEncode} 区间内没有检测记录";
+            }
+
+            var sb = new StringBuilder();
+            sb.Append($"编码器 {minEncode}~{maxEncode} 区间共 {rows.Count} 条记录，最近 {Math.Min(limit, rows.Count)} 条：\n");
+            foreach (var m in rows.Take(limit))
+            {
+                sb.AppendLine($"  [{m.DetectTime:HH:mm:ss}] 编码器={m.Encode} 条码={m.Barcode} X={m.WorldX:F1} Y={m.WorldY:F1} 角度={m.Angle:F1} 结果={m.Result ?? "-"}");
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>告警摘要（alert_summary）：最近 N 小时日志中 Error/Warning 数量与去重后的代表性样例（采样最近 200 条）。</summary>
+        private static async Task<string> BuildAlertSummaryAsync(int hours, CancellationToken ct)
+        {
+            hours = ClampHours(hours);
+            var since = DateTime.Now.AddHours(-hours);
+            await using var db = new LogDbContext();
+            var rows = await db.Logs.AsNoTracking()
+                .Where(l => l.Timestamp >= since && (l.Level == "Error" || l.Level == "Warning"))
+                .OrderByDescending(l => l.Id)
+                .Take(200)
+                .ToListAsync(ct).ConfigureAwait(false);
+
+            if (rows.Count == 0)
+            {
+                return $"最近 {hours} 小时没有 Error/Warning 告警，状态正常。";
+            }
+
+            var errs = rows.Count(l => string.Equals(l.Level, "Error", StringComparison.OrdinalIgnoreCase));
+            var warns = rows.Count(l => string.Equals(l.Level, "Warning", StringComparison.OrdinalIgnoreCase));
+            var sb = new StringBuilder();
+            sb.Append($"最近 {hours} 小时告警（采样最近 {rows.Count} 条）：Error {errs} 条，Warning {warns} 条。\n");
+            var seen = new HashSet<string>();
+            var shown = 0;
+            foreach (var r in rows)
+            {
+                if (shown >= 8)
+                {
+                    break;
+                }
+
+                var key = (r.RenderedMessage ?? string.Empty).Trim();
+                if (key.Length == 0 || !seen.Add(key))
+                {
+                    continue;
+                }
+
+                var brief = key.Length > 90 ? key[..90] + "…" : key;
+                sb.AppendLine($"  [{r.Timestamp:MM-dd HH:mm}] [{r.Level}] {brief}");
+                shown++;
+            }
+
+            return sb.ToString().TrimEnd();
+        }
+
+        /// <summary>无码率（no_barcode_rate）：最近 N 小时检测总数、无码（noread/空）数量与占比。</summary>
+        private static async Task<string> BuildNoBarcodeRateAsync(int hours, CancellationToken ct)
+        {
+            hours = ClampHours(hours);
+            var since = DateTime.Now.AddHours(-hours);
+            await using var db = new AppDbContext();
+            var total = await db.BarcodeData.CountAsync(m => m.DetectTime >= since, ct).ConfigureAwait(false);
+            var noCode = await db.BarcodeData
+                .CountAsync(m => m.DetectTime >= since && (m.Barcode == string.Empty || m.Barcode == "noread"), ct)
+                .ConfigureAwait(false);
+            var rate = total > 0 ? noCode * 100.0 / total : 0.0;
+            return total == 0
+                ? $"最近 {hours} 小时没有检测记录。"
+                : $"最近 {hours} 小时共检测 {total} 条，无码 {noCode} 条，无码率 {rate:F1}%。";
+        }
+
         /// <summary>清空多轮会话历史（开启新对话）。模型保持加载状态。</summary>
         public async Task ResetConversationAsync(CancellationToken cancellationToken = default)
         {
@@ -1061,6 +1166,9 @@ intent 与字段：
 - save_case: {"title":"标题","symptom":"症状","cause":"原因","solution":"解法","keywords":"关键词1,关键词2"}   ← 用户描述了一次异常的处理过程并要求记录/沉淀为案例
 - get_recipes: {}   ← 用户问"有哪些配方/当前是什么配方/当前配方的参数"（返回配方清单+当前配方参数快照）
 - headtail_audit: {"hours":24,"recipe":"配方B"}   ← 用户问"头尾判定靠哪个特征/哪个特征最有用/特征池效果/判得准不准/某特征有没有用"。返回逐特征三指标：出死区率（有无区分力）、裁决占比（谁在干活）、QR一致率（判得对不对）
+- encode_range: {"min_encode":整数,"max_encode":整数,"limit":整数}   ← 用户问"编码器/N号到N号之间/第N个产品"按编码器区间查记录
+- alert_summary: {"hours":整数小时数}   ← 用户问"最近告警/报错/警告/Warning/Error/有没有异常"
+- no_barcode_rate: {"hours":整数小时数}   ← 用户问"无码率/没读到码的有多少/连续n条没码"
 - unknown: {}
 hours 用整数小时数表示时间范围（例如"今天"按 24，"最近一小时"按 1）。
 示例：{"intent":"by_barcode","barcode":"ABC123","limit":20}

@@ -482,6 +482,7 @@ namespace MainAPP.ViewModels
             // M74: try-catch 保证失败时提示错误
             try
             {
+                AuditLogService.Instance.Record("保存", "全局设置");
                 // L371a: 保存前校验数值字段有效性
             if (MinRecentDays <= 0)
                 {
@@ -642,6 +643,7 @@ namespace MainAPP.ViewModels
             var previousSelectedUser = SelectedUser;
             var createdUser = AppUser.Create(trimmedUserName, NewAccountDisplayName, NewAccountPassword, NewAccountRole, NewAccountEnabled);
             Users.Add(createdUser);
+            AuditLogService.Instance.Record("新增", "账号", null, trimmedUserName);
             SelectedUser = createdUser;
             try
             {
@@ -768,6 +770,7 @@ namespace MainAPP.ViewModels
                 // M339: Save 失败时回滚 Users 和 SelectedUser
                 var userToDelete = SelectedUser;
                 Users.Remove(userToDelete);
+                AuditLogService.Instance.Record("删除", "账号", userToDelete.Username, null);
                 SelectedUser = null;
                 try
                 {

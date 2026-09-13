@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using MainAPP.Models;
 using MainAPP.Services;
 using Microsoft.Win32;
+using Microsoft.EntityFrameworkCore;
 using ScottPlot.WPF;
 using System;
 using System.Collections.Generic;
@@ -608,6 +609,100 @@ namespace MainAPP.ViewModels
 
         // 标记是否已弹出异常预警通知，避免每次重新加载重复打扰
         private bool _analyticsNotified;
+
+        // ─────────────────────────────────────────────────────────────
+        // 2026-09-13: SPC 过程控制 + 班报/日报生成
+        // ─────────────────────────────────────────────────────────────
+
+        [ObservableProperty]
+        private int _spcHours = 24;
+
+        [ObservableProperty]
+        private string _spcSummary = "未查询（输入小时数后点「查询 SPC」）";
+
+        [ObservableProperty]
+        private SpcResult? _spcResult;
+
+        /// <summary>View 注册的 SPC 渲染回调（收到结果后在控制图 WpfPlot 绘制）。</summary>
+        public Action<SpcResult?>? SpcRenderer { get; set; }
+
+        /// <summary>View 注册的日报生成结果回调（参数 = 文件路径，null = 失败）。</summary>
+        public Action<string?>? ReportDone { get; set; }
+
+        [RelayCommand]
+        private void QuerySpc()
+        {
+            if (!MainAPP.Models.Settings.Instance.SpcEnabled)
+            {
+                SpcSummary = "SPC 未启用（设置 → 算法 → SPC 过程控制）";
+                return;
+            }
+
+            var hours = Math.Clamp(SpcHours <= 0 ? 24 : SpcHours, 1, 24 * 30);
+            var subgroup = Math.Clamp(MainAPP.Models.Settings.Instance.SpcSubgroupSize, 2, 10);
+            var since = DateTime.Now.AddHours(-hours);
+
+            List<double> scores;
+            try
+            {
+                using var db = new AppDbContext();
+                scores = db.BarcodeData.AsNoTracking()
+                    .Where(x => x.DetectTime >= since && x.Score > 0)
+                    .OrderBy(x => x.DetectTime)
+                    .Select(x => x.Score)
+                    .ToList();
+            }
+            catch (Exception ex)
+            {
+                SpcSummary = $"SPC 查询失败：{ex.Message}";
+                SpcResult = null;
+                SpcRenderer?.Invoke(null);
+                return;
+            }
+
+            if (scores.Count == 0)
+            {
+                SpcSummary = $"最近 {hours} 小时无评分样本（Score>0），无法建立控制图";
+                SpcResult = null;
+                SpcRenderer?.Invoke(null);
+                return;
+            }
+
+            var r = SpcCalculator.Compute(scores, subgroup);
+            SpcResult = r;
+            SpcRenderer?.Invoke(r);
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append($"样本 {scores.Count}，子组 {r.MeanValues.Length} 组 | CL={r.CenterLine:F3} UCL={r.Ucl:F3} LCL={r.Lcl:F3}");
+            if (r.Cpk is { } cpk)
+            {
+                sb.Append($" | CPK={cpk:F2}");
+            }
+
+            if (r.AlarmMessages.Count > 0)
+            {
+                sb.Append(" | 判异: ").Append(string.Join("；", r.AlarmMessages));
+                LogService.Instance.Warning($"[SPC] {sb}");
+            }
+
+            SpcSummary = sb.ToString();
+        }
+
+        [RelayCommand]
+        private async Task GenerateReportAsync()
+        {
+            try
+            {
+                var now = DateTime.Now;
+                var path = await ReportService.Instance.GenerateHtmlAsync(now.AddHours(-24), now).ConfigureAwait(false);
+                ReportDone?.Invoke(path);
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"生成日报失败: {ex}");
+                ReportDone?.Invoke(null);
+            }
+        }
     }
 
     /// <summary>

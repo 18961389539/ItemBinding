@@ -374,6 +374,7 @@ public partial class ProtocolSettingsViewModel : ObservableObject
     [RelayCommand]
     private void Save()
     {
+        var beforeNames = string.Join("/", _settings.Protocol?.Protocols?.Select(p => p.Name) ?? Enumerable.Empty<string>());
         // 停用项置底（重排序绑定源）
         var ordered = Protocols.OrderByDescending(p => p.Enabled).ToList();
         for (var i = 0; i < ordered.Count; i++)
@@ -384,11 +385,16 @@ public partial class ProtocolSettingsViewModel : ObservableObject
             }
         }
 
+        // 反序列化路径下 Protocol 可能为 null（settings.json 出现 "Protocol": null 时属性初始化器不保证），防御性重建
+        _settings.Protocol ??= new ProtocolSettings();
         _settings.Protocol.Protocols = ordered;
         _settings.Save();
         CurrentReceiver = Settings.Instance.MessageReceiver;
         OnPropertyChanged(nameof(IsCurrentInUse));
         OnPropertyChanged(nameof(InUseBadgeText));
+        // 2026-09-13: 操作审计（协议清单前后差异）
+        var afterNames = string.Join("/", ordered.Select(p => p.Name));
+        AuditLogService.Instance.Record("保存", "自定义通讯协议", beforeNames, afterNames);
         NotificationService.Success("通讯协议已保存并生效。");
     }
 }

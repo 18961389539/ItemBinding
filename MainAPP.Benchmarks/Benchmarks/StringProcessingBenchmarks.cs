@@ -12,12 +12,12 @@ namespace MainAPP.Benchmarks.Benchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class StringProcessingBenchmarks
 {
-    private string _simpleField;
-    private string _fieldWithComma;
-    private string _fieldWithQuote;
-    private string _fieldWithNewline;
-    private string _fieldAllSpecial;
-    private string _csvLine;
+    private string _simpleField = null!;
+    private string _fieldWithComma = null!;
+    private string _fieldWithQuote = null!;
+    private string _fieldWithNewline = null!;
+    private string _fieldAllSpecial = null!;
+    private string _csvLine = null!;
 
     [Params(10, 100, 1000)]
     public int FieldCount { get; set; }

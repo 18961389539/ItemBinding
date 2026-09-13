@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>运维门户</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#101014;color:#e8e8ec;font:14px/1.6 -apple-system,BlinkMacSystemFont,"Microsoft YaHei",sans-serif}
+header{padding:12px 16px;border-bottom:1px solid #26262e;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+h1{font-size:16px;font-weight:600;margin:0}
+.meta{color:#8a8a96;font-size:12px}
+.wrap{padding:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.card{background:#17171d;border:1px solid #26262e;border-radius:10px;padding:12px}
+.card h2{font-size:13px;font-weight:600;margin:0 0 10px;color:#9a9af0}
+.dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;font-size:13px}
+.dt{color:#9a9aa8}.dd{margin:0;text-align:right;font-variant-numeric:tabular-nums}
+.badge{display:inline-block;padding:1px 8px;border-radius:999px;font-size:11px}
+.on{background:#173c2c;color:#3ddc84}.off{background:#3c1a1a;color:#ff6b6b}.idle{background:#26262e;color:#9a9aa8}
+.btn{background:#2a2a66;color:#fff;border:none;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer;margin:2px 8px 2px 0}
+.btn:hover{background:#33337e}
+#msg{min-height:20px;font-size:12px;color:#9adc9a;margin:6px 0 0}
+table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px}
+th{color:#9a9aa8;text-align:left;padding:6px 8px;border-bottom:1px solid #26262e;font-weight:500;white-space:nowrap}
+td{padding:6px 8px;border-bottom:1px solid #20202a;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:hover td{background:#1c1c24}
+.dim{color:#66667a}.ok{color:#3ddc84}.ng{color:#ff6b6b}
+.alarm{font-size:12px;padding:4px 0;border-bottom:1px solid #20202a;white-space:pre-wrap;word-break:break-all}
+</style>
+</head>
+<body>
+<header><h1>一键运维门户</h1><span class="meta" id="meta">—</span></header>
+<div class="wrap">
+  <div class="card">
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <span class="meta">快捷操作：</span>
+      <button class="btn" id="btnReport">生成日报(近24h)</button>
+      <button class="btn" id="btnClear">清空 AI 会话</button>
+    </div>
+    <div id="msg"></div>
+  </div>
+
+  <div class="grid" style="margin-top:12px">
+    <div class="card"><h2>相机 / 读码器</h2>
+      <div class="dl">
+        <span class="dt">连接</span><span class="dd" id="c-conn">-</span>
+        <span class="dt">型号</span><span class="dd" id="c-model">-</span>
+        <span class="dt">序列号</span><span class="dd" id="c-serial">-</span>
+        <span class="dt">IP</span><span class="dd" id="c-ip">-</span>
+      </div>
+    </div>
+    <div class="card"><h2>编码器 / VGT</h2>
+      <div class="dl">
+        <span class="dt">编码器速度</span><span class="dd" id="e-speed">-</span>
+        <span class="dt">最近报文</span><span class="dd" id="e-last">-</span>
+        <span class="dt">机器人可达</span><span class="dd" id="v-robot">-</span>
+        <span class="dt">VGT 可达</span><span class="dd" id="v-vgt">-</span>
+      </div>
+    </div>
+    <div class="card"><h2>系统</h2>
+      <div class="dl">
+        <span class="dt">主循环</span><span class="dd" id="s-paused">-</span>
+        <span class="dt">托管内存</span><span class="dd" id="s-mem">-</span>
+        <span class="dt">刷新</span><span class="dd" id="s-now">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2>最近告警（Error / Warning）</h2>
+    <div id="alarms"><div class="dim">加载中…</div></div>
+  </div>
+
+  <div class="card" style="margin-top:12px">
+    <h2>最近检测</h2>
+    <table><thead><tr><th>时间</th><th>条码</th><th>X</th><th>Y</th><th>角度</th><th>结果</th></tr></thead><tbody id="tbody"></tbody></table>
+  </div>
+</div>
+
+<script>
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+function badge(el,on,onTxt,offTxt){el.className=on?'badge on':'badge off';el.textContent=on?onTxt:offTxt;}
+async function tick(){
+  try{
+    var r=await fetch('/api/ops',{cache:'no-store'});var s=await r.json();
+    badge($('c-conn'),!!s.camera.connected,'已连接','未连接');
+    $('c-model').textContent=s.camera.model||'-';$('c-serial').textContent=s.camera.serial||'-';$('c-ip').textContent=s.camera.ip||'-';
+    $('e-speed').textContent=(s.encoder.speed>0?s.encoder.speed+' ms':'未建立');
+    $('e-last').textContent=s.encoder.lastReceive||'-';
+    badge($('v-robot'),!!s.vgt.robotLive,'可达','不可达');
+    badge($('v-vgt'),!!s.vgt.vgtLive,'可达','不可达');
+    badge($('s-paused'),!!s.paused,'已暂停','运行中');
+    $('s-mem').textContent=s.memoryMb+' MB';$('s-now').textContent=s.now;
+    $('meta').textContent='更新于 '+new Date().toLocaleTimeString();
+    var ah='';
+    if(!s.alarms||s.alarms.length===0)ah='<div class="dim">无告警</div>';
+    else for(var i=0;i<s.alarms.length;i++)ah+='<div class="alarm">'+esc(s.alarms[i])+'</div>';
+    $('alarms').innerHTML=ah;
+    var h='';
+    if(!s.recent||s.recent.length===0)h='<tr><td colspan="6" class="dim">暂无检测记录</td></tr>';
+    else for(var j=0;j<s.recent.length;j++){var m=s.recent[j];
+      h+='<tr><td>'+esc(m.time)+'</td><td>'+(m.barcode?esc(m.barcode):'<span class="dim">—</span>')+'</td><td>'+m.x+'</td><td>'+m.y+'</td><td>'+m.a+'</td><td class="'+(m.result==='NG'?'ng':'ok')+'">'+esc(m.result)+'</td></tr>';}
+    $('tbody').innerHTML=h;
+  }catch(e){}
+}
+function post(u,okMsg){
+  fetch(u,{method:'POST',cache:'no-store'}).then(function(r){return r.json();}).then(function(j){
+    $('msg').textContent=(j&&j.ok?('✓ '):'✗ ')+(j&&j.msg||(j&&j.path?'':'失败'));
+    $('msg').style.color=(j&&j.ok)?'#9adc9a':'#ff6b6b';
+  }).catch(function(){$('msg').textContent='✗ 请求失败';$('msg').style.color='#ff6b6b';});
+}
+$('btnReport').onclick=function(){post('/api/report','日报已生成');};
+$('btnClear').onclick=function(){post('/api/ai/clear','已清空 AI 会话');};
+setInterval(tick,3000);tick();
+</script>
+</body>
+</html>

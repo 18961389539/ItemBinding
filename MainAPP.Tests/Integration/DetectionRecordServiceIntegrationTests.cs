@@ -264,7 +264,7 @@ public class DetectionRecordServiceIntegrationTests : IAsyncDisposable
             Assert.Single(buildResult.ValidRecords);
             // saveDraw=true 时 ImageFullName 应包含帧号和索引
             Assert.Contains("draw_42_0", buildResult.ValidRecords[0].ImageFullName);
-            Assert.True(buildResult.ValidRecords[0].ImageFullName.EndsWith(".jpg"));
+            Assert.EndsWith(".jpg", buildResult.ValidRecords[0].ImageFullName);
         }
         finally
         {

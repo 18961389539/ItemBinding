@@ -132,6 +132,13 @@
                     Content="Query"
                     Style="{StaticResource ButtonPrimary}"
                     ToolTip="Reload chart data for the selected time range" />
+                <Button
+                    Margin="10,0,0,0"
+                    Padding="10,3"
+                    Command="{Binding GenerateReportCommand}"
+                    Content="生成日报(近24h)"
+                    Style="{StaticResource NeonButtonStyle}"
+                    ToolTip="生成最近 24 小时的 HTML 日报（Saves/Reports/）" />
 
                 <!--  2026-09-12 调试闭环改进：配方/工位/结果切片（对当前数据集即时生效）  -->
                 <Rectangle
@@ -657,6 +664,40 @@
                             </StackPanel>
                         </Border>
                     </Grid>
+                </Grid>
+            </TabItem>
+
+            <!--  2026-09-13: SPC 过程控制（X̄ 控制图 + 判异）  -->
+            <TabItem Header="SPC 控制">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,6">
+                        <TextBlock Style="{StaticResource TechMetricLabel}" VerticalAlignment="Center" Text="小时数:" />
+                        <TextBox Width="80" Margin="6,0" VerticalAlignment="Center"
+                                 Text="{Binding SpcHours, UpdateSourceTrigger=PropertyChanged}" />
+                        <Button
+                            Padding="12,3"
+                            Content="查询 SPC"
+                            Command="{Binding QuerySpcCommand}"
+                            Style="{StaticResource ButtonPrimary}" />
+                        <TextBlock Margin="12,0,0,0" VerticalAlignment="Center" FontSize="12"
+                                   Text="监控特性：检测评分 Score（组均值 X̄）" />
+                    </StackPanel>
+                    <TextBlock
+                        Grid.Row="1"
+                        Margin="0,2,0,6"
+                        TextWrapping="Wrap"
+                        FontSize="12"
+                        Foreground="#9a9aa8"
+                        Text="{Binding SpcSummary}" />
+                    <ScottPlot:WpfPlot
+                        x:Name="SpcPlot"
+                        Grid.Row="2"
+                        Margin="0,4,0,0" />
                 </Grid>
             </TabItem>
         </TabControl>

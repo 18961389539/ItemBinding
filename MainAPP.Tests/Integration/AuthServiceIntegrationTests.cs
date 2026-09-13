@@ -27,8 +27,8 @@ public class AuthServiceIntegrationTests : IDisposable
     [Fact]
     public void ResetDefaults_CreatesAdminAndOperator()
     {
-        Assert.True(_auth.Users.Any(u => u.Role == UserRole.Admin));
-        Assert.True(_auth.Users.Any(u => u.Role == UserRole.Operator));
+        Assert.Contains(_auth.Users, u => u.Role == UserRole.Admin);
+        Assert.Contains(_auth.Users, u => u.Role == UserRole.Operator);
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public class AuthServiceIntegrationTests : IDisposable
 
         _auth.Reload();
 
-        Assert.True(_auth.Users.Any(u => u.Username == barcode));
+        Assert.Contains(_auth.Users, u => u.Username == barcode);
     }
 
     [Fact]

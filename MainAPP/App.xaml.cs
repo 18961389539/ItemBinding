@@ -44,6 +44,8 @@ namespace MainAPP
         // 内嵌页面跑 Deep Chat（MIT），C# 侧只提供 /ai/chat 端点桥接到 AiChatService。
         // 同一份页面也暴露给手机浏览器，与 CameraWebHost（5188）同一模式、错开端口。
         private readonly AiWebHost _aiWebHost = new();
+        // 2026-09-13: 统一远程运维门户（5188/5190 错开端口 5191）
+        private readonly OpsWebHost _opsWebHost = new();
         // L407b: OnExit 数据清理任务等待超时（秒）
         private const int OnExitDataCleanupWaitSec = 5;
         private const int OnExitDataCleanupFinalWaitSec = 1;
@@ -258,6 +260,10 @@ namespace MainAPP
             // 2026-09-12: 停止 AI 对话 Web 服务（与相机调试服务同一时序，须在扫码枪关闭之前）
             try { _aiWebHost.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止 AI 对话 Web 服务失败: {ex}"); }
+
+            // 2026-09-13: 停止统一运维门户（同一时序）
+            try { _opsWebHost.Stop(); }
+            catch (Exception ex) { LogService.Instance.Error($"停止运维门户 Web 服务失败: {ex}"); }
 
             // 2026-09-12: 停止 llama-server 侧车（进程内推理已退役，显存由侧车持有）
             try { LlamaServerHost.Instance.Stop(); }
@@ -496,6 +502,15 @@ namespace MainAPP
             {
                 LogService.Instance.Error($"启动 ToVGT 服务失败: {ex}");
             }
+            // 2026-09-13: 启动班报/日报自动产出（跨天自动生成昨日日报 + 图表页可手动）
+            try
+            {
+                ReportService.Instance.Start();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"启动日报服务失败: {ex}");
+            }
             // L367a: 添加 60 秒超时，避免扫码枪初始化任务无限期挂起
             _scannerInitializeCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
             var token = _scannerInitializeCts.Token;
@@ -543,6 +558,16 @@ namespace MainAPP
             catch (Exception ex)
             {
                 LogService.Instance.Error($"启动 AI 对话 Web 服务失败: {ex}");
+            }
+
+            // 2026-09-13: 启动统一运维门户（5191）
+            try
+            {
+                _opsWebHost.Start();
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"启动运维门户 Web 服务失败: {ex}");
             }
         }
 

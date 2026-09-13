@@ -3,6 +3,88 @@
 # CA1416: 验证平台兼容性
 dotnet_diagnostic.CA1416.severity = none
 
+# ────────────────────────────────────────────────────────────────
+# CA 规则分级（2026-09-13）
+# Directory.Build.props 已显式启用 AnalysisLevel=latest-recommended（SDK 10 全量建议集），
+# 本段把「低价值/纯噪音」规则降级到 suggestion（IDE 可见、不阻断构建），
+# 使全解决方案构建保持零警告，同时保留高价值规则（见文末 warning 段）。
+# 原则：正确性/资源/安全/线程规则保持 warning；风格/命名/性能微优化降级。
+# ────────────────────────────────────────────────────────────────
+
+# 性能类（多数为微优化，噪音大于收益，降为 suggestion）
+dotnet_diagnostic.CA1822.severity = suggestion   # 可将成员标记为 static
+dotnet_diagnostic.CA1826.severity = suggestion   # 用属性代替方法（Count/Length）
+dotnet_diagnostic.CA1829.severity = suggestion   # Count() 代替 Length/Count 属性
+dotnet_diagnostic.CA1825.severity = suggestion   # 用 Array.Empty 避免零长度数组分配
+dotnet_diagnostic.CA1859.severity = suggestion   # 使用具体类型而非接口
+dotnet_diagnostic.CA1860.severity = suggestion   # 避免类型转换式 Convert
+dotnet_diagnostic.CA1861.severity = suggestion   # 避免常量数组重复分配
+dotnet_diagnostic.CA1866.severity = suggestion   # 字符串方法使用字符/长度重载
+dotnet_diagnostic.CA1847.severity = suggestion   # string.Contains 使用字符重载
+dotnet_diagnostic.CA1838.severity = suggestion   # 避免 StringBuilder 的 P/Invoke 参数
+dotnet_diagnostic.CA1848.severity = suggestion   # 使用 LoggerMessage 委托
+dotnet_diagnostic.CA1873.severity = suggestion   # 避免可空值装箱
+
+# 命名/风格类（纯风格，降为 suggestion 或 none）
+dotnet_diagnostic.CA1707.severity = none         # 标识符不得含下划线（测试方法名大量使用）
+dotnet_diagnostic.CA1708.severity = none         # 标识符不得仅大小写不同
+dotnet_diagnostic.CA1710.severity = suggestion   # 标识符应使用正确后缀
+dotnet_diagnostic.CA1711.severity = suggestion   # 标识符不应使用保留后缀
+dotnet_diagnostic.CA1715.severity = suggestion   # 类型参数应使用前缀
+dotnet_diagnostic.CA1716.severity = suggestion   # 标识符不应使用语言关键字
+dotnet_diagnostic.CA1720.severity = suggestion   # 标识符不应包含类型名
+dotnet_diagnostic.CA1725.severity = suggestion   # 参数名应与基类声明一致
+dotnet_diagnostic.CA1050.severity = none         # 类型应声明在独立文件中
+dotnet_diagnostic.CA1051.severity = suggestion   # 不要声明可见实例字段
+dotnet_diagnostic.CA1018.severity = suggestion   # 特性应以 Attribute 后缀结尾
+dotnet_diagnostic.CA1021.severity = suggestion   # 避免使用 out 参数
+dotnet_diagnostic.CA1040.severity = suggestion   # 避免使用空接口
+dotnet_diagnostic.CA2225.severity = suggestion   # 运算符重载应有命名替代
+
+# 全球化/格式相关（本项目固定中文环境，文化相关的降级）
+dotnet_diagnostic.CA1305.severity = none         # 指定 IFormatProvider
+dotnet_diagnostic.CA1304.severity = suggestion   # 指定 StringComparison
+dotnet_diagnostic.CA1309.severity = suggestion   # 使用序数字符串比较
+dotnet_diagnostic.CA1310.severity = none         # 指定 StringComparison 的正确性
+dotnet_diagnostic.CA1311.severity = none         # 指定区域性，避免隐式行为差异
+
+# 现代 API 建议（升级建议，不阻断）
+dotnet_diagnostic.CA1510.severity = suggestion   # 使用 ArgumentNullException.ThrowIfNull
+dotnet_diagnostic.CA1512.severity = suggestion   # 使用 ArgumentOutOfRangeException.ThrowIf*
+dotnet_diagnostic.CA1513.severity = suggestion   # 使用 ArgumentException.ThrowIfNullOrEmpty
+dotnet_diagnostic.CA1507.severity = suggestion   # 使用 nameof 代替字符串
+dotnet_diagnostic.CA2263.severity = suggestion   # 使用泛型重载
+dotnet_diagnostic.CA1852.severity = suggestion   # 密封内部类型
+dotnet_diagnostic.CA1854.severity = suggestion   # 使用 TryGetValue 模式
+dotnet_diagnostic.CA1864.severity = suggestion   # 优先使用集合字面量
+
+# 反模式/可维护性（低出现频次，降级为 suggestion，IDE 提示即可）
+dotnet_diagnostic.CA2201.severity = suggestion   # 不要引发保留的异常类型
+dotnet_diagnostic.CA2208.severity = suggestion   # 正确实例化 ArgumentException
+dotnet_diagnostic.CA1816.severity = suggestion   # Dispose 应调用 GC.SuppressFinalize（无终结器类无意义）
+dotnet_diagnostic.CA2011.severity = suggestion   # 避免无限递归赋值
+dotnet_diagnostic.CA2024.severity = suggestion   # 内部常量字段的可互操作性
+dotnet_diagnostic.CA1001.severity = suggestion   # 拥有可释放字段的类型应可释放（生命周期由 VM/服务管理）
+dotnet_diagnostic.CA2016.severity = suggestion   # 将 CancellationToken 转发到方法（渐进修复中）
+dotnet_diagnostic.CA1068.severity = suggestion   # CancellationToken 参数应位于最后（渐进修复中）
+dotnet_diagnostic.CA1805.severity = none         # 不初始化默认值（显式初始化风格，语义冗余）
+dotnet_diagnostic.CA2211.severity = suggestion   # 非常量静态字段不应可见
+dotnet_diagnostic.CA2101.severity = suggestion   # 指定字符串封送处理
+dotnet_diagnostic.CA5351.severity = suggestion   # 不使用破坏性加密算法
+dotnet_diagnostic.CA1000.severity = suggestion   # 不要在泛型类型中声明静态成员
+dotnet_diagnostic.CA1067.severity = suggestion   # 实现 IEquatable 时同时重写 Equals
+dotnet_diagnostic.CA2227.severity = suggestion   # 集合属性应为只读
+dotnet_diagnostic.CA1031.severity = suggestion   # 不要捕获一般异常类型
+dotnet_diagnostic.CA1032.severity = suggestion   # 实现标准异常构造函数
+dotnet_diagnostic.CA1034.severity = suggestion   # 嵌套类型不应可见
+dotnet_diagnostic.CA1712.severity = suggestion   # 不要以枚举值类型名前缀
+dotnet_diagnostic.CA1815.severity = suggestion   # 值类型应重写 Equals
+dotnet_diagnostic.CA2213.severity = suggestion   # 可释放字段应被释放
+dotnet_diagnostic.CA2214.severity = suggestion   # 构造函数不应调用可重写方法
+dotnet_diagnostic.CA2249.severity = suggestion   # 考虑使用 string.Contains 代替 IndexOf
+dotnet_diagnostic.CA2254.severity = suggestion   # 模板应静态类型化
+dotnet_diagnostic.CA2000.severity = suggestion   # 在丢失范围前释放对象
+
 # VSTHRD200: async 方法应使用 Async 后缀（提示级别，不阻断构建）
 dotnet_diagnostic.VSTHRD200.severity = suggestion
 

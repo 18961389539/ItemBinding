@@ -1,0 +1,30 @@
+<Project>
+
+  <!--
+    Solution-wide build conventions (2026-09-13).
+    Applies to every project under this repo. Projects may override these values in their own .csproj
+    (Directory.Build.props is imported before the project file, so project-level settings win).
+    See docs/knowledge/代码结构与维护约定.md for the maintainability contract this file enforces.
+  -->
+  <PropertyGroup>
+    <!-- C# language level: keep the whole solution on the latest compiler features. -->
+    <LangVersion>latest</LangVersion>
+
+    <!-- Nullable is intentionally NOT set here: it is a per-project decision (MainAPP &amp; libs enable it;
+         vendored third-party code keeps its own settings). Add <Nullable>enable</Nullable> per project. -->
+
+    <!-- Suppress the ~66 benign "package X doesn't support net8.0-windows" TFM-support warnings.
+         These come from NuGet buildTransitive targets of packages that still target netstandard2.0;
+         they run fine on net8.0-windows (verified in production), so the noise is suppressed
+         per the official <SuppressTfmSupportBuildWarnings> remedy. Real CS/analyzer warnings are NOT suppressed. -->
+    <SuppressTfmSupportBuildWarnings>true</SuppressTfmSupportBuildWarnings>
+
+    <!-- Built-in analyzers: explicit 'latest-recommended' (same as SDK default; documented here so the
+         contract is visible). Do not raise to 'latest-all' without triaging the resulting warning flood. -->
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <!-- Enforce .editorconfig code-style rules during build (IDE000x etc. become real warnings). -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+</Project>

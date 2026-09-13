@@ -105,6 +105,9 @@ namespace MainAPP.Models
         // --- 产品掩码面积上下限过滤（2026-09-07，原图像素；0=禁用）---
         public double MinMaskAreaPixels { get => Algorithm.MinMaskAreaPixels; set => Algorithm.MinMaskAreaPixels = value; }
         public double MaxMaskAreaPixels { get => Algorithm.MaxMaskAreaPixels; set => Algorithm.MaxMaskAreaPixels = value; }
+        public bool SpcEnabled { get => Algorithm.SpcEnabled; set => Algorithm.SpcEnabled = value; }
+        public int SpcHours { get => Algorithm.SpcHours; set => Algorithm.SpcHours = value; }
+        public int SpcSubgroupSize { get => Algorithm.SpcSubgroupSize; set => Algorithm.SpcSubgroupSize = value; }
 
         // --- Security 安全配置 ---
         public string UserName { get => Security.UserName; set => Security.UserName = value; }
@@ -162,7 +165,8 @@ namespace MainAPP.Models
                 {
                     _instance = Load();
                 }
-                return _instance;
+                // volatile 字段不做 null-state 流跟踪，但 Load() 要么返回非空实例要么抛异常，此处断言安全
+                return _instance!;
             }
         }
 

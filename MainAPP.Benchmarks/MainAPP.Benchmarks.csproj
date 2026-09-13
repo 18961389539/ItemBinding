@@ -9,6 +9,8 @@
 		<!-- BenchmarkDotNet 要求 Release 模式运行，运行时自动切换 -->
 		<ServerGarbageCollection>true</ServerGarbageCollection>
 		<ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+		<!-- NETSDK1206: 传递依赖 SQLite 仍带 win7-x64 RID 资产，.NET 8 下默认找不到对应资产（仅基准工程告警，运行不受影响） -->
+		<NoWarn>$(NoWarn);NETSDK1206</NoWarn>
 	</PropertyGroup>
 
 	<ItemGroup>

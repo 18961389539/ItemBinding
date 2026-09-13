@@ -185,5 +185,15 @@ namespace MainAPP.Models
         /// 该值参与落库 <c>DbModel.Result</c>，是 AI 对话回答「合格率/过站」类问题的数据基础。
         /// </summary>
         public double ResultOkScorePercent { get; set; } = 75.0;
+
+        // --- SPC 过程控制（2026-09-13 新增）---
+        /// <summary>SPC 控制图是否启用（false = 图表页隐藏 SPC 查询）。</summary>
+        public bool SpcEnabled { get; set; } = true;
+
+        /// <summary>SPC 查询的时间窗（小时），默认最近 24 小时。</summary>
+        public int SpcHours { get; set; } = 24;
+
+        /// <summary>SPC 子组大小（每组样本数，2~10；控制限系数按 A2 表），默认 8。</summary>
+        public int SpcSubgroupSize { get; set; } = 8;
     }
 }

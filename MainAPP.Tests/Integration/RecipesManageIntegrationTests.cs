@@ -53,7 +53,7 @@ public class RecipesManageIntegrationTests : IDisposable
 
         _manager.AddRecipe(recipe);
 
-        Assert.True(_manager.Recipes.Contains(recipe));
+        Assert.Contains(recipe, _manager.Recipes);
         var files = Directory.GetFiles(_tempDir, "*.recipe", SearchOption.AllDirectories);
         Assert.True(files.Length >= 1);
     }
@@ -63,12 +63,12 @@ public class RecipesManageIntegrationTests : IDisposable
     {
         var recipe = new Recipe { Name = $"Remove_{Guid.NewGuid():N}" };
         _manager.AddRecipe(recipe);
-        Assert.True(_manager.Recipes.Contains(recipe));
+        Assert.Contains(recipe, _manager.Recipes);
 
         var result = _manager.RemoveRecipe(recipe);
 
         Assert.True(result);
-        Assert.False(_manager.Recipes.Contains(recipe));
+        Assert.DoesNotContain(recipe, _manager.Recipes);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class RecipesManageIntegrationTests : IDisposable
         // 重新加载
         _manager.LoadAllRecipes();
 
-        Assert.True(_manager.Recipes.Any(r => r.Name == name));
+        Assert.Contains(_manager.Recipes, r => r.Name == name);
     }
 
     [Fact]
@@ -182,7 +182,7 @@ public class RecipesManageIntegrationTests : IDisposable
         var recipe = new Recipe { Name = "Test<Recipe>|Name" };
         _manager.AddRecipe(recipe);
 
-        Assert.True(_manager.Recipes.Contains(recipe));
+        Assert.Contains(recipe, _manager.Recipes);
         // 验证文件被创建（路径中无效字符已被替换）
         var files = Directory.GetFiles(_tempDir, "*.recipe", SearchOption.AllDirectories);
         Assert.True(files.Length >= 1);

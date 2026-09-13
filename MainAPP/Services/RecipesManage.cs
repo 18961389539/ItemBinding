@@ -255,6 +255,8 @@ namespace MainAPP.Services
         {
             if (recipe == null) throw new ArgumentNullException(nameof(recipe));
 
+            // 2026-09-13: 操作审计（切换配方记录前后配方名）
+            AuditLogService.Instance.Record("切换", "配方", CurrentRecipe?.Name, recipe.Name);
             // L110: 直接使用 CurrentRecipe setter，其内部已处理属性通知、事件触发与持久化，避免重复保存逻辑
             CurrentRecipe = recipe;
         }

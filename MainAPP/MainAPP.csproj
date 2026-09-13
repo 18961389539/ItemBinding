@@ -95,6 +95,7 @@
 		<!-- 2026-09-13: Web 页面抽为独立嵌入资源（替代 C# raw string，可独立编辑/校验） -->
 		<EmbeddedResource Include="Web\AiIndex.html" />
 		<EmbeddedResource Include="Web\CameraIndex.html" />
+		<EmbeddedResource Include="Web\OpsIndex.html" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -35,6 +35,9 @@ namespace MainAPP.Views
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
             // 2026-09-12 调试闭环改进：问 AI 助手（复制摘要 + 跳转 AI 标签页）
             _viewModel.AiAssistRequested += ViewModel_AiAssistRequested;
+            // 2026-09-13: SPC 控制图渲染 / 日报生成落盘提示
+            _viewModel.SpcRenderer = RenderSpc;
+            _viewModel.ReportDone = OnReportDone;
             DataContext = _viewModel;
 
             Loaded += ChartsView_Loaded;
@@ -243,6 +246,55 @@ namespace MainAPP.Views
             {
                 mainWindow.ActivateAiChatTab();
                 NotificationService.Info("分析摘要已复制到剪贴板，可在 AI 助手中粘贴提问。");
+            }
+        }
+
+        // ─────────────────────────────────────────────────────────────
+        // 2026-09-13: SPC 控制图渲染 / 日报生成提示
+        // ─────────────────────────────────────────────────────────────
+
+        private void RenderSpc(MainAPP.Services.SpcResult? r)
+        {
+            var plot = SpcPlot.Plot;
+            plot.Clear();
+            if (r is null || r.MeanValues.Length == 0)
+            {
+                plot.Title("SPC 控制图（无数据）");
+                SpcPlot.Refresh();
+                return;
+            }
+
+            var xs = Enumerable.Range(1, r.MeanValues.Length).Select(i => (double)i).ToArray();
+            plot.Add.Scatter(xs, r.MeanValues, color: ScottPlot.Color.FromHex("#22A5F7"));
+            var cl = plot.Add.HorizontalLine(r.CenterLine, color: ScottPlot.Color.FromHex("#3ddc84"));
+            var ucl = plot.Add.HorizontalLine(r.Ucl, color: ScottPlot.Color.FromHex("#ff6b6b"));
+            var lcl = plot.Add.HorizontalLine(r.Lcl, color: ScottPlot.Color.FromHex("#ff6b6b"));
+            // 判异点标红
+            if (r.AlarmIndices.Count > 0)
+            {
+                var ax = r.AlarmIndices.Select(i => (double)i).ToArray();
+                var ay = r.AlarmIndices.Select(i => r.MeanValues[i - 1]).ToArray();
+                plot.Add.Scatter(ax, ay, color: ScottPlot.Color.FromHex("#e05252"));
+            }
+
+            plot.Title($"X̄ 控制图（CL={r.CenterLine:F3} UCL={r.Ucl:F3} LCL={r.Lcl:F3}" + (r.Cpk is { } cpk ? $" CPK={cpk:F2}" : "") + "）");
+            plot.Axes.AutoScale();
+            SpcPlot.Refresh();
+        }
+
+        private void OnReportDone(string? path)
+        {
+            if (path is null)
+            {
+                MessageBox.Show("日报生成失败，详见日志。", "日报", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var result = MessageBox.Show($"日报已生成：\n{path}\n\n打开所在文件夹？", "日报",
+                MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (result == MessageBoxResult.Yes)
+            {
+                _ = System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
             }
         }
     }

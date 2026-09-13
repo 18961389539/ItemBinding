@@ -18,7 +18,7 @@ public class RectExtensionsBenchmarks
     private Point _pointInside;
     private Point _pointOutside;
     private Size _container;
-    private List<Rect> _rectList;
+    private List<Rect> _rectList = null!;
 
     [Params(10, 100, 1000)]
     public int MergeCount { get; set; }

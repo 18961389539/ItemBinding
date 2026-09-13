@@ -13,10 +13,10 @@ namespace MainAPP.Benchmarks.Benchmarks;
 [SimpleJob(warmupCount: 3, iterationCount: 5)]
 public class RecipeJsonBenchmarks
 {
-    private Recipe _recipe;
-    private string _recipeJson;
-    private JsonSerializerOptions _cachedOpts;
-    private JsonSerializerOptions _newOpts;
+    private Recipe _recipe = null!;
+    private string _recipeJson = null!;
+    private JsonSerializerOptions _cachedOpts = null!;
+    private JsonSerializerOptions _newOpts = null!;
 
     [GlobalSetup]
     public void Setup()

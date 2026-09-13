@@ -335,7 +335,7 @@ public class BarcodeDataServiceIntegrationTests : IAsyncDisposable
 
         var results = await _service.GetByTimeRangeAsync(start, end);
 
-        Assert.True(results.Any(r => r.Barcode == barcode));
+        Assert.Contains(results, r => r.Barcode == barcode);
     }
 
     public async ValueTask DisposeAsync()

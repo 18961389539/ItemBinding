@@ -834,11 +834,13 @@ namespace MainAPP.Services.AI
             s.Algorithm.MinMaskAreaPixels,
             s.Algorithm.MaxMaskAreaPixels,
             s.Algorithm.BrightnessDirectionEnabled,
-            s.Algorithm.BrightnessHeadEndIsBright,
             s.Algorithm.BrightnessDirectionDeadband,
             s.Algorithm.BrightnessContrastStretchEnabled,
             s.Algorithm.BrightnessStretchLowPercentile,
             s.Algorithm.BrightnessStretchHighPercentile,
+            // 2026-09-13: 头尾判定特征池（含并入的亮度判向）
+            s.Algorithm.HeadTailFeaturePoolEnabled,
+            s.Algorithm.HeadTailFeatureDeadband,
             s.Algorithm.TrackerExpireSeconds,
         };
 

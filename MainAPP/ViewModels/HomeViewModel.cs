@@ -1701,8 +1701,8 @@ namespace MainAPP.ViewModels
                         Angle = dbm.Angle,
                         Barcode = dbm.Barcode,
                         MaskAreaOriginalPixels = maskArea,
-                        // 2026-09-08: 灰度判向统计随主页推理结果展示（null=未判向，与落库值同源，
-                        // 方便现场直接核对头端明暗/死区，无需切到数据库页）
+                        // 2026-09-08: 亮度判向统计随主页推理结果展示（null=未判向，与落库值同源，
+                        // 2026-09-13 起由特征池产出；方便现场核对头端明暗/死区，无需切到数据库页）
                         BrightMean = dbm.BrightMean,
                         DarkMean = dbm.DarkMean,
                         BrightnessDiff = dbm.BrightnessDiff,

@@ -61,15 +61,16 @@ namespace MainAPP.Models
         public string Barcode { get; set; } = "noread";
 
         /// <summary>
-        /// 灰度判向"正向半区"平均灰度（0~255）。null = 本帧未判向/统计未完成。
-        /// 来自 <see cref="DetectionRecordService"/> 判向 out 统计（与 DbModel.BrightMean 同值），
-        /// 仅无角度模型回退 + 判向实际统计完成时有值。
+        /// 亮度判向"正向半区"平均灰度（0~255）。null = 未判向/统计未完成。
+        /// 来自 <see cref="HeadTailFeaturePool"/> 的亮度特征统计（与 DbModel.BrightMean 同值）。
+        /// <para>2026-09-13 起该统计由特征池产出（原独立"灰度判向"已并入特征池，成为派生于级联
+        /// 中的 "BrightnessDiff" 特征）；仅在启用亮度特征且统计完成（两侧均有掩码像素）时有值。</para>
         /// <para>2026-09-11 起为"掩码内对比度拉伸之后"的值，不再是原始绝对灰度（详见 DbModel.BrightMean）。</para>
         /// </summary>
         public double? BrightMean { get; set; }
 
         /// <summary>
-        /// 灰度判向"负向半区"平均灰度（0~255）。null 语义与口径同 <see cref="BrightMean"/>。
+        /// 亮度判向"负向半区"平均灰度（0~255）。null 语义与口径同 <see cref="BrightMean"/>。
         /// </summary>
         public double? DarkMean { get; set; }
 

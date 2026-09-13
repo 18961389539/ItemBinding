@@ -81,9 +81,11 @@ namespace MainAPP.Models
         public double MaxMaskAreaPixels { get; set; } = 0;
 
         /// <summary>
-        /// 是否启用"分割线两侧平均灰度"判向（无角度模型时消除掩码回退角度的 180° 方向歧义）。
-        /// <para>开启后：以掩码矩形宽度轴为角度正向，统计掩码内两侧平均灰度，较亮/较暗侧（见
-        /// <see cref="BrightnessHeadEndIsBright"/>）作为产品头端；头端落在角度负向半区时把回退角度 +180°，
+        /// 是否启用"亮度"判向特征（无角度模型时消除掩码回退角度的 180° 方向歧义）。
+        /// <para>2026-09-13 起本开关控制的是<b>特征池内的亮度特征</b>（<c>HeadTailFeaturePool</c> 的
+        /// "BrightnessDiff"，排在几何特征之后、梯度/纹理之前），不再是独立判向路径。开启后：以掩码矩形
+        /// 宽度轴为角度正向，统计掩码内两侧（拉伸后）平均灰度，较亮半区即产品头端——即
+        /// "数值大的一侧是头部"，与特征池其余特征完全同一约定；头端落在角度负向半区时把回退角度 +180°，
         /// 使落库与发给机器人的角度扩展为唯一朝向 (-180,180]。判向结果由 AngleTracker 归一化。</para>
         /// <para>适用前提：产品长轴一端有系统性明暗特征（标签/色差等）且两端不对称；两端对称或光照
         /// 梯度与特征同量级时结果不可靠，可由配方 <c>IsBrightnessDirectionEnabled</c> 显式关闭。
@@ -93,9 +95,12 @@ namespace MainAPP.Models
         public bool BrightnessDirectionEnabled { get; set; } = true;
 
         /// <summary>
-        /// 灰度判向的产品头端明暗约定：true = 头端（角度 0° 标定端）在图像上偏亮，较亮半区为头端；
-        /// false = 头端偏暗，较暗半区为头端。现场标定一次后锁定。
+        /// <b>[已废弃，2026-09-13]</b> 原"灰度判向头端明暗约定"：true = 头端偏亮，false = 头端偏暗。
+        /// <para>废弃原因：亮度判向并入特征池后统一采用"数值大的一侧是头部"（零定标）约定，
+        /// 与其余 6 个特征一致，不再需要外部明暗约定做符号修正。此字段仅为兼容既有 config
+        /// 文件而保留（读写不影响任何判定结果），后续版本可移除。</para>
         /// </summary>
+        [Obsolete("已废弃：亮度判向并入特征池后统一走『数值大的一侧是头部』，此开关不再影响判定结果。")]
         public bool BrightnessHeadEndIsBright { get; set; } = true;
 
         /// <summary>

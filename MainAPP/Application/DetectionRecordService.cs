@@ -41,10 +41,6 @@ public sealed class DetectionRecordService
     private static DateTime _lastAngleRejectLogTime = DateTime.MinValue;
     private static int _angleRejectCountSinceLog;
 
-    // 2026-09-08: 灰度判向"不可判"告警节流（Unix 秒时间戳，30s 一条），避免产品连续经过时刷屏
-    private static int _lastBrightnessUnclearLogUnix;
-    private const int BrightnessUnclearLogIntervalSec = 30;
-
     /// <summary>角度质量门拒绝聚合日志的限频窗口（秒）。</summary>
     private static readonly TimeSpan AngleRejectLogInterval = TimeSpan.FromSeconds(30);
 
@@ -392,9 +388,8 @@ public sealed class DetectionRecordService
             // 输出域：(-180,180]（AngleTracker 归一化，与 DbModel.Angle 落库/机器人发送域一致）。
             AngleDrawInfo? angleDrawInfo = null;
             double? modelAngle = null;
-            // 2026-09-08: 灰度判向统计快照——声明在分支外，供下方 DbModel 落库引用（out 变量若
-            // 声明在分支内则作用域到块尾为止，无法在块外使用）；在"掩码角度路径"（未启用角度模型，
-            // 或模型方向退化而回落）真正执行判向时有值。
+            // 2026-09-08: 判向统计快照（2026-09-13 起由特征池产出）——声明在分支外，供下方 DbModel 落库引用；
+            // 未启用亮度特征/无灰度图/掩码退化/单侧无像素时为 null。
             BrightnessDirectionStats? brightnessStats = null;
             // 2026-09-11: 掩码角度路径实际施加的头尾翻转（true=相对 fallbackAngle 翻转了 180°）。
             // 供 UI 方向箭头复现同一朝向（null = 未走掩码角度路径，无可绘制朝向）。
@@ -459,17 +454,16 @@ public sealed class DetectionRecordService
                     maskMinAreaRect.Width, maskMinAreaRect.MaskArea,
                     transformer, isResize, resizeWidth, resizeHeight) + offsetAngle;
 
-                // 头尾（180° 方向）判定，优先级：**二维码位置 → 灰度亮暗**。
-                // 二维码是产品上的物理地标，位置固定；灰度差是光度统计，实测 96.1% 的帧落在死区内、
-                // 基本无法定头尾。故二维码可用时以它为准。
-                // 注意：灰度判向**仍然照常执行**（产出 BrightMean/DarkMean/BrightnessDiff 落库，
-                // 供现场标定与离线比对），只是当二维码能定头尾时用它的结论覆盖方向——多算一遍掩码扫描
-                // 但保留了诊断数据，且与改动前成本一致。
-                double brightnessAngle = ApplyBrightnessHeadDirectionIfEnabled(
-                    fallbackAngle, angleSourceImage, edgeResult,
-                    maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
-                    brightnessDirectionEnabled,
-                    out brightnessStats);
+                // 头尾（180° 方向）判定，优先级：**二维码位置 → 特征池级联**。
+                // 二维码是产品上的物理地标，位置固定，可用时以它为准。
+                // 2026-09-13: 灰度判向已**并入特征池**（成为级联中的 "BrightnessDiff" 特征，
+                // 排在几何特征之后、梯度/纹理之前），不再作为独立兜底路径——理由：
+                //   ① 原级联"几何 → 结构 → 纹理"中间空了一档，而亮度恰是信噪比高于梯度/纹理的产品固有属性；
+                //   ② 原灰度兜底在级联全死区时才执行，等于把它排在纹理之后，与其实测判别力不符；
+                //   ③ 两套判据（"头端偏亮" vs "数值大=头"）合并为单一约定，消除语义分叉。
+                // 特征池**始终执行**（即使二维码能定头尾），以产出 BrightMean/DarkMean/BrightnessDiff
+                // 统计落库，供现场标定与离线比对。
+                double longAxisPx = isResize ? maskMinAreaRect.Width * (double)resizeWidth : maskMinAreaRect.Width;
 
                 // 头端向量：产品质心（OBB 中心，原图像素）→ 二维码中心（原图像素）。
                 // 必须换算到与 fallbackAngle 同一坐标系：已标定 → 世界 mm（角度即世界角）；
@@ -493,19 +487,23 @@ public sealed class DetectionRecordService
                     dyHead = (imageBarcodeY - imageY) / (isResize ? resizeHeight : 1);
                 }
 
-                double longAxisPx = isResize ? maskMinAreaRect.Width * (double)resizeWidth : maskMinAreaRect.Width;
-
                 // 2026-09-13: 特征池头尾判定——"数值大的一侧是头部"零定标级联。
-                // 顺序：二维码位置（QR 真值，99.9% 有码）→ 特征池（几何→结构，见 HeadTailFeaturePool）→ 灰度（兼容回退）。
+                // 顺序：二维码位置（QR 真值，99.9% 有码）→ 特征池（几何 → 亮度 → 结构 → 纹理）→ 全死区则不判。
                 // 码位置三用：变体分流（codePresent）/光度特征码区剔除/（有码帧）头尾真值。
                 if (Models.Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled)
                 {
+                    var alg = Models.Settings.Instance.Algorithm;
                     var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
                     poolDecision = HeadTailFeaturePool.Evaluate(
                         fallbackAngle, angleSourceImage, edgeResult,
                         maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
                         longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
-                        Models.Settings.Instance.Algorithm.HeadTailFeatureDeadband);
+                        alg.HeadTailFeatureDeadband,
+                        brightnessDirectionEnabled,
+                        alg.BrightnessContrastStretchEnabled,
+                        alg.BrightnessStretchLowPercentile,
+                        alg.BrightnessStretchHighPercentile,
+                        out brightnessStats);
                     if (poolDecision is { Decisive: true })
                     {
                         LogService.Instance.Debug(
@@ -516,8 +514,8 @@ public sealed class DetectionRecordService
                 modelAngle = TryApplyBarcodeHeadDirection(
                                   fallbackAngle, hasBarcode, dxHead, dyHead, headOffsetPx, longAxisPx)
                               ?? (poolDecision is { Decisive: true } ? (double?)poolDecision.Angle : null)
-                              ?? brightnessAngle;
-                // 头尾翻转标记：与实发角完全同源（二维码优先 → 灰度兜底），供 UI 箭头复现朝向
+                              ?? fallbackAngle;
+                // 头尾翻转标记：与实发角完全同源（二维码优先 → 特征池），供 UI 箭头复现朝向
                 headFlipped = IsHeadOppositeDegrees(modelAngle.Value, fallbackAngle);
             }
             angle = _angleTracker.Resolve(
@@ -595,273 +593,6 @@ public sealed class DetectionRecordService
         return new DetectionBuildResult(records, indexedRecords, angleDrawInfos, maskAreaByEdgeIndex, headFlips);
     }
 
-    /// <summary>
-    /// 灰度判向的统计快照（随 DbModel 落库，供标定/验证：头端明暗假设、死区阈值、方向一致性）。
-    /// 仅当灰度统计真正完成（两侧均有掩码像素）时输出；未启用/无图/掩码退化/单侧无像素时输出 null。
-    /// <para>2026-09-11 起 <paramref name="MeanPlus"/>/<paramref name="MeanMinus"/>/<paramref name="Diff"/>
-    /// 均为"掩码内对比度拉伸之后"的值（拉伸关闭或窗口过窄时即原始绝对灰度）；不变式
-    /// <c>Diff = MeanPlus − MeanMinus</c> 仍然成立。落库列 <c>DbModel.BrightMean/DarkMean/BrightnessDiff</c>
-    /// 同口径。</para>
-    /// <para><paramref name="Low"/>/<paramref name="High"/> 为本次实际使用的拉伸窗口（未拉伸/跳过拉伸时为
-    /// <see cref="double.NaN"/>），仅内存传递、不落库；用于配方页显示，以及现场判断
-    /// "绝对的灰度水平 / 是否过曝"。</para>
-    /// </summary>
-    /// <param name="MeanPlus">正向半区（+u 侧）拉伸后平均灰度 0~255。</param>
-    /// <param name="MeanMinus">负向半区（−u 侧）拉伸后平均灰度 0~255。</param>
-    /// <param name="Diff">两侧拉伸后平均灰度差 = MeanPlus − MeanMinus。|Diff| &lt; 死区即"不可判"样本。</param>
-    /// <param name="Low">本次使用的拉伸窗口低分位灰度；未拉伸时为 NaN。</param>
-    /// <param name="High">本次使用的拉伸窗口高分位灰度；未拉伸时为 NaN。</param>
-    internal readonly record struct BrightnessDirectionStats(
-        double MeanPlus,
-        double MeanMinus,
-        double Diff,
-        double Low,
-        double High);
-
-    /// <summary>对比度拉伸的最小有效窗口跨度（灰度级）。窗口窄于此值视为近单色掩码，跳过拉伸。</summary>
-    private const double MinStretchSpan = 8.0;
-
-    /// <summary>
-    /// 按"最近秩"（nearest-rank）从 256 桶直方图取分位数（0~100）。
-    /// 用分位而非极值取窗口，可避开孤立噪点与掩码边缘毛刺对拉伸窗口的干扰。
-    /// </summary>
-    /// <param name="histogram">已累积的直方图（下标 = 灰度值）。</param>
-    /// <param name="total">直方图样本总数，必须与实际累积数一致。</param>
-    /// <param name="percentile">分位数 0~100，超出范围会被钳制。</param>
-    /// <returns>对应的灰度值（0~255）。</returns>
-    private static double PercentileFromHistogram(int[] histogram, long total, double percentile)
-    {
-        if (total <= 0)
-        {
-            return 0;
-        }
-
-        if (percentile <= 0)
-        {
-            percentile = 0;
-        }
-        else if (percentile >= 100)
-        {
-            percentile = 100;
-        }
-
-        long target = (long)Math.Ceiling(total * percentile / 100.0);
-        if (target < 1)
-        {
-            target = 1;
-        }
-
-        long acc = 0;
-        for (int i = 0; i < histogram.Length; i++)
-        {
-            acc += histogram[i];
-            if (acc >= target)
-            {
-                return i;
-            }
-        }
-
-        return histogram.Length - 1;
-    }
-
-    /// <summary>对比度拉伸窗口的诊断描述（用于日志/提示；未拉伸时返回空串）。</summary>
-    private static string StretchDesc(bool stretch, double lo, double hi)
-        => stretch ? $"（掩码内拉伸窗口 {lo:F0}~{hi:F0}）" : string.Empty;
-
-    /// <summary>
-    /// 2026-09-08: 灰度判向（消除掩码回退角度的 180° 方向歧义，输出唯一朝向，值域仍由调用方
-    /// AngleTracker.Resolve 归一化到 (-180,180]）。
-    /// <para><b>2026-09-11 起定位为"头尾判定的兜底"</b>：头尾优先由二维码位置决定
-    /// （见 <see cref="TryApplyBarcodeHeadDirection"/>，实测本线 99.9% 的产品都有二维码），
-    /// 仅当无二维码 / 二维码几何上定不了头尾时才采用本方法的结论。本方法仍照常执行以产出
-    /// 落库统计（BrightMean/DarkMean/BrightnessDiff），供现场标定与离线比对。</para>
-    /// <para>轴前提：<paramref name="rectAngleDeg"/> 描述掩码最小外接矩形的宽度轴方向，而 BuildMinAreaRect
-    /// 已做宽≥高归一化，故宽度轴恒为产品长轴——与主页绘制的"短轴参考线"互为垂直，本方法按宽度轴
-    /// 投影把掩码分成正/负两个半区，恰等于参考线两侧的头尾半区。</para>
-    /// <para>原理：以宽度轴单位向量 u（方向 = <paramref name="rectAngleDeg"/>）为"角度正向"，
-    /// 把掩码内像素按投影 t=(p−center)·u 的符号分成"正向半区/负向半区"，统计两侧平均灰度（BGR 图转灰度、
-    /// 只取掩码置信度 &gt; 0.5 的像素，排除背景干扰）。</para>
-    /// <para>头端约定（AlgorithmSettings.BrightnessHeadEndIsBright）：true（默认）= 产品头端偏亮，较亮半区即头端；
-    /// false = 头端偏暗，较暗半区即头端。头端若落在 −u 负半区则把角度 +180°（归一化后等价 −180°），
-    /// 使头端始终与角度正向一致 —— 同一物理摆向恒输出同一角度，相差 180° 的摆向输出相差 180°。</para>
-    /// <para>可靠性保护：两侧平均灰度差绝对值小于 BrightnessDirectionDeadband（死区）判定为"不可判"，
-    /// 维持原角度不翻转（防止光照/噪声导致方向抖动），并输出 30s 节流告警；掩码退化（MaskArea=0）、
-    /// 无灰度图或任一侧无像素时直接返回原角度。</para>
-    /// <para>2026-09-11 新增<b>掩码内对比度拉伸</b>：判向前把掩码内灰度的 [pLow, pHigh] 分位窗口
-    /// 线性映射到 [0,255]（见 <c>AlgorithmSettings.BrightnessContrastStretchEnabled</c> /
-    /// <c>BrightnessStretchLowPercentile</c> / <c>BrightnessStretchHighPercentile</c>），使两端本来就小的
-    /// 反差在满量程下被放大，让固定死区重新具备判别力（真实图回放实测 `|diff|` 中位数放大 2.3 倍）。
-    /// 窗口跨度不足 <see cref="MinStretchSpan"/>（近单色掩码）时自动跳过拉伸，避免把噪声放大成信号。
-    /// 拉伸只改变"用哪套灰度做比较"，不改变掩码、分割轴与半区划分；输出角度语义完全不变。</para>
-    /// <para>开关来源：<paramref name="brightnessEnabled"/> 由调用方解析（配方级覆盖 ?? 全局
-    /// Algorithm.BrightnessDirectionEnabled，见 BuildAndSaveAsync），头端明暗约定与死区仍读全局设置。</para>
-    /// <remarks>坐标系：掩码、Bounds、矩形中心与 <paramref name="bgrImage"/> 同处推理图坐标系
-    /// （调用方传入的 sourceImg 已按 IsResize 缩放）。灰度转换仅在判向启用且有目标时进行，用后即释放。
-    /// 源图兼容 3ch BGR（生产链路）与 1ch 灰度（配方页测试推理复用时 inferenceMat 可能为灰度源图），
-    /// 其余通道无法提取亮度则跳过判向。</remarks>
-    /// </summary>
-    internal static double ApplyBrightnessHeadDirectionIfEnabled(
-        double fallbackAngle,
-        Mat? bgrImage,
-        Segmentation edgeResult,
-        float rectCenterX,
-        float rectCenterY,
-        float rectAngleDeg,
-        float maskArea,
-        bool brightnessEnabled,
-        out BrightnessDirectionStats? stats)
-    {
-        stats = null;
-        if (!brightnessEnabled || bgrImage is null || bgrImage.Empty() || maskArea <= 0)
-        {
-            return fallbackAngle;
-        }
-
-        // 头端明暗约定与死区阈值仍读全局设置（配方级仅覆盖总开关）
-        var alg = Models.Settings.Instance.Algorithm;
-
-        var mask = edgeResult.Mask;
-        if (mask is null || mask.Width <= 0 || mask.Height <= 0)
-        {
-            return fallbackAngle;
-        }
-
-        // 2026-09-08: 判向只需亮度信息——1ch 灰度源图直接复用（配方页测试推理路径的 inferenceMat
-        // 可能为灰度），3ch BGR 转灰度（生产链路）；BGR2GRAY 不能直接作用于 1ch 图，否则抛异常。
-        using var gray = bgrImage.Channels() switch
-        {
-            3 => bgrImage.CvtColor(ColorConversionCodes.BGR2GRAY),
-            1 => bgrImage.Clone(),
-            _ => null,
-        };
-        if (gray is null)
-        {
-            return fallbackAngle;
-        }
-
-        var bounds = edgeResult.Bounds;
-        var rad = rectAngleDeg * Math.PI / 180.0;
-        var ux = Math.Cos(rad);
-        var uy = Math.Sin(rad);
-
-        // 2026-09-11: 由"纯累加和"改为"256 桶直方图"累积。原因：掩码内对比度拉伸需要先拿到
-        // 掩码内的灰度分位窗口才能做映射，而分位数无法从累加和反推。直方图在**同一遍扫描**内
-        // 额外支撑这一需求，代价仅 3×256 个 int（掩码内灰度是 byte，天然 256 桶）。
-        var histAll = new int[256];
-        var histPlus = new int[256];
-        var histMinus = new int[256];
-        for (int my = 0; my < mask.Height; my++)
-        {
-            for (int mx = 0; mx < mask.Width; mx++)
-            {
-                // 掩码置信度阈值与 GetMaskStats 口径一致（>0.5 视为产品像素）
-                if (mask[my, mx] <= 0.5f)
-                {
-                    continue;
-                }
-
-                var px = bounds.X + mx;
-                var py = bounds.Y + my;
-                if (px < 0 || py < 0 || px >= gray.Width || py >= gray.Height)
-                {
-                    continue;
-                }
-
-                // 沿角度正向 u 的投影：>=0 归正向半区，<0 归负向半区（分割线两侧）
-                var t = (px - rectCenterX) * ux + (py - rectCenterY) * uy;
-                var value = gray.At<byte>(py, px);
-                histAll[value]++;
-                if (t >= 0)
-                {
-                    histPlus[value]++;
-                }
-                else
-                {
-                    histMinus[value]++;
-                }
-            }
-        }
-
-        long countPlus = 0, countMinus = 0;
-        for (int i = 0; i < 256; i++)
-        {
-            countPlus += histPlus[i];
-            countMinus += histMinus[i];
-        }
-
-        if (countPlus == 0 || countMinus == 0)
-        {
-            return fallbackAngle; // 某侧无像素（极端掩码），无法判向，无统计输出
-        }
-
-        // ---- 掩码内对比度拉伸（2026-09-11）----
-        // 把掩码内灰度的 [lo, hi] 分位窗口线性映射到 [0,255]，让两端本来就小的反差在满量程下被放大，
-        // 从而使固定死区阈值重新具备判别力。窗口过窄（近单色掩码）时跳过，避免把噪声放大成信号。
-        double lo = 0, hi = 255;
-        bool stretch = alg.BrightnessContrastStretchEnabled;
-        if (stretch)
-        {
-            long total = countPlus + countMinus;
-            lo = PercentileFromHistogram(histAll, total, alg.BrightnessStretchLowPercentile);
-            hi = PercentileFromHistogram(histAll, total, alg.BrightnessStretchHighPercentile);
-            if (hi - lo < MinStretchSpan)
-            {
-                stretch = false; // 掩码近乎单色，拉伸会把噪声放大成信号，放弃拉伸
-                lo = 0;
-                hi = 255;
-            }
-        }
-
-        double scale = stretch ? 255.0 / (hi - lo) : 1.0;
-        double sumPlus = 0, sumMinus = 0;
-        for (int i = 0; i < 256; i++)
-        {
-            if (histPlus[i] == 0 && histMinus[i] == 0)
-            {
-                continue;
-            }
-
-            double v = stretch ? (i - lo) * scale : i;
-            if (v < 0)
-            {
-                v = 0;
-            }
-            else if (v > 255)
-            {
-                v = 255;
-            }
-
-            sumPlus += v * histPlus[i];
-            sumMinus += v * histMinus[i];
-        }
-
-        var meanPlus = sumPlus / countPlus;
-        var meanMinus = sumMinus / countMinus;
-        var diff = meanPlus - meanMinus;
-        // 统计已完成即回填（死区样本同样落库——正是标定死区阈值所需的分析数据）
-        stats = new BrightnessDirectionStats(
-            meanPlus, meanMinus, diff,
-            stretch ? lo : double.NaN,
-            stretch ? hi : double.NaN);
-        if (Math.Abs(diff) < alg.BrightnessDirectionDeadband)
-        {
-            LogBrightnessUnclear(meanPlus, meanMinus, stretch, lo, hi);
-            return fallbackAngle; // 死区内：不可判，维持原角度
-        }
-
-        // 头端落在 −u 半区（正角度反向）时翻转 180°，使头端与角度正向对齐
-        bool headInMinusHalf = alg.BrightnessHeadEndIsBright ? diff < 0 : diff > 0;
-        if (headInMinusHalf)
-        {
-            LogService.Instance.Debug(
-                $"[灰度判向] 头端在负半区，翻转 180°: rectAngle={rectAngleDeg:F1}°, 亮差={diff:F1}" +
-                $"{StretchDesc(stretch, lo, hi)}");
-            return fallbackAngle + 180.0;
-        }
-
-        return fallbackAngle;
-    }
-
     /// <summary>二维码中心离产品质心的最小像素距离比（相对产品长轴长度），低于此值无法判定头尾。</summary>
     private const double MinBarcodeHeadOffsetRatio = 0.05;
 
@@ -869,14 +600,14 @@ public sealed class DetectionRecordService
     private const double MinBarcodeHeadCos = 0.30;
 
     /// <summary>
-    /// 2026-09-11: 用二维码位置校正产品头尾（180° 方向）；返回 null 表示"二维码无法定头尾"，由调用方回退灰度判向。
+    /// 2026-09-11: 用二维码位置校正产品头尾（180° 方向）；返回 null 表示"二维码无法定头尾"，由调用方回退特征池。
     /// <para>原理：角度正向 u = (cos(baseAngle), sin(baseAngle)) 已由角度值本身给出（已标定 = 世界角；
     /// 未标定 = 图像主轴角，与 <c>ComputeMaskAngleCalibrated</c> 同口径）。计算"产品质心 → 二维码中心"
     /// 在 u 上的投影：投影 ≥ 0 表示二维码（头端）落在角度正向半区，与约定一致、不翻转；投影 &lt; 0 则 +180°，
-    /// 使头端与角度正向对齐——与 <see cref="ApplyBrightnessHeadDirectionIfEnabled"/> 同一套
+    /// 使头端与角度正向对齐——与 <see cref="HeadTailFeaturePool"/> 的"数值大的一侧是头部"同一套
     /// "头端与角度正向一致"的约定，两者可互换。</para>
     /// <para><b>只改方向、不改角度</b>：翻转量恒为 180°，长轴几何、分割轴、输出域均不变。</para>
-    /// <para>保护条件（任一不满足即返回 null 回退灰度判向）：无二维码；二维码中心离产品质心过近
+    /// <para>保护条件（任一不满足即返回 null 回退特征池）：无二维码；二维码中心离产品质心过近
     /// （相对长轴不足 <see cref="MinBarcodeHeadOffsetRatio"/>，此时 cos 由噪声决定）；
     /// 二维码方向几乎垂直于长轴（|cos| &lt; <see cref="MinBarcodeHeadCos"/>，投影无区分度）。</para>
     /// </summary>
@@ -934,7 +665,7 @@ public sealed class DetectionRecordService
     /// <para>用途：把服务端**已经施加**的头尾翻转作为唯一事实下发给 UI，让画面方向箭头与实发角同源；
     /// 此前 UI 在绘制时自行按灰度统计二次判定，二维码链路（P5）启用后会与实发角相差 180°（所见非所发）。</para>
     /// <para>翻转量恒为 0 或 180°（见 <see cref="TryApplyBarcodeHeadDirection"/> 与
-    /// <c>ApplyBrightnessHeadDirectionIfEnabled</c>），故用"接近 180°"判定而非符号比较，
+    /// <see cref="HeadTailFeaturePool"/>），故用"接近 180°"判定而非符号比较，
     /// 对 offsetAngle / 标定旋转等常量偏移天然免疫（两点同偏移相减抵消）。</para>
     /// </summary>
     /// <param name="angle">最终角度（已含头尾翻转）。</param>
@@ -954,23 +685,6 @@ public sealed class DetectionRecordService
         }
 
         return Math.Abs(diff - 180.0) <= HeadOppositeToleranceDegrees;
-    }
-
-    /// <summary>
-    /// 灰度判向"不可判"告警（30s 节流聚合一条 Warning，失败即重置窗口）。
-    /// </summary>
-    private static void LogBrightnessUnclear(double meanPlus, double meanMinus, bool stretch, double lo, double hi)
-    {
-        var now = (int)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var last = Interlocked.Exchange(ref _lastBrightnessUnclearLogUnix, now);
-        if (now - last < BrightnessUnclearLogIntervalSec)
-        {
-            return;
-        }
-
-        LogService.Instance.Warning(
-            $"[灰度判向] 两侧平均灰度差 {Math.Abs(meanPlus - meanMinus):F1} 低于死区({Models.Settings.Instance.Algorithm.BrightnessDirectionDeadband:F1})，" +
-            $"无法判定头尾，维持掩码角度{StretchDesc(stretch, lo, hi)}");
     }
 
     /// <summary>

@@ -1083,9 +1083,12 @@ namespace MainAPP.ViewModels
                 // 掩码回退角度同样应用灰度判向（配方级 IsBrightnessDirectionEnabled ?? 全局 Algorithm
                 // .BrightnessDirectionEnabled），消除 180° 方向歧义，测试推理显示值 = 生产实发值（所见即所发）。
                 bool brightnessDirectionTried = false;
-                // 2026-09-08: 判向灰度统计随测试推理展示（与生产落库同一 out 数据），供标定 OffsetAngle/
-                // 死区阈值时核对"亮/暗半区灰度差"是否稳定；声明在外层便于汇总文案引用。
-                DetectionRecordService.BrightnessDirectionStats? brightnessStats = null;
+                // 2026-09-08: 判向亮度统计随测试推理展示（与生产落库同一 out 数据），供标定 OffsetAngle/
+                // 死区阈值时核对"正/负半区灰度差"是否稳定；声明在外层便于汇总文案引用。
+                // 2026-09-13: 判据已由独立"灰度判向"并入特征池（HeadTailFeaturePool），此处改走特征池
+                // 统一入口，保证测试推理显示值 = 生产实发值（所见即所发）这一不变式继续成立。
+                BrightnessDirectionStats? brightnessStats = null;
+                HeadTailPoolDecision? testPoolDecision = null;
                 if (sendAngle is null && (!wantAngle || angleDirectionDegenerate))
                 {
                     // 2026-09-08: 掩码回退角度经三点标定换算为世界坐标系角度（与生产 BuildAndSaveAsync
@@ -1101,16 +1104,27 @@ namespace MainAPP.ViewModels
                     var fallbackAngle = maskWorldAngle + (double)OffsetAngle;
                     bool brightnessEnabled = this.YoloTool?.IsBrightnessDirectionEnabled
                         ?? Models.Settings.Instance.Algorithm.BrightnessDirectionEnabled;
-                    if (brightnessEnabled && product is not null && maskArea > 0)
+                    if (product is not null && maskArea > 0)
                     {
-                        // 复用生产同一判向实现：inferenceMat 与 product 掩码/Bounds 同处推理图坐标系，
-                        // 与方法内部灰度统计的坐标系约定一致；头端明暗约定与死区仍由该方法读全局设置。
-                        sendAngle = ToVGT.ToRobotAngle(DetectionRecordService.ApplyBrightnessHeadDirectionIfEnabled(
+                        // 复用生产同一实现：inferenceMat 与 product 掩码/Bounds 同处推理图坐标系，
+                        // 与特征池内部灰度统计的坐标系约定一致；死区/拉伸参数由全局设置提供。
+                        // 配方页不传条码（测试推理无真值），codePresent=false → 不做码区剔除。
+                        var alg = Models.Settings.Instance.Algorithm;
+                        testPoolDecision = HeadTailFeaturePool.Evaluate(
                             fallbackAngle, inferenceMat, product,
                             maskRectCenterX, maskRectCenterY, maskRectAngleDeg, maskArea,
-                            brightnessEnabled: true,
-                            out brightnessStats));
-                        brightnessDirectionTried = true;
+                            maskRectWidth, codePresent: false, codeCenterX: 0, codeCenterY: 0,
+                            alg.HeadTailFeatureDeadband,
+                            brightnessEnabled,
+                            alg.BrightnessContrastStretchEnabled,
+                            alg.BrightnessStretchLowPercentile,
+                            alg.BrightnessStretchHighPercentile,
+                            out brightnessStats);
+                        sendAngle = ToVGT.ToRobotAngle(
+                            testPoolDecision is { Decisive: true }
+                                ? testPoolDecision.Angle
+                                : fallbackAngle);
+                        brightnessDirectionTried = brightnessEnabled;
                     }
                     else
                     {
@@ -1119,7 +1133,7 @@ namespace MainAPP.ViewModels
                     angleFromMaskFallback = true;
                 }
 
-                // 判向完成（两侧均有像素）时附上灰度统计，页面上直接核对头端明暗与死区是否合适。
+                // 判向完成（两侧均有像素）时附上亮度统计，页面上直接核对头端明暗与死区是否合适。
                 // 2026-09-11: 半区命名改为"正向/负向"（原名"亮/暗半区"与事实相反，两值大小关系不固定）；
                 // 并显示掩码内对比度拉伸窗口，便于现场判断绝对灰度水平（窗口整体偏低说明成像偏暗）。
                 string brightnessDetail = brightnessStats is { } bStats
@@ -1130,7 +1144,11 @@ namespace MainAPP.ViewModels
                     : string.Empty;
                 string fallbackAngleDesc = angleFromMaskFallback
                     ? (angleDirectionDegenerate ? "模型方向退化→" : string.Empty)
-                      + (brightnessDirectionTried ? $"掩码主轴角+灰度判向{brightnessDetail}" : "掩码主轴角")
+                      + (testPoolDecision is { Decisive: true } pd
+                          ? $"掩码主轴角+特征池[{pd.SourceFeature}]{brightnessDetail}"
+                          : brightnessDirectionTried
+                              ? $"掩码主轴角+brightness特征{brightnessDetail}"
+                              : "掩码主轴角")
                     : string.Empty;
                 string angleText = sendAngle is not null
                     ? $"\n角度: {sendAngle:F1}°" + (angleFromMaskFallback ? $"（{fallbackAngleDesc}）" : string.Empty)

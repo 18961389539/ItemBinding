@@ -21,6 +21,11 @@ namespace MainAPP.Application
     /// 它是 <paramref name="AgreeCount"/> / <paramref name="DisagreeCount"/> 的分母，也是判断一致率可信度的权重。</param>
     /// <param name="AgreeCount">符号与 QR 真值一致的帧数（判对）。</param>
     /// <param name="DisagreeCount">符号与 QR 真值相反的帧数（判错）。</param>
+    /// <param name="TakeOverCount">该特征"抢走"裁决权的帧数（弱信号让位机制生效，2026-09-13）。
+    /// 定义：该特征在级联中排在首个出死区特征之后，却因其置信更强而接管了裁决。
+    /// 该值 &gt; 0 说明"让位"机制在为这类产品纠正优先级先验；长期为 0 说明机制未触发（可能是好事）。</param>
+    /// <param name="YieldedCount">该特征"让位"给后出死区特征的帧数——仅在它是首个出死区特征、
+    /// 且最终裁决者不是它时计入。这是 <paramref name="TakeOverCount"/> 的对偶面。</param>
     public sealed record HeadTailFeatureStat(
         string Name,
         int TotalSamples,
@@ -28,7 +33,9 @@ namespace MainAPP.Application
         int AdjudicatedCount,
         int TruthComparedCount,
         int AgreeCount,
-        int DisagreeCount)
+        int DisagreeCount,
+        int TakeOverCount = 0,
+        int YieldedCount = 0)
     {
         /// <summary>出死区率 = 出死区帧数 / 出现帧数。低 → 该特征对本产品几乎无区分力。</summary>
         public double DecisiveRate => TotalSamples > 0 ? (double)DecisiveCount / TotalSamples : 0;
@@ -44,6 +51,12 @@ namespace MainAPP.Application
 
         /// <summary>是否已有足够真值样本支撑一致率结论（低于此阈值时一致率仅供参考）。</summary>
         public bool HasEnoughTruth => TruthComparedCount >= HeadTailFeatureAudit.MinTruthSamples;
+
+        /// <summary>
+        /// 让位净收益 = 抢来裁决的次数 − 让出去的次数。正 → 该特征常作为"更强信号"接管；
+        /// 负 → 该特征常作为"弱信号"被接管。绝对值为 0 表示它既不强也不弱。
+        /// </summary>
+        public int TakeOverNet => TakeOverCount - YieldedCount;
 
         /// <summary>
         /// 综合诊断：把三个指标压成一句人话，供 UI/AI 助手直接展示。
@@ -111,19 +124,28 @@ namespace MainAPP.Application
         /// <summary>JSON 解析失败被跳过的帧数（数据损伤自检；正常应为 0）。</summary>
         public int MalformedFrames { get; }
 
+        /// <summary>弱信号让位机制（2026-09-13）生效的帧数——即最终裁决者不是首个出死区特征。
+        /// 用于回答"新机制到底改变了多少帧的裁决"，是评估该机制实际影响力的直接口径。</summary>
+        public int TakeOverFrames { get; }
+
         private HeadTailFeatureAudit(
             IReadOnlyList<HeadTailFeatureStat> stats,
-            int totalFrames, int framesWithTruth, int allDeadbandFrames, int malformedFrames)
+            int totalFrames, int framesWithTruth, int allDeadbandFrames, int malformedFrames,
+            int takeOverFrames)
         {
             Stats = stats;
             TotalFrames = totalFrames;
             FramesWithTruth = framesWithTruth;
             AllDeadbandFrames = allDeadbandFrames;
             MalformedFrames = malformedFrames;
+            TakeOverFrames = takeOverFrames;
         }
 
         /// <summary>级联全死区率 = 无人裁决的帧占比。</summary>
         public double AllDeadbandRate => TotalFrames > 0 ? (double)AllDeadbandFrames / TotalFrames : 0;
+
+        /// <summary>让位机制触发率 = 被接管的帧占比。用于判断该机制是"常态修正"还是"偶发兜底"。</summary>
+        public double TakeOverRate => TotalFrames > 0 ? (double)TakeOverFrames / TotalFrames : 0;
 
         /// <summary>
         /// 汇总统计（纯函数，internal 供单测）。
@@ -141,8 +163,10 @@ namespace MainAPP.Application
             var compared = new Dictionary<string, int>();
             var agree = new Dictionary<string, int>();
             var disagree = new Dictionary<string, int>();
+            var takeOver = new Dictionary<string, int>();
+            var yielded = new Dictionary<string, int>();
 
-            int totalFrames = 0, framesWithTruth = 0, allDeadband = 0, malformed = 0;
+            int totalFrames = 0, framesWithTruth = 0, allDeadband = 0, malformed = 0, takeOverFrames = 0;
             int n = Math.Min(traces.Count, truths.Count);
 
             for (int i = 0; i < n; i++)
@@ -228,6 +252,17 @@ namespace MainAPP.Application
                 }
 
                 adjudicated[source!] = adjudicated.GetValueOrDefault(source!) + 1;
+
+                // 让位统计：首个出死区特征 ≠ 最终裁决者 ⇒ 该帧发生了接管。
+                // 只在"有人裁决"的帧上判——全死区帧没有让位语义。
+                var firstDecisive = features.FirstOrDefault(f => f.Decisive);
+                if (firstDecisive.Name is not null &&
+                    !string.Equals(firstDecisive.Name, source, StringComparison.Ordinal))
+                {
+                    takeOverFrames++;
+                    takeOver[source!] = takeOver.GetValueOrDefault(source!) + 1;
+                    yielded[firstDecisive.Name] = yielded.GetValueOrDefault(firstDecisive.Name) + 1;
+                }
             }
 
             var stats = order.Select(name => new HeadTailFeatureStat(
@@ -237,9 +272,11 @@ namespace MainAPP.Application
                 adjudicated.GetValueOrDefault(name),
                 compared.GetValueOrDefault(name),
                 agree.GetValueOrDefault(name),
-                disagree.GetValueOrDefault(name))).ToList();
+                disagree.GetValueOrDefault(name),
+                takeOver.GetValueOrDefault(name),
+                yielded.GetValueOrDefault(name))).ToList();
 
-            return new HeadTailFeatureAudit(stats, totalFrames, framesWithTruth, allDeadband, malformed);
+            return new HeadTailFeatureAudit(stats, totalFrames, framesWithTruth, allDeadband, malformed, takeOverFrames);
         }
 
         /// <summary>

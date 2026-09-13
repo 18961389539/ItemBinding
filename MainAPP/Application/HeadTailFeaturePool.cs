@@ -88,8 +88,10 @@ namespace MainAPP.Application
     /// 正/负两个半区，计算有符号相对值；数值大（正号）的半区即头部。该规则利用"产品的
     /// 物理不对称性随产品一起旋转"这一事实自定向，无需任何符号定标/约定冻结。</para>
     /// <para>级联按固定优先级排序（几何 → 亮度 → 结构 → 纹理）：几何特征对光照完全免疫故最优先；
-    /// <b>亮度特征</b>（2026-09-13 由灰度判向并入）是产品固有属性、信噪比高于梯度/纹理，紧随几何之后；
-    /// 第一个出死区的特征即定头尾，全部死区则返回非 decisive 结果。</para>
+    /// <b>亮度特征</b>（2026-09-13 由灰度判向并入）是产品固有属性、信噪比高于梯度/纹理，紧随几何之后。
+    /// 默认取第一个出死区的特征定头尾；<b>但先到者仅勉强过线时，允许后方明显更强的特征接管</b>
+    /// （弱信号让位，见 <c>WeakConfidence</c>/<c>StrongConfidence</c>），避免「早到的弱者压制后到的强者」。
+    /// 全部死区则返回非 decisive 结果。</para>
     /// <para>配套自检（在线统计，见 FeatureSamples 设计）：① 出死区率（特征对当前产品有无区分力）；
     /// ② QR 一致率（有码帧上与二维码真值的一致性，验证"大=头"约定）；③ 头向-位置相关性
     /// （非零 = 被场景光照梯度污染，该特征应弃用）。</para>
@@ -316,16 +318,54 @@ namespace MainAPP.Application
             return BuildDecision(fallbackAngle, features);
         }
 
-        /// <summary>级联决策（纯函数，internal 供单测）：第一个出死区的特征定头尾。</summary>
+        /// <summary>
+        /// 弱信号让位门槛：首个出死区者的置信倍数（|v|/db）低于此值时，
+        /// 允许后续更强特征接管裁决（2026-09-13 修「早到的弱者压制后到的强者」）。
+        /// </summary>
+        /// <remarks>
+        /// 纯 <c>FirstOrDefault</c> 的缺陷：① 只要 <c>|v| = 0.101 &gt; db = 0.10</c> 就裁决，
+        /// 哪怕后面 ⑦ 的 <c>|v|/db = 8</c>（信号强 80 倍）也永远没机会说话——用微弱信号覆盖强信号。
+        /// 本机制给"先到"一个<b>有条件</b>的优先权：先到者信号足够强（≥ <see cref="StrongConfidence"/>）
+        /// 则维持级联语义不变；只有先到者勉强过线（&lt; <see cref="WeakConfidence"/>）时，
+        /// 才检查后方是否存在明显更强的特征。
+        /// </remarks>
+        private const double WeakConfidence = 1.5;
+
+        /// <summary>
+        /// 强信号门槛：后续特征置信倍数达此值才允许接管弱信号先到者。
+        /// 与 <see cref="WeakConfidence"/> 拉开 2 倍差值，避免两特征置信接近时反复横跳。
+        /// </summary>
+        private const double StrongConfidence = 3.0;
+
+        /// <summary>
+        /// 置信倍数比较的浮点容差。必要性：<c>0.15 / 0.10</c> 在 IEEE754 下得 1.4999999999999998
+        /// 而非 1.5，<c>0.30 / 0.10</c> 得 2.9999999999999996 而非 3.0 → 恰好落在门槛上的样本
+        /// 会因精度误差被判到错误一侧。加入 1e-9 相对容差使边界行为符合直觉（阈值本身是启发式值，
+        /// 这点容差不会改变任何实质判断）。
+        /// </summary>
+        private const double ConfidenceEpsilon = 1e-9;
+
+        /// <summary>
+        /// 级联决策（纯函数，internal 供单测）。
+        /// <para><b>裁决规则</b>：默认取第一个出死区的特征（级联语义，体现"几何对光照免疫故优先"的先验）；
+        /// 但当该特征只是<b>勉强过线</b>（|v|/db &lt; <see cref="WeakConfidence"/>）而后方存在
+        /// <b>明显更强</b>的特征（|v|/db ≥ <see cref="StrongConfidence"/>）时，由后者接管——
+        /// 避免微弱信号压制强信号。接管者取后方置信度最大者，同等置信度时保持原顺序（稳定性）。</para>
+        /// <para>设计取舍：用"刚性区间"而非连续加权，是为了保住级联的<b>可解释性</b>——
+        /// 落库的 SourceFeature 依旧明确指向单一裁决者，现场工程师能复查"这帧是谁判的"；
+        /// 贝叶斯/加权融合会把多特征混在一起，出问题无法归因到具体一项。</para>
+        /// </summary>
         internal static HeadTailPoolDecision BuildDecision(
             double fallbackAngle, IReadOnlyList<HeadTailFeatureSample> features)
         {
-            var decisive = features.FirstOrDefault(f => f.Decisive);
-            if (decisive is null)
+            var first = features.FirstOrDefault(f => f.Decisive);
+            if (first is null)
             {
                 // 级联全部死区：维持原角度（调用方回退灰度兜底）
                 return new HeadTailPoolDecision(fallbackAngle, false, "None", false, features);
             }
+
+            var decisive = ResolveWeakSignalYield(first, features);
 
             // "数值大的一侧是头部"：有符号值 > 0 → 头在正半区（u 正向），角度不翻转；
             // < 0 → 头在负半区 → +180°（归一化后等价 −180°），使头端与角度正向一致。
@@ -334,6 +374,85 @@ namespace MainAPP.Application
             var angle = fallbackAngle + (flipped ? 180.0 : 0.0);
             return new HeadTailPoolDecision(angle, flipped, decisive.Name, true, features);
         }
+
+        /// <summary>
+        /// 弱信号让位裁决（纯函数，internal 供单测）：返回最终定头尾的特征。
+        /// <para>先到者置信 ≥ <see cref="StrongConfidence"/> → 直接采用（不折腾，保持级联稳定）；
+        /// 先到者置信 ≥ <see cref="WeakConfidence"/> → 也采用（不算勉强，视为有效判断）；
+        /// 先到者置信 &lt; <see cref="WeakConfidence"/> → 在后出死区且<b>符号相同</b>的特征中找置信最大者，
+        /// 若该值 ≥ <see cref="StrongConfidence"/> 则由它接管，否则仍由先到者裁决。</para>
+        /// <para><b>为什么要求符号相同（让位只确认、不翻案）</b>：让位要修的是"弱者压制强者"
+        /// （同一结论本该由更强证据支持），而不是"弱者判错了方向"。若允许异符号接管，
+        /// 伪信号会因数值极端而 conf 虚高并劫持裁决——实测案例：全屏掩码下
+        /// <c>EdgeDensityDiff = −1.0</c>（相对差理论极值，Canny 边界响应所致）conf 高达 10，
+        /// 会推翻亮度特征的 conf 1.18 从而给出错误方向。<b>方向性错误应交给一致性统计去发现和修正</b>
+        /// （headtail_audit 里某特征一致率长期偏低 → 降优先级或删除），
+        /// 而不是靠启发式在这里翻案——职责分离更干净，也不会引入新的拍脑袋参数。</para>
+        /// </summary>
+        /// <param name="first">第一个出死区的特征（调用方保证非 null）。</param>
+        /// <param name="features">完整特征表（含未出死区项，本方法自行筛选）。</param>
+        internal static HeadTailFeatureSample ResolveWeakSignalYield(
+            HeadTailFeatureSample first, IReadOnlyList<HeadTailFeatureSample> features)
+        {
+            var firstConfidence = ConfidenceOf(first);
+            if (firstConfidence + ConfidenceEpsilon >= WeakConfidence)
+            {
+                return first; // 先到者信号不算勉强，维持级联语义
+            }
+
+            var firstPositive = first.SignedValue > 0;
+
+            // 用索引定位而非引用比较：引用相等依赖"调用方传同一实例"这一隐式契约，
+            // 将来若改成值语义或复制列表会静默失效；record 的 Equals 是值语义，
+            // 故按字段匹配首个命中项即可（特征名在单帧内唯一）。
+            var startIndex = -1;
+            for (int i = 0; i < features.Count; i++)
+            {
+                if (ReferenceEquals(features[i], first) || features[i] == first)
+                {
+                    startIndex = i;
+                    break;
+                }
+            }
+
+            if (startIndex < 0)
+            {
+                return first; // 理论上不可达；保守起见不做让位
+            }
+
+            HeadTailFeatureSample? strongest = null;
+            var strongestConfidence = 0.0;
+            for (int i = startIndex + 1; i < features.Count; i++)
+            {
+                var f = features[i];
+                if (!f.Decisive)
+                {
+                    continue;
+                }
+
+                // 只接受与先到者同符号的接管者（让位 = 用更强证据确认同一结论）
+                if ((f.SignedValue > 0) != firstPositive)
+                {
+                    continue;
+                }
+
+                var conf = ConfidenceOf(f);
+                // 严格大于：同等置信度时保留先出现者，避免级联顺序被噪声扰动
+                if (conf > strongestConfidence)
+                {
+                    strongestConfidence = conf;
+                    strongest = f;
+                }
+            }
+
+            return strongest is not null && strongestConfidence + ConfidenceEpsilon >= StrongConfidence
+                ? strongest
+                : first;
+        }
+
+        /// <summary>置信倍数 = |有符号值| / 死区。死区非正时返回 0（不可比，视作无信号）。</summary>
+        private static double ConfidenceOf(HeadTailFeatureSample f)
+            => f.Deadband > 0 ? Math.Abs(f.SignedValue) / f.Deadband : 0.0;
 
         /// <summary>判定轨迹序列化（落库 BarcodeData.HeadFeatures，诊断用）。</summary>
         public static string? SerializeTrace(HeadTailPoolDecision? decision)

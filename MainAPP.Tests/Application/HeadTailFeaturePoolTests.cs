@@ -246,5 +246,181 @@ namespace MainAPP.Tests.Application
             Assert.True(double.IsNaN(stats!.Value.Low), "窗口过窄应跳过拉伸，Low 为 NaN");
             Assert.Equal(4.0, stats.Value.Diff, 1);   // 原始差值，未被放大
         }
+
+        // ------------------------------------------------------------------
+        // 弱信号让位（2026-09-13）：修「早到的弱者压制后到的强者」
+        // ------------------------------------------------------------------
+
+        /// <summary>直接构造特征表，精确控制 v/db/出死区，用于让位逻辑的单点验证。</summary>
+        private static HeadTailFeatureSample[] Feats(params (string Name, double V, double Db)[] items)
+            => items.Select(x => new HeadTailFeatureSample(
+                   x.Name, x.V, x.Db, Math.Abs(x.V) >= x.Db)).ToArray();
+
+        /// <summary>先到者勉强过线（conf 1.2 &lt; 1.5）、后面有同向强信号（conf 8）→ 强信号接管。</summary>
+        [Fact]
+        public void WeakFirst_StrongLaterSameSign_LaterTakesOver()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.12, 0.10),   // conf = 1.2，勉强过线
+                ("BrightnessDiff", 0.00, 51.0),   // 未出死区
+                ("EdgeDensityDiff", 0.80, 0.10)); // conf = 8.0，强信号、同向
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.True(decision.Decisive);
+            Assert.Equal("EdgeDensityDiff", decision.SourceFeature);
+            Assert.False(decision.Flipped);          // v > 0 → 头在正向
+            Assert.Equal(30.0, decision.Angle);
+        }
+
+        /// <summary>
+        /// 接管者符号相反 → <b>不让位</b>（让位只确认、不翻案）。
+        /// <para>理由：让位要修的是"弱者压制强者"（同一结论本该由更强证据支持），
+        /// 而非"弱者判错方向"。允许异符号接管会让伪信号劫持裁决——实测全屏掩码下
+        /// EdgeDensityDiff 的 ±1.0 极值（Canny 边界响应）conf 高达 10，会推翻正确的亮度判断。
+        /// 方向性错误交给 headtail_audit 的一致率统计去发现。</para>
+        /// </summary>
+        [Fact]
+        public void WeakFirst_StrongLaterOppositeSign_NoTakeOver()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.12, 0.10),    // 弱，指向正向
+                ("EdgeDensityDiff", -0.80, 0.10)); // 强但指向负向 → 不允许接管
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("CentroidOffset", decision.SourceFeature);
+            Assert.False(decision.Flipped);
+            Assert.Equal(30.0, decision.Angle);
+        }
+
+        /// <summary>先到者信号足够强（conf 4 ≥ 3）→ 维持级联语义，后面再强也不接管。</summary>
+        [Fact]
+        public void StrongFirst_LaterStronger_KeepsFirst()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.40, 0.10),    // conf = 4.0，不勉强
+                ("EdgeDensityDiff", 0.90, 0.10));  // conf = 9.0，更强
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("CentroidOffset", decision.SourceFeature);
+        }
+
+        /// <summary>先到者勉强、但后面只是中等强（conf 2.5 &lt; 3）→ 不让位（阈值留滞回）。</summary>
+        [Fact]
+        public void WeakFirst_MediumLater_NoTakeOver()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.12, 0.10),    // conf = 1.2，勉强
+                ("EdgeDensityDiff", 0.25, 0.10));  // conf = 2.5，不够格接管
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("CentroidOffset", decision.SourceFeature);
+        }
+
+        /// <summary>先到者勉强、后方有多个强信号 → 取置信度最大者（不是第一个够格的）。</summary>
+        [Fact]
+        public void WeakFirst_MultipleStrong_TakesHighestConfidence()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.11, 0.10),    // conf = 1.1
+                ("WidthTaper", 0.35, 0.10),        // conf = 3.5，够格
+                ("EdgeDensityDiff", 0.90, 0.10));  // conf = 9.0，更强 → 应选它
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("EdgeDensityDiff", decision.SourceFeature);
+        }
+
+        /// <summary>接管者与先到者同向但符号为负 → 翻转方向由该符号决定（+180°）。</summary>
+        [Fact]
+        public void TakeOver_SameNegativeSign_Flips180()
+        {
+            var features = Feats(
+                ("CentroidOffset", -0.12, 0.10),   // 弱，指向负向
+                ("EdgeDensityDiff", -0.80, 0.10)); // 强且同向 → 接管
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("EdgeDensityDiff", decision.SourceFeature);
+            Assert.True(decision.Flipped);
+            Assert.Equal(210.0, decision.Angle);
+        }
+
+        /// <summary>全部落死区 → 不裁决（让位机制不改变此行为）。</summary>
+        [Fact]
+        public void AllDeadband_StillNotDecisive()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.05, 0.10),
+                ("EdgeDensityDiff", 0.02, 0.10));
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.False(decision.Decisive);
+            Assert.Equal("None", decision.SourceFeature);
+            Assert.Equal(30.0, decision.Angle);   // 维持回退角
+        }
+
+        /// <summary>先到者的 v 恰在弱门槛边界（conf = 1.5）→ 视为不勉强，不让位（边界含等号）。</summary>
+        [Fact]
+        public void ExactlyAtWeakThreshold_KeepsFirst()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.15, 0.10),    // conf = 1.5，恰在边界
+                ("EdgeDensityDiff", 0.90, 0.10));  // conf = 9.0
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("CentroidOffset", decision.SourceFeature);
+        }
+
+        /// <summary>接管者置信恰在强门槛边界（conf = 3.0）→ 允许接管（边界含等号）。</summary>
+        [Fact]
+        public void ExactlyAtStrongThreshold_TakesOver()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.11, 0.10),    // conf = 1.1，弱
+                ("EdgeDensityDiff", 0.30, 0.10));  // conf = 3.0，恰在边界 → 接管
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("EdgeDensityDiff", decision.SourceFeature);
+        }
+
+        /// <summary>死区为 0（不可比）→ 置信倍数为 0，不参与让位也不被接管。</summary>
+        [Fact]
+        public void ZeroDeadband_ConfidenceIsZero_SafeFallback()
+        {
+            var features = Feats(
+                ("CentroidOffset", 0.5, 0.0),      // db=0 → 但 Decisive 由 |v|>=0 决定 = true，conf=0
+                ("EdgeDensityDiff", 0.80, 0.10));  // conf = 8.0
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            // 先到者 conf=0 < 1.5 → 检查后方；后方 conf 8 ≥ 3 → 接管
+            Assert.Equal("EdgeDensityDiff", decision.SourceFeature);
+        }
+
+        /// <summary>
+        /// 回归保护：现有产品数据里几何特征通常给出 conf ≥ 3 的强信号，
+        /// 让位机制不应改变这类帧的裁决结果（级联稳定性优先）。
+        /// </summary>
+        [Fact]
+        public void StrongGeometrySignal_BehaviorUnchanged()
+        {
+            // 复刻 StrongPositiveCentroidOffset 的真实 BuildFeatures 输出：
+            // v = 0.4、db = 0.10 → conf = 4.0 ≥ 3.0
+            var agg = Agg(100, 50, 50, sumT: 2000, sumT2: 50_000, sumT3: 1_400_000);
+            var features = HeadTailFeaturePool.BuildFeatures(
+                agg, LongAxis, Deadband, false, 1.0, 99.0, out _);
+
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            Assert.Equal("CentroidOffset", decision.SourceFeature);
+            Assert.False(decision.Flipped);
+        }
     }
 }

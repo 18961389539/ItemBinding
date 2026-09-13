@@ -318,5 +318,146 @@ namespace MainAPP.Tests.Application
             Assert.Equal(0, edge.TruthComparedCount);
             Assert.True(double.IsNaN(edge.AgreeRate));
         }
+
+        // ─────────────────────── 弱信号让位统计（2026-09-13）───────────────────────
+        // 判据：src ≠ 轨迹中首个出死区特征 ⇒ 该帧发生了接管（takeOverFrames++），
+        // 接管者计 takeOver，被接管者计 yielded。全死区帧不算（没有让位语义）。
+
+        [Fact]
+        public void SourceIsFirstDecisive_NoTakeOver()
+        {
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("BrightnessDiff", 3.0, true)),
+            };
+            var truths = new List<bool?> { null };
+
+            var audit = HeadTailFeatureAudit.Build(traces, truths);
+
+            Assert.Equal(0, audit.TakeOverFrames);
+            Assert.Equal(0, audit.TakeOverRate, 6);
+            Assert.Equal(0, audit.Stats.Single(s => s.Name == "CentroidOffset").TakeOverCount);
+            Assert.Equal(0, audit.Stats.Single(s => s.Name == "CentroidOffset").YieldedCount);
+            Assert.Equal(0, audit.Stats.Single(s => s.Name == "BrightnessDiff").TakeOverCount);
+        }
+
+        [Fact]
+        public void SourceIsLaterDecisive_CountedAsTakeOver()
+        {
+            // 首个出死区是 CentroidOffset（弱），最终裁决落在 BrightnessDiff（强）→ 一次接管
+            var traces = new List<string?>
+            {
+                Trace("BrightnessDiff", ("CentroidOffset", 0.12, true), ("BrightnessDiff", 3.0, true)),
+            };
+            var truths = new List<bool?> { null };
+
+            var audit = HeadTailFeatureAudit.Build(traces, truths);
+
+            Assert.Equal(1, audit.TakeOverFrames);
+            Assert.Equal(1.0, audit.TakeOverRate, 6);
+
+            var weak = audit.Stats.Single(s => s.Name == "CentroidOffset");
+            Assert.Equal(0, weak.TakeOverCount);
+            Assert.Equal(1, weak.YieldedCount);   // 它让位了一次
+            Assert.Equal(-1, weak.TakeOverNet);
+            Assert.Equal(0, weak.AdjudicatedCount); // 让位后它不再裁决
+
+            var strong = audit.Stats.Single(s => s.Name == "BrightnessDiff");
+            Assert.Equal(1, strong.TakeOverCount);
+            Assert.Equal(0, strong.YieldedCount);
+            Assert.Equal(1, strong.TakeOverNet);
+            Assert.Equal(1, strong.AdjudicatedCount);
+        }
+
+        [Fact]
+        public void AllDeadband_NoTakeOverEvenIfSourceNotFirst()
+        {
+            // 全死区帧 src 为 None → 没有让位语义，所有让位计数保持 0
+            var traces = new List<string?>
+            {
+                Trace("None", ("CentroidOffset", 0.01, false), ("BrightnessDiff", 0.02, false)),
+            };
+            var truths = new List<bool?> { null };
+
+            var audit = HeadTailFeatureAudit.Build(traces, truths);
+
+            Assert.Equal(1, audit.AllDeadbandFrames);
+            Assert.Equal(0, audit.TakeOverFrames);
+            Assert.All(audit.Stats, s =>
+            {
+                Assert.Equal(0, s.TakeOverCount);
+                Assert.Equal(0, s.YieldedCount);
+            });
+        }
+
+        [Fact]
+        public void MultipleFrames_TakeOverAccumulates()
+        {
+            var traces = new List<string?>
+            {
+                Trace("BrightnessDiff", ("CentroidOffset", 0.12, true), ("BrightnessDiff", 3.0, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.50, true), ("BrightnessDiff", 0.30, false)),
+                Trace("BrightnessDiff", ("CentroidOffset", 0.11, true), ("BrightnessDiff", -2.5, true)),
+            };
+            var truths = new List<bool?> { null, null, null };
+
+            var audit = HeadTailFeatureAudit.Build(traces, truths);
+
+            Assert.Equal(3, audit.TotalFrames);
+            Assert.Equal(2, audit.TakeOverFrames);
+            Assert.Equal(2.0 / 3.0, audit.TakeOverRate, 6);
+
+            var centroid = audit.Stats.Single(s => s.Name == "CentroidOffset");
+            Assert.Equal(1, centroid.AdjudicatedCount); // 只有第 2 帧由它裁决
+            Assert.Equal(2, centroid.YieldedCount);      // 第 1、3 帧都让位给 BrightnessDiff
+            Assert.Equal(0, centroid.TakeOverCount);
+            Assert.Equal(-2, centroid.TakeOverNet);
+
+            var brightness = audit.Stats.Single(s => s.Name == "BrightnessDiff");
+            Assert.Equal(2, brightness.AdjudicatedCount); // 第 1、3 帧接管
+            Assert.Equal(2, brightness.TakeOverCount);
+            Assert.Equal(0, brightness.YieldedCount);
+            Assert.Equal(2, brightness.TakeOverNet);
+        }
+
+        [Fact]
+        public void SourceUnknown_NotInTrace_StillCountsTakeOver()
+        {
+            // src 指向一个不在特征表里的名字（理论上不该发生）→ 仍按"非首个出死区"计一次接管，
+            // 不能让统计口径因脏数据而静默漏计。
+            var traces = new List<string?>
+            {
+                Trace("GhostFeature", ("CentroidOffset", 0.5, true)),
+            };
+            var truths = new List<bool?> { null };
+
+            var audit = HeadTailFeatureAudit.Build(traces, truths);
+
+            Assert.Equal(1, audit.TakeOverFrames);
+            Assert.Equal(1, audit.Stats.Single(s => s.Name == "CentroidOffset").YieldedCount);
+        }
+
+        [Fact]
+        public void TakeOverMetric_DoesNotAffectAgreeRate()
+        {
+            // 让位统计是纯"谁裁决"的口径，不得污染一致率分母
+            var traces = new List<string?>
+            {
+                Trace("BrightnessDiff", ("CentroidOffset", 0.12, true), ("BrightnessDiff", 3.0, true)),
+                Trace("BrightnessDiff", ("CentroidOffset", 0.14, true), ("BrightnessDiff", 2.0, true)),
+            };
+            var truths = new List<bool?> { true, true };
+
+            var audit = HeadTailFeatureAudit.Build(traces, truths);
+
+            var centroid = audit.Stats.Single(s => s.Name == "CentroidOffset");
+            Assert.Equal(2, centroid.DecisiveCount);
+            Assert.Equal(2, centroid.TruthComparedCount);
+            Assert.Equal(2, centroid.AgreeCount);   // 一致率只看它自己的符号，与是否让位无关
+
+            var brightness = audit.Stats.Single(s => s.Name == "BrightnessDiff");
+            Assert.Equal(2, brightness.TruthComparedCount);
+            Assert.Equal(2, brightness.AgreeCount);
+        }
     }
 }

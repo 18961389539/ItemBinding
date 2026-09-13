@@ -530,6 +530,8 @@ namespace MainAPP.Services.AI
                 adjudicatedRate = Math.Round(s.AdjudicatedRate * 100, 1),
                 truthSamples = s.TruthComparedCount,
                 agreeRate = s.TruthComparedCount > 0 ? Math.Round(s.AgreeRate * 100, 1) : (double?)null,
+                takeOver = s.TakeOverCount,
+                yielded = s.YieldedCount,
                 diagnosis = s.Diagnosis(),
             }).ToList();
 
@@ -545,9 +547,13 @@ namespace MainAPP.Services.AI
                 framesWithQrTruth = audit.FramesWithTruth,
                 allDeadbandRate = Math.Round(audit.AllDeadbandRate * 100, 1),
                 malformedFrames = audit.MalformedFrames,
+                takeOverFrames = audit.TakeOverFrames,
+                takeOverRate = Math.Round(audit.TakeOverRate * 100, 1),
                 byAdjudication = ranked,
                 note = "agreeRate 的分母是该特征出死区且有 QR 真值的帧数；" +
-                       "truthSamples 低于 30 时一致率仅供参考。decidableRate 低 = 该特征对本产品无区分力。",
+                       "truthSamples 低于 30 时一致率仅供参考。decidableRate 低 = 该特征对本产品无区分力。" +
+                       "takeOverFrames = 弱信号让位机制生效的帧数（最终裁决者不是首个出死区特征）；" +
+                       "takeOver/yielded 是逐特征的抢来/让出次数，长期观察可判断该机制是常态修正还是偶发兜底。",
             }, JsonOpts);
         }
 

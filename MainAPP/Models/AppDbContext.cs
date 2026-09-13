@@ -90,6 +90,28 @@ namespace MainAPP.Models
         }
 
         /// <summary>
+        /// 读取 BarcodeData 列，并保证"表一定存在"（自愈兜底，2026-09-13）。
+        /// <para><b>为什么需要它</b>：<see cref="GetBarcodeDataColumnsAsync"/> 在表不存在时
+        /// 返回<b>空集而非报错</b>（PRAGMA 对不存在的表不抛异常），于是所有
+        /// <c>!cols.Contains(x)</c> 判断都为真，紧接着的 <c>ALTER TABLE BarcodeData</c>
+        /// 会因 "no such table: BarcodeData" 失败。这会让"库文件被删除/首次运行"
+        /// 的场景直接崩在启动路径上——测试环境删除膨胀库后即复现。</para>
+        /// <para><b>兜底方式</b>：空列集 ⇒ 表不存在 ⇒ 调 <c>EnsureCreatedAsync</c> 按模型建全表。
+        /// 该调用幂等（库中已有任何表时直接返回 false，不做任何改动），故对既有库零影响。</para>
+        /// </summary>
+        private async Task<HashSet<string>> EnsureTableAndGetColumnsAsync(CancellationToken cancellationToken)
+        {
+            var cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+            if (cols.Count == 0)
+            {
+                await Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
+                cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return cols;
+        }
+
+        /// <summary>
         /// 2026-09-08: 为已存在的数据库幂等补充灰度判向统计列（BrightMean/DarkMean/BrightnessDiff）。
         /// EnsureCreatedAsync 仅在库不存在时建表，升级已有库不会补新列——若缺列，新写入的 INSERT
         /// 会因 "no such column" 失败。SQLite 用 PRAGMA table_info 探测列，缺哪列补哪列
@@ -97,7 +119,7 @@ namespace MainAPP.Models
         /// </summary>
         public async Task EnsureBrightnessColumnsAsync(CancellationToken cancellationToken = default)
         {
-            var cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+            var cols = await EnsureTableAndGetColumnsAsync(cancellationToken).ConfigureAwait(false);
 
             // 缺哪列补哪列（double? → REAL 可空列，无需默认值；ALTER ADD COLUMN 对既有行自动为 NULL）
             if (!cols.Contains("BrightMean"))
@@ -158,7 +180,7 @@ namespace MainAPP.Models
         /// </summary>
         public async Task EnsureTraceColumnsAsync(CancellationToken cancellationToken = default)
         {
-            var cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+            var cols = await EnsureTableAndGetColumnsAsync(cancellationToken).ConfigureAwait(false);
 
             if (!cols.Contains("RecipeName"))
             {

@@ -7,7 +7,24 @@ using System.Linq;
 namespace MainAPP.Application
 {
     /// <summary>单个候选特征的判定样本：有符号值 + 死区 + 是否 decisive（级联在此特征定头尾）。</summary>
-    public sealed record HeadTailFeatureSample(string Name, double SignedValue, double Deadband, bool Decisive);
+    /// <summary>
+    /// 单个头尾特征样本。
+    /// <para><b>为什么要把 <paramref name="Scale"/> 单独记下来</b>（2026-09-13）：各特征量纲不同
+    /// （③偏度天然比相对差大、④亮度是 0~255 灰度差），故 <paramref name="Deadband"/>
+    /// 是"基准死区 × 本特征缩放系数"的积。而弱信号让位的置信度
+    /// <c>conf = |v| / 基准</c> 必须<b>跨产品可比</b> —— 基准死区一旦按产品自适应，
+    /// 就无法再从 <paramref name="Deadband"/> 反推出缩放系数（基准×系数与基准耦合了）。
+    /// 记下 <paramref name="Scale"/> 后用固定的 <c>ConfReference</c> 归一化，即得跨产品稳定的置信度。</para>
+    /// <para>语义分离：<paramref name="Deadband"/> 只决定"<b>是否发言</b>"（可自适应），
+    /// <c>ConfReference × Scale</c> 只决定"<b>发言有多强</b>"（恒定，保证让位阈值跨产品通用）。</para>
+    /// </summary>
+    /// <param name="Name">特征名。</param>
+    /// <param name="SignedValue">有符号特征值（&gt;0 = 头在 +u 侧）。</param>
+    /// <param name="Deadband">实际生效死区 = 基准死区 × <paramref name="Scale"/>（自适应时基准会变）。</param>
+    /// <param name="Decisive">是否出死区（|值| ≥ <paramref name="Deadband"/>）。</param>
+    /// <param name="Scale">本特征相对"基准死区"的缩放系数（量纲换算用；默认 1.0 = 与基准同量纲）。</param>
+    public sealed record HeadTailFeatureSample(
+        string Name, double SignedValue, double Deadband, bool Decisive, double Scale = 1.0);
 
     /// <summary>
     /// 特征池头尾判定结果。Decisive=false 时 Angle=fallbackAngle（级联全部死区，调用方
@@ -319,7 +336,7 @@ namespace MainAPP.Application
         }
 
         /// <summary>
-        /// 弱信号让位门槛：首个出死区者的置信倍数（|v|/db）低于此值时，
+        /// 弱信号让位门槛：首个出死区者的置信倍数（|v|/基准）低于此值时，
         /// 允许后续更强特征接管裁决（2026-09-13 修「早到的弱者压制后到的强者」）。
         /// </summary>
         /// <remarks>
@@ -336,6 +353,18 @@ namespace MainAPP.Application
         /// 与 <see cref="WeakConfidence"/> 拉开 2 倍差值，避免两特征置信接近时反复横跳。
         /// </summary>
         private const double StrongConfidence = 3.0;
+
+        /// <summary>
+        /// 置信度归一化基准（2026-09-13 引入，为自适应死区铺路）。
+        /// <para><b>为什么需要它</b>：<see cref="WeakConfidence"/>/<see cref="StrongConfidence"/>
+        /// 是<b>跨产品通用</b>的阈值——"1.5 倍"在产品 A 与产品 B 上必须代表同等信号强度。
+        /// 若用实际死区（即将自适应）做归一化，同一帧图的"1.5 倍"会随产品漂移，
+        /// 这两个阈值的物理含义就消失了。</para>
+        /// <para><b>取值</b>：等于相对差量纲下的传统死区默认值 0.10，故在"死区未自适应"
+        /// 的现状下 <c>conf</c> 与旧口径<b>完全等价</b>（回归零影响）；自适应上线后
+        /// 它保持不变，从而 <c>conf</c> 仍是跨产品可比的绝对量。</para>
+        /// </summary>
+        private const double ConfReference = 0.10;
 
         /// <summary>
         /// 置信倍数比较的浮点容差。必要性：<c>0.15 / 0.10</c> 在 IEEE754 下得 1.4999999999999998
@@ -450,9 +479,16 @@ namespace MainAPP.Application
                 : first;
         }
 
-        /// <summary>置信倍数 = |有符号值| / 死区。死区非正时返回 0（不可比，视作无信号）。</summary>
+        /// <summary>
+        /// 置信倍数 = |有符号值| / (<see cref="ConfReference"/> × 本特征缩放系数)。
+        /// <para><b>为什么不用实际死区归一化</b>：实际死区即将按产品自适应，
+        /// 用它做分母会让"1.5 倍"在不同产品上代表不同信号强度，让位阈值失去意义。
+        /// 用固定基准后，<c>conf</c> 是<b>跨产品可比</b>的绝对信号强度。</para>
+        /// <para>缩放系数非正时返回 0（不可比，视作无信号）。现状下死区恒为 0.10 × 系数，
+        /// 故本式与旧口径 <c>|v|/Deadband</c> 完全等价。</para>
+        /// </summary>
         private static double ConfidenceOf(HeadTailFeatureSample f)
-            => f.Deadband > 0 ? Math.Abs(f.SignedValue) / f.Deadband : 0.0;
+            => f.Scale > 0 ? Math.Abs(f.SignedValue) / (ConfReference * f.Scale) : 0.0;
 
         /// <summary>判定轨迹序列化（落库 BarcodeData.HeadFeatures，诊断用）。</summary>
         public static string? SerializeTrace(HeadTailPoolDecision? decision)
@@ -468,6 +504,9 @@ namespace MainAPP.Application
                 v = Math.Round(f.SignedValue, 4),
                 db = Math.Round(f.Deadband, 3),
                 dec = f.Decisive,
+                // 缩放系数（2026-09-13 增）：使轨迹自描述——基准死区自适应后，
+                // 仅凭 db 无法还原该特征由何种量纲换算而来，也就无法离线复算跨产品可比的 conf。
+                sc = Math.Round(f.Scale, 4),
             });
             return System.Text.Json.JsonSerializer.Serialize(
                 new { src = decision.SourceFeature, dec = decision.Decisive, f = payload });
@@ -494,14 +533,19 @@ namespace MainAPP.Application
             brightnessStats = null;
             var list = new List<HeadTailFeatureSample>(7);
 
-            void Add(string name, double value, double db)
-                => list.Add(new HeadTailFeatureSample(name, value, db, Math.Abs(value) >= db));
+            // 统一入口：调用方只给"相对基准死区的缩放系数"（量纲换算），
+            // 实际死区 = 基准死区 × 系数。这样基准死区将来可自适应，而系数保持恒定。
+            void Add(string name, double value, double scale = 1.0)
+            {
+                var db = deadband * scale;
+                list.Add(new HeadTailFeatureSample(name, value, db, Math.Abs(value) >= db, scale));
+            }
 
             // ① 轴向质心偏移：掩码像素质心相对 OBB 中心沿主轴的偏移（头重侧质心偏移）
             if (a.SampleCount > 0 && longAxisPx > 1.0)
             {
                 var meanT = a.SumT / a.SampleCount;
-                Add("CentroidOffset", meanT / (longAxisPx / 2.0), deadband);
+                Add("CentroidOffset", meanT / (longAxisPx / 2.0));
             }
 
             // ② 两端宽度差：两半区平均 |垂直偏移| ≈ 各自半宽（头宽尾窄的锥度）
@@ -511,7 +555,7 @@ namespace MainAPP.Application
                 var wMinus = a.SumAbsSMinus / a.CountMinus;
                 if (wPlus + wMinus > 0)
                 {
-                    Add("WidthTaper", (wPlus - wMinus) / (wPlus + wMinus), deadband);
+                    Add("WidthTaper", (wPlus - wMinus) / (wPlus + wMinus));
                 }
             }
 
@@ -523,7 +567,7 @@ namespace MainAPP.Application
                 if (m2 > 1e-9)
                 {
                     var m3 = a.SumT3 / a.SampleCount - 3 * mu * (m2 + mu * mu) + 2 * mu * mu * mu;
-                    Add("AxialSkew", m3 / Math.Pow(m2, 1.5), deadband * SkewDeadbandMultiplier);
+                    Add("AxialSkew", m3 / Math.Pow(m2, 1.5), SkewDeadbandMultiplier);
                 }
             }
 
@@ -544,7 +588,7 @@ namespace MainAPP.Application
                 var gMinus = a.SumGradMinus / a.PhotoCountMinus;
                 if (gPlus + gMinus > 0)
                 {
-                    Add("GradientEnergyDiff", (gPlus - gMinus) / (gPlus + gMinus), deadband);
+                    Add("GradientEnergyDiff", (gPlus - gMinus) / (gPlus + gMinus));
                 }
 
                 // ⑥ 两半区局部纹理差（5×5 局部标准差均值）
@@ -552,7 +596,7 @@ namespace MainAPP.Application
                 var sMinus = a.SumStdMinus / a.PhotoCountMinus;
                 if (sPlus + sMinus > 0)
                 {
-                    Add("TextureStdDiff", (sPlus - sMinus) / (sPlus + sMinus), deadband);
+                    Add("TextureStdDiff", (sPlus - sMinus) / (sPlus + sMinus));
                 }
 
                 // ⑦ 两半区边缘密度差（Canny 边缘像素占比）
@@ -562,7 +606,7 @@ namespace MainAPP.Application
                     var dMinus = (double)a.EdgeMinus / a.PhotoCountMinus;
                     if (dPlus + dMinus > 0)
                     {
-                        Add("EdgeDensityDiff", (dPlus - dMinus) / (dPlus + dMinus), deadband);
+                        Add("EdgeDensityDiff", (dPlus - dMinus) / (dPlus + dMinus));
                     }
                 }
             }
@@ -658,12 +702,17 @@ namespace MainAPP.Application
                 stretch ? lo : double.NaN,
                 stretch ? hi : double.NaN);
 
-            // 量纲换算：绝对灰度差 → 相对差量纲，与其它特征在级联内可比
+            // 量纲换算：绝对灰度差 → 相对差量纲，与其它特征在级联内可比。
+            // 记下缩放系数而非常量积——基准死区将来可自适应，而该系数恒定，
+            // 使 ConfidenceOf 能用固定 ConfReference 算出跨产品可比的置信度。
+            var brightnessScale = BrightnessDeadbandScale;
+            var brightnessDb = deadband * brightnessScale;
             list.Add(new HeadTailFeatureSample(
                 "BrightnessDiff",
                 diff,
-                deadband * BrightnessDeadbandScale,
-                Math.Abs(diff) >= deadband * BrightnessDeadbandScale));
+                brightnessDb,
+                Math.Abs(diff) >= brightnessDb,
+                brightnessScale));
         }
 
         /// <summary>

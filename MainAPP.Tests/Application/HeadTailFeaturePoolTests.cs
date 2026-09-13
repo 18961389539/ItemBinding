@@ -1,3 +1,4 @@
+using System.Linq;
 using MainAPP.Application;
 using Xunit;
 
@@ -251,10 +252,21 @@ namespace MainAPP.Tests.Application
         // 弱信号让位（2026-09-13）：修「早到的弱者压制后到的强者」
         // ------------------------------------------------------------------
 
-        /// <summary>直接构造特征表，精确控制 v/db/出死区，用于让位逻辑的单点验证。</summary>
+        /// <summary>
+        /// 直接构造特征表，精确控制 v/db/出死区，用于让位逻辑的单点验证。
+        /// <para><b>Scale 的推导</b>（2026-09-13）：置信度现按 <c>|v|/(ConfReference × Scale)</c> 计算
+        /// （ConfReference = 0.10），故必须同时给出 Scale 才能控制 conf。
+        /// 这里用 <c>Scale = Db / 0.10</c> 反推——它恰好与生产口径一致：
+        /// db=0.10→scale 1.0（相对差特征）、db=0.20→2.0（偏度 SkewDeadbandMultiplier）、
+        /// db=51→510（亮度 BrightnessDeadbandScale）。这样本辅助函数构造的样本
+        /// 其 conf 恒等于 <c>|v|/Db</c>，既有的让位用例语义保持不变。</para>
+        /// </summary>
+        private const double TestConfReference = 0.10;
+
         private static HeadTailFeatureSample[] Feats(params (string Name, double V, double Db)[] items)
             => items.Select(x => new HeadTailFeatureSample(
-                   x.Name, x.V, x.Db, Math.Abs(x.V) >= x.Db)).ToArray();
+                   x.Name, x.V, x.Db, Math.Abs(x.V) >= x.Db,
+                   TestConfReference > 0 ? x.Db / TestConfReference : 1.0)).ToArray();
 
         /// <summary>先到者勉强过线（conf 1.2 &lt; 1.5）、后面有同向强信号（conf 8）→ 强信号接管。</summary>
         [Fact]
@@ -421,6 +433,142 @@ namespace MainAPP.Tests.Application
 
             Assert.Equal("CentroidOffset", decision.SourceFeature);
             Assert.False(decision.Flipped);
+        }
+
+        // ───────── ConfReference 拆分（2026-09-13，为自适应死区铺路）─────────
+
+        /// <summary>
+        /// ★ 核心不变式：让位判断的置信度必须由【固定的 ConfReference × Scale】决定，
+        /// 而<b>不</b>依赖 Deadband。这是自适应死区能安全上线的前提——
+        /// 若 conf 随 Deadband 漂移，"1.5 倍"阈值在不同产品上就代表不同信号强度。
+        /// </summary>
+        [Fact]
+        public void Confidence_IndependentOfDeadband_SameScale()
+        {
+            // 同一 v、同一 scale，只有 db 不同（模拟死区自适应前后）
+            var tight = new HeadTailFeatureSample("CentroidOffset", 0.12, 0.05, true, 1.0);
+            var loose = new HeadTailFeatureSample("CentroidOffset", 0.12, 0.30, false, 1.0);
+
+            // 让位裁决结果必须一致：conf = 0.12/(0.10×1.0) = 1.2 < 1.5 → 允许后方接管
+            var later = new HeadTailFeatureSample("EdgeDensityDiff", 0.80, 0.10, true, 1.0);
+
+            var r1 = HeadTailFeaturePool.ResolveWeakSignalYield(tight, new[] { tight, later });
+            var r2 = HeadTailFeaturePool.ResolveWeakSignalYield(loose, new[] { loose, later });
+
+            Assert.Equal("EdgeDensityDiff", r1.Name);
+            Assert.Equal("EdgeDensityDiff", r2.Name); // 死区变了，结论不变
+        }
+
+        /// <summary>
+        /// 缩放系数参与归一化：亮度特征 db = 510×基准，其 conf 必须与相对差特征同口径
+        /// （即 |diff|/510 而不是 |diff|/0.10，否则亮度会因量纲大 510 倍而永远 conf 虚高）。
+        /// </summary>
+        [Fact]
+        public void Confidence_NormalizedByScale_BrightnessComparable()
+        {
+            // 亮度 diff = 51 → conf = 51/(0.10×510) = 1.0（刚好 1 倍基准，信号弱）
+            var dim = new HeadTailFeatureSample("BrightnessDiff", 51.0, 51.0, true, 510.0);
+            // 后方同号强特征 conf = 0.80/0.10 = 8 ≥ 3 → 应接管
+            var strong = new HeadTailFeatureSample("EdgeDensityDiff", 0.80, 0.10, true, 1.0);
+
+            var taken = HeadTailFeaturePool.ResolveWeakSignalYield(dim, new[] { dim, strong });
+            Assert.Equal("EdgeDensityDiff", taken.Name);
+
+            // 若误用 db 归一化（51/51=1.0 也是 1.0，此例巧合相同），故再加一例区分：
+            // 亮度 diff = 255 → 正确 conf = 255/51 = 5（强，不触发让位）
+            var bright = new HeadTailFeatureSample("BrightnessDiff", 255.0, 51.0, true, 510.0);
+            var kept = HeadTailFeaturePool.ResolveWeakSignalYield(bright, new[] { bright, strong });
+            Assert.Equal("BrightnessDiff", kept.Name); // conf 5 ≥ 1.5，不折腾
+        }
+
+        /// <summary>
+        /// 零/负 Scale 时置信度退化为 0（不可比），不得抛异常或产生无穷大。
+        /// </summary>
+        [Fact]
+        public void Confidence_ZeroScale_ReturnsZero_NoThrow()
+        {
+            var broken = new HeadTailFeatureSample("CentroidOffset", 5.0, 0.10, true, 0.0);
+            var later = new HeadTailFeatureSample("EdgeDensityDiff", 0.80, 0.10, true, 1.0);
+
+            var result = HeadTailFeaturePool.ResolveWeakSignalYield(broken, new[] { broken, later });
+
+            // broken 的 conf = 0 < 1.5 → 允许接管；later conf 8 ≥ 3 → 由 later 接管
+            Assert.Equal("EdgeDensityDiff", result.Name);
+        }
+
+        /// <summary>缩放系数必须出现在落库轨迹里——否则基准自适应后无法离线复算跨产品可比的 conf。</summary>
+        [Fact]
+        public void SerializeTrace_IncludesScale()
+        {
+            var agg = Agg(100, 50, 50, sumT: 2000, sumT2: 50_000, sumT3: 1_400_000);
+            var features = HeadTailFeaturePool.BuildFeatures(
+                agg, LongAxis, Deadband, false, 1.0, 99.0, out _);
+            var decision = HeadTailFeaturePool.BuildDecision(30.0, features);
+
+            var json = HeadTailFeaturePool.SerializeTrace(decision);
+
+            Assert.NotNull(json);
+            Assert.Contains("\"sc\":", json);
+            Assert.Contains("\"CentroidOffset\"", json);
+        }
+
+        /// <summary>
+        /// 亮度特征的 scale 必须等于 BrightnessDeadbandScale(510)，相对差特征为 1.0——
+        /// 锁住量纲换算关系，防止将来改动 AddBrightnessFeature 时漏掉 scale。
+        /// </summary>
+        [Fact]
+        public void BuildFeatures_BrightnessScale_IsBrightnessDeadbandScale()
+        {
+            var (hp, hm, ha) = Histograms(plusGray: 200, minusGray: 50, countPlus: 500, countMinus: 500);
+            var agg = Agg(1000, 500, 500, sumT: 0, sumT2: 100_000, sumT3: 0,
+                pP: 500, pM: 500, gP: 0, gM: 0, stP: 0, stM: 0, eP: 0, eM: 0,
+                histP: hp, histM: hm, histAll: ha);
+
+            var features = HeadTailFeaturePool.BuildFeatures(
+                agg, LongAxis, Deadband, false, 1.0, 99.0, out _);
+
+            var brightness = features.Single(f => f.Name == "BrightnessDiff");
+            Assert.Equal(510.0, brightness.Scale, 3);
+            Assert.Equal(Deadband * 510.0, brightness.Deadband, 3);
+
+            var centroid = features.Single(f => f.Name == "CentroidOffset");
+            Assert.Equal(1.0, centroid.Scale, 3);
+        }
+
+        /// <summary>
+        /// ★ 自适应死区的安全前提（风险 #1 的防线）：<b>死区只能影响 Decisive 与 Deadband，
+        /// 绝不能影响 SignedValue</b>。
+        /// <para>若哪天有人把 deadband 引到特征值公式里（例如做归一化），
+        /// "死区 → 特征值 → 中位数 → 新死区" 就构成闭环：死区升高使值变小，
+        /// 值变小又推高死区……最终死区爬到顶、级联全部落死区而系统静默失效。
+        /// 本测试把该不变式焊死，任何此类改动会立刻报红。</para>
+        /// </summary>
+        [Theory]
+        [InlineData(0.001)]
+        [InlineData(0.10)]
+        [InlineData(1.0)]
+        [InlineData(100.0)]
+        public void Deadband_DoesNotAffectSignedValues(double deadband)
+        {
+            var agg = Agg(100, 50, 50, sumT: 2000, sumT2: 50_000, sumT3: 1_400_000,
+                sAP: 600, sAM: 500, pP: 400, pM: 400,
+                gP: 800, gM: 700, stP: 900, stM: 800, eP: 40, eM: 30);
+
+            var features = HeadTailFeaturePool.BuildFeatures(
+                agg, LongAxis, deadband, false, 1.0, 99.0, out _);
+
+            var centroid = features.Single(f => f.Name == "CentroidOffset");
+            var taper = features.Single(f => f.Name == "WidthTaper");
+            var skew = features.Single(f => f.Name == "AxialSkew");
+
+            // 特征值必须与死区无关（这是不变式；下面的具体数值只是当前实现的快照）
+            Assert.Equal(0.4, centroid.SignedValue, 9);
+            Assert.Equal((600.0 / 50 - 500.0 / 50) / (600.0 / 50 + 500.0 / 50), taper.SignedValue, 9);
+            Assert.Equal(2.0, skew.Scale, 9);
+
+            // 而死区本身随参数线性变化，且 Decisive 跟随死区（这两者才"应该"变）
+            Assert.Equal(deadband, centroid.Deadband, 9);
+            Assert.Equal(deadband * 2.0, skew.Deadband, 9);
         }
     }
 }

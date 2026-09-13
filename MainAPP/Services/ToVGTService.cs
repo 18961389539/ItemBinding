@@ -35,6 +35,10 @@ namespace MainAPP.Services
         // 发送到 VGT 的 UDP 客户端（StartAsync 中创建，DisposeAsync 中释放）
         private volatile UdpClient? _vgtClient;
 
+        // 2026-09-13: 自定义协议 UDP 客户端缓存（per-endpoint，避免每帧 new UdpClient——
+        // 帧频高时省略套接字反复创建/释放；DisposeAsync 统一释放）
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, UdpClient> _customClients = new();
+
         // 用于接收编码器数据的 UDP 客户端（StartAsync 中创建，DisposeAsync 中释放）
         private volatile UdpClient? _encoderClient;
 
@@ -336,6 +340,17 @@ namespace MainAPP.Services
 
         #region SendTo
 
+        /// <summary>发送审计日志统一前缀（2026-09-13 收敛分散的发送标识）。</summary>
+        private const string AuditPrefix = "[发送审计]";
+
+        /// <summary>发送成功审计（统一格式：接收方/帧/编码器/条目数/内容）。</summary>
+        private static void AuditSend(string receiver, uint frame, uint encoder, int count, string content)
+            => LogService.Instance.Info($"{AuditPrefix}[{receiver}] 帧={frame} 编码器={encoder} 条目数={count} | {content}");
+
+        /// <summary>发送告警审计（统一前缀）。</summary>
+        private static void AuditWarn(string receiver, string message)
+            => LogService.Instance.Warning($"{AuditPrefix}[{receiver}] {message}");
+
         /// <summary>
         /// 将一组 <see cref="MessageToVGT"/> 按协议格式组合为待发送字符串。
         /// </summary>
@@ -366,7 +381,7 @@ namespace MainAPP.Services
             var client = _vgtClient;
             if (client is null)
             {
-                LogService.Instance.Warning("ToVGTService.SendToVGT: vgtClient 为 null，无法发送消息。");
+                AuditWarn("VGT", "vgtClient 为 null，无法发送消息。");
                 return;
             }
 
@@ -376,7 +391,7 @@ namespace MainAPP.Services
             // 发送失败属于非致命（VGT 侧自行超时），降级为 Warning 日志。
             try { client.Send(data, data.Length); }
             catch (ObjectDisposedException) { /* 客户端在发送期间被释放，吞掉异常 */ }
-            catch (System.Net.Sockets.SocketException ex) { LogService.Instance.Warning($"VGT 消息发送失败: {ex.Message}"); }
+            catch (System.Net.Sockets.SocketException ex) { AuditWarn("VGT", $"消息发送失败: {ex.Message}"); }
         }
 
         private void SendToLeiLei(IEnumerable<MessageToVGT> messages, uint encoderValue = 0)
@@ -397,7 +412,7 @@ namespace MainAPP.Services
             var client = _vgtClient;
             if (client is null)
             {
-                LogService.Instance.Warning("ToVGTService.SendToLeiLei: vgtClient 为 null，无法发送消息。");
+                AuditWarn("LL", "vgtClient 为 null，无法发送消息。");
                 return;
             }
 
@@ -405,7 +420,7 @@ namespace MainAPP.Services
             // REVIEW-FIX: 同 SendToVGT，补充捕获 SocketException，避免 UDP 发送失败冒泡中断检测主循环。
             try { client.Send(data, data.Length); }
             catch (ObjectDisposedException) { /* 客户端在发送期间被释放，吞掉异常 */ }
-            catch (System.Net.Sockets.SocketException ex) { LogService.Instance.Warning($"LL 消息发送失败: {ex.Message}"); }
+            catch (System.Net.Sockets.SocketException ex) { AuditWarn("LL", $"消息发送失败: {ex.Message}"); }
         }
 
         /// <summary>
@@ -475,8 +490,7 @@ namespace MainAPP.Services
 
                 var detail = string.Join(" | ", messages.Select(m =>
                     $"条码={m.Barcode}, X={m.X:F2}, Y={m.Y:F2}, 角度={m.RZ:F2}"));
-                LogService.Instance.Info(
-                    $"[UDP→{receiver}] 帧={scannerResult.FrameNumber} 编码器={scannerResult.EncoderValue} 条目数={messages.Count} | {detail}");
+                AuditSend(receiver, scannerResult.FrameNumber, scannerResult.EncoderValue, messages.Count, detail);
             }
         }
 
@@ -533,14 +547,14 @@ namespace MainAPP.Services
 
             if (parts.Count == 0)
             {
-                LogService.Instance.Debug($"[自定义协议] {proto.Name}: 帧={scannerResult.FrameNumber} 无可发记录（拒发策略过滤）。");
+                LogService.Instance.Debug($"{AuditPrefix}[{proto.Name}] 帧={scannerResult.FrameNumber} 无可发记录（拒发策略过滤）。");
                 return;
             }
 
             var endpoint = ParseEndPoint(proto.EndPoint);
             if (endpoint is null)
             {
-                LogService.Instance.Warning($"[自定义协议] {proto.Name}: 端点 '{proto.EndPoint}' 无法解析，未发送。");
+                AuditWarn(proto.Name, $"端点 '{proto.EndPoint}' 无法解析，未发送。");
                 return;
             }
 
@@ -548,16 +562,15 @@ namespace MainAPP.Services
             byte[] data = Encoding.UTF8.GetBytes(content);
             try
             {
-                using var client = new UdpClient();
-                // UDP 无连接发送：每次向目标端点发一帧，不占端口/不复用（帧频低，创建开销可忽略）
+                // 2026-09-13: 复用 per-endpoint 缓存客户端（原每帧 new UdpClient）
+                var client = _customClients.GetOrAdd(proto.EndPoint, static _ => new UdpClient());
                 client.Send(data, data.Length, endpoint);
-                LogService.Instance.Info(
-                    $"[自定义协议] {proto.Name}: 帧={scannerResult.FrameNumber} 编码器={scannerResult.EncoderValue} 条目数={parts.Count} → {proto.EndPoint} | {content}");
+                AuditSend(proto.Name, scannerResult.FrameNumber, scannerResult.EncoderValue, parts.Count, content);
             }
             catch (ObjectDisposedException) { /* 发送期间被释放，吞掉异常 */ }
             catch (SocketException ex)
             {
-                LogService.Instance.Warning($"[自定义协议] {proto.Name} 发送失败: {ex.Message}");
+                AuditWarn(proto.Name, $"发送失败: {ex.Message}");
             }
         }
 
@@ -631,6 +644,19 @@ namespace MainAPP.Services
             }
             catch (Exception ex) { LogService.Instance.Warning($"ToVGTService.DisposeAsync: 释放 encoderClient 失败: {ex}"); }
             finally { _encoderClient = null; }
+
+            // 2026-09-13: 释放自定义协议缓存客户端（per-endpoint）
+            try
+            {
+                foreach (var c in _customClients.Values)
+                {
+                    try { c.Close(); } catch { }
+                    c.Dispose();
+                }
+
+                _customClients.Clear();
+            }
+            catch (Exception ex) { LogService.Instance.Warning($"ToVGTService.DisposeAsync: 释放自定义协议客户端失败: {ex}"); }
 
             // 释放 CTS
             try

@@ -236,18 +236,11 @@ namespace MainAPP.Services.AI
                 "BenchmarkDotNet.Artifacts", "Models", "ScottPlot5", "ImageViewerControl",
             };
             var extensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".md", ".txt", ".docx" };
-            // 2026-09-13: 语料噪声排除（文件级精确匹配，不删文件本身）——
-            // 构建清单/临时导出/第三方包说明/过程性评审与诊断报告对现场问答无价值，过滤避免脏语料。
-            // 保留 docs/ 下的手册与 docs/knowledge/ 知识文档（现走 KnowledgeDocsFolder 工作区根扫描）。
-            var excludedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "cuda_runtime_dlls_SHA256.txt",
-                "nuget-readme.md",
-                "_v25.txt",
-                "CodeReviewReport-2026-08-04.md",
-                "灰度判向诊断报告-2026-09-11.md",
-                "灰度判向_回放验证报告.md",
-            };
+            // 2026-09-13: 语料噪声排除（文件名精确匹配，来源 AiSettings.KnowledgeExcludedFiles 可配置——
+            // 构建清单/临时导出/第三方包说明/过程性评审与诊断报告对现场问答无价值，过滤避免脏语料）。
+            var excludedFiles = new HashSet<string>(
+                MainAPP.Models.Settings.Instance.Ai.KnowledgeExcludedFiles ?? [],
+                StringComparer.OrdinalIgnoreCase);
 
             foreach (var root in roots)
             {

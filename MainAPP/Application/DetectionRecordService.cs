@@ -35,6 +35,9 @@ public sealed class DetectionRecordService
     private readonly IBarcodeDataService _barcodeData;
     private readonly AngleTracker _angleTracker;
 
+    // 2026-09-13: 标定构图（镜像与否）仅首次记录日志，让"镜像假设"可见而非改了才知道
+    private static bool s_mirrorStateLogged;
+
     // 2026-09-07: 角度质量门拒绝诊断日志的节流状态。主流程不传 onRejected 时拒绝原因被静默丢弃，
     // 大量 -9999 无从定位。这里统一记录并限频（30s 一条聚合 Warning），避免高拒绝率刷爆日志。
     private static readonly object AngleRejectLogLock = new();
@@ -212,6 +215,23 @@ public sealed class DetectionRecordService
         ArgumentNullException.ThrowIfNull(scanerResult);
         ArgumentNullException.ThrowIfNull(edgeResults);
         ArgumentNullException.ThrowIfNull(transformer);
+
+        // 2026-09-13: 标定构图可见化——镜像/同构影响消歧链的 cos 翻转，首次进帧即记录（只记一次）
+        if (!s_mirrorStateLogged)
+        {
+            s_mirrorStateLogged = true;
+            if (transformer.IsInitialized)
+            {
+                LogService.Instance.Info(
+                    transformer.IsMirrored
+                        ? "[标定] 三点标定构图为镜像（X/Y 轴反向）——二维码/模型消歧已按镜像翻转 cos 对齐特征池头向约定；如同构不要镜像，请重标定。"
+                        : "[标定] 三点标定同构无镜像（X/Y 轴同向），消歧无需翻转。");
+            }
+            else
+            {
+                LogService.Instance.Info("[标定] 未初始化——坐标/角度按图像系兜底（WorldX/Y 像素、Angle 图像角），落库标记 IsCalibrated=false。");
+            }
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
 

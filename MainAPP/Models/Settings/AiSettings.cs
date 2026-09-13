@@ -72,6 +72,20 @@ namespace MainAPP.Models
         public string KnowledgeDocsFolder { get; set; } = string.Empty;
 
         /// <summary>
+        /// 知识库语料噪声排除（按文件名精确匹配，2026-09-13 配置化）。
+        /// 默认剔除构建清单/临时导出/第三方包说明/过程性评审报告；现场增删改这里即可，无需改代码。
+        /// </summary>
+        public List<string> KnowledgeExcludedFiles { get; set; } = new()
+        {
+            "cuda_runtime_dlls_SHA256.txt",
+            "nuget-readme.md",
+            "_v25.txt",
+            "CodeReviewReport-2026-08-04.md",
+            "灰度判向诊断报告-2026-09-11.md",
+            "灰度判向_回放验证报告.md",
+        };
+
+        /// <summary>
         /// 是否允许 AI 调用「写」类工具（调曝光/切配方等）。
         /// 默认 false：只读。开启后每次写操作仍会要求二次确认并落审计日志。
         /// </summary>

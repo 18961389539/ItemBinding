@@ -131,6 +131,9 @@ namespace MainAPP.Models
         // --- 自定义通讯协议（2026-09-13 新增，扁平转发参与 JSON 序列化）---
         public List<ProtocolTemplateConfig> ProtocolTemplates { get => Protocol.Protocols; set => Protocol.Protocols = value; }
 
+        // --- 知识库语料噪声排除（2026-09-13 配置化，替代硬编码黑名单）---
+        public List<string> AiKnowledgeExcludedFiles { get => Ai.KnowledgeExcludedFiles; set => Ai.KnowledgeExcludedFiles = value; }
+
         /// <summary>
         /// 设置变更事件（弱事件模式，订阅者被 GC 回收时自动取消订阅，无内存泄漏风险）
         /// </summary>

@@ -139,6 +139,14 @@ namespace MainAPP.Application
         private const int HistogramBuckets = 256;
 
         /// <summary>
+        /// 派生图 ROI 相对掩码外接框的外扩余量（像素）。取最大卷积核半径：
+        /// 局部标准差的 5×5 高斯 → 半径 2；Sobel 3×3 → 1；Canny 内部 Sobel → 1。
+        /// 余量保证外接框内像素的核邻域完整落在 ROI 内，框内结果与整幅图计算一致
+        /// （差异只出现在余量环上，而余量环不被掩码读取）。
+        /// </summary>
+        private const int RoiMargin = 2;
+
+        /// <summary>
         /// 特征池级联判定。返回 null = 无法运行（无图像/掩码退化）；返回非 null 时
         /// Decisive 标识级联是否给出了头尾结论（未 decisive 时 Angle = fallbackAngle 原样返回）。
         /// </summary>
@@ -190,11 +198,28 @@ namespace MainAPP.Application
                 return null;
             }
 
-            // 灰度与派生图（梯度幅值/局部标准差/边缘）。全部一次性预计算，主扫描只做 At 读取。
+            var bounds = edgeResult.Bounds;
+
+            // 2026-09-13: 派生图裁到掩码外接框（含核半径余量）。三张派生图只在掩码内被读取，
+            // 却按整幅图计算——5MP 实测占单帧耗时约一半（Sobel 29ms + 局部标准差 31ms + Canny 6ms）。
+            // 裁剪后这部分成本随【掩码面积】而非【画幅】缩放（掩码约占画幅 45% 时省约 35ms/帧）。
+            // 余量 RoiMargin 保证框内像素的卷积核邻域完整落在 ROI 内：Sobel/高斯在框内与
+            // 整幅图计算逐位一致；Canny 的非极大值抑制/滞后可能使框缘约 2px 内有细微差异
+            // （远小于 0.10 死区，对相对差特征可忽略）。
+            // ROI 视图零拷贝：new Mat(parent, rect) 只调整数据指针与尺寸，不复制像素。
+            var extentWidth = Math.Max(bounds.Width, mask.Width);
+            var extentHeight = Math.Max(bounds.Height, mask.Height);
+            if (!TryComputeMaskRoi(bounds.X, bounds.Y, extentWidth, extentHeight,
+                    bgrImage.Width, bgrImage.Height, out var roi))
+            {
+                return null; // 掩码外接框与图像无交集（退化，防御）
+            }
+
+            using var grayRoiView = new Mat(bgrImage, roi);
             using var gray = bgrImage.Channels() switch
             {
-                3 => bgrImage.CvtColor(ColorConversionCodes.BGR2GRAY),
-                1 => bgrImage.Clone(),
+                3 => grayRoiView.CvtColor(ColorConversionCodes.BGR2GRAY),
+                1 => grayRoiView.Clone(),
                 _ => null,
             };
             if (gray is null)
@@ -210,7 +235,9 @@ namespace MainAPP.Application
                 return null;
             }
 
-            var bounds = edgeResult.Bounds;
+            // 扫描按图像坐标寻址（掩码外接框可能越出图像），派生图按 ROI 局部坐标读取
+            var imageWidth = bgrImage.Width;
+            var imageHeight = bgrImage.Height;
             var rad = rectAngleDeg * Math.PI / 180.0;
             var ux = Math.Cos(rad);
             var uy = Math.Sin(rad);
@@ -249,7 +276,7 @@ namespace MainAPP.Application
 
                     var px = bounds.X + mx;
                     var py = bounds.Y + my;
-                    if (px < 0 || py < 0 || px >= gray.Width || py >= gray.Height)
+                    if (px < 0 || py < 0 || px >= imageWidth || py >= imageHeight)
                     {
                         continue;
                     }
@@ -286,10 +313,13 @@ namespace MainAPP.Application
                         }
                     }
 
-                    var g = gray.At<byte>(py, px);
-                    var gm = gradMag.At<float>(py, px);
-                    var ls = localStd.At<float>(py, px);
-                    var isEdge = edge.At<byte>(py, px) > 0;
+                    // ROI 局部坐标：派生图与灰度图都是 ROI 尺寸
+                    var lx = px - roi.X;
+                    var ly = py - roi.Y;
+                    var g = gray.At<byte>(ly, lx);
+                    var gm = gradMag.At<float>(ly, lx);
+                    var ls = localStd.At<float>(ly, lx);
+                    var isEdge = edge.At<byte>(ly, lx) > 0;
 
                     // 亮度累加（同样剔除码邻域——码是高对比度区域，不剔除会把它误判成头端特征）
                     if (histAll is not null)
@@ -752,6 +782,31 @@ namespace MainAPP.Application
             }
 
             return histogram.Length - 1;
+        }
+
+        /// <summary>
+        /// 计算派生图的 ROI = 掩码外接框外扩 <see cref="RoiMargin"/> 后与图像求交。
+        /// 返回 false 表示外接框与图像无交集（掩码完全越界，退化场景）。
+        /// <para><b>为什么用 extent 而不是 bounds</b>：扫描按 (bounds.X + mx, bounds.Y + my) 寻址、
+        /// mx 遍历 [0, mask.Width)——若 mask 尺寸大于 bounds（异常数据），按 bounds 算的 ROI
+        /// 会漏掉部分被读取的像素。取两者较大值是防御性的，代价只是 ROI 略大。</para>
+        /// </summary>
+        private static bool TryComputeMaskRoi(
+            int originX, int originY, int extentWidth, int extentHeight,
+            int imageWidth, int imageHeight, out Rect roi)
+        {
+            var x0 = Math.Max(0, originX - RoiMargin);
+            var y0 = Math.Max(0, originY - RoiMargin);
+            var x1 = Math.Min(imageWidth, originX + extentWidth + RoiMargin);
+            var y1 = Math.Min(imageHeight, originY + extentHeight + RoiMargin);
+            if (x1 <= x0 || y1 <= y0)
+            {
+                roi = default;
+                return false;
+            }
+
+            roi = new Rect(x0, y0, x1 - x0, y1 - y0);
+            return true;
         }
 
         /// <summary>梯度幅值图（Sobel X/Y 平方和开方，CV_32F）。</summary>

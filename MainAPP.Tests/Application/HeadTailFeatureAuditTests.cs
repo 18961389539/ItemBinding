@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using MainAPP.Application;
@@ -458,6 +459,270 @@ namespace MainAPP.Tests.Application
             var brightness = audit.Stats.Single(s => s.Name == "BrightnessDiff");
             Assert.Equal(2, brightness.TruthComparedCount);
             Assert.Equal(2, brightness.AgreeCount);
+        }
+
+        // ─────────────── 自洽性指标（2026-09-13，不依赖真值）───────────────
+
+        [Fact]
+        public void SingleDecisiveFrame_NotCountedInDivergence()
+        {
+            // 只有 1 个特征出死区 → 分歧度无意义，必须计入 singleDecisive 而非 multiDecisive
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("WidthTaper", 0.01, false)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("WidthTaper", 0.02, false)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null });
+
+            Assert.Equal(0, audit.Consistency.MultiDecisiveFrames);
+            Assert.Equal(2, audit.Consistency.SingleDecisiveFrames);
+            Assert.Equal(0, audit.Consistency.DivergentFrames);
+            Assert.Equal(0, audit.Consistency.DivergenceRate, 6);
+            Assert.Equal(1.0, audit.Consistency.SingleDecisiveRate, 6);
+        }
+
+        [Fact]
+        public void MultiDecisive_SameSign_NoDivergence()
+        {
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("WidthTaper", 0.3, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.4, true), ("WidthTaper", 0.2, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null });
+
+            Assert.Equal(2, audit.Consistency.MultiDecisiveFrames);
+            Assert.Equal(0, audit.Consistency.DivergentFrames);
+            Assert.Equal(0, audit.Consistency.DivergenceRate, 6);
+        }
+
+        [Fact]
+        public void MultiDecisive_OppositeSign_Divergence()
+        {
+            // 两特征反号 → 分歧
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("WidthTaper", -0.3, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.4, true), ("WidthTaper", 0.2, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null });
+
+            Assert.Equal(2, audit.Consistency.MultiDecisiveFrames);
+            Assert.Equal(1, audit.Consistency.DivergentFrames);
+            Assert.Equal(0.5, audit.Consistency.DivergenceRate, 6);
+        }
+
+        [Fact]
+        public void DivergenceRate_HalfButNotZeroOrOne()
+        {
+            // 3 个特征：2 正 1 负 → 有分歧（不是"全同"也不是"全反"）
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("WidthTaper", 0.3, true), ("AxialSkew", -0.4, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null });
+
+            Assert.Equal(1, audit.Consistency.MultiDecisiveFrames);
+            Assert.Equal(1, audit.Consistency.DivergentFrames);
+        }
+
+        [Fact]
+        public void FlipRate_StableDirection_ZeroFlips()
+        {
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.6, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.4, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null, null });
+
+            Assert.Equal(2, audit.Consistency.ComparablePairs);
+            Assert.Equal(0, audit.Consistency.DirectionFlips);
+            Assert.Equal(0, audit.Consistency.FlipRate, 6);
+        }
+
+        [Fact]
+        public void FlipRate_AlternatingDirection_CountsFlips()
+        {
+            // 交替方向 → 每对都翻转
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+                Trace("CentroidOffset", ("CentroidOffset", -0.5, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null, null });
+
+            Assert.Equal(2, audit.Consistency.ComparablePairs);
+            Assert.Equal(2, audit.Consistency.DirectionFlips);
+            Assert.Equal(1.0, audit.Consistency.FlipRate, 6);
+        }
+
+        [Fact]
+        public void FlipRate_SkipsFramesWithoutDecision()
+        {
+            // 中间一帧全死区（src=None）→ 不参与相邻对比：只比较第 1 与第 3 帧
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+                Trace("None", ("CentroidOffset", 0.01, false)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null, null });
+
+            Assert.Equal(1, audit.AllDeadbandFrames);
+            Assert.Equal(1, audit.Consistency.ComparablePairs); // 只有 1 对
+            Assert.Equal(0, audit.Consistency.DirectionFlips);  // 两帧同向
+        }
+
+        [Fact]
+        public void FlipRate_NoComparablePairs_ZeroNotNaN()
+        {
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null });
+
+            Assert.Equal(0, audit.Consistency.ComparablePairs);
+            Assert.Equal(0.0, audit.Consistency.FlipRate); // 无对可比 → 0（不是 NaN，避免展示成坏值）
+        }
+
+        [Fact]
+        public void PositionCorrelation_TooFewSamples_NotUsable()
+        {
+            var traces = new List<string?>();
+            var posX = new List<double>();
+            var posY = new List<double>();
+            for (int i = 0; i < 10; i++)
+            {
+                traces.Add(Trace("CentroidOffset", ("CentroidOffset", i % 2 == 0 ? 0.5 : -0.5, true)));
+                posX.Add(i * 10.0);
+                posY.Add(i * 5.0);
+            }
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?>(new bool?[10]), posX, posY);
+
+            Assert.False(audit.Consistency.PositionUsable);
+            Assert.True(double.IsNaN(audit.Consistency.PositionCorrelationX));
+            Assert.Contains("不可用", audit.Consistency.Diagnosis());
+        }
+
+        [Fact]
+        public void PositionCorrelation_NoPositionVariation_NotUsable()
+        {
+            // 30 帧但位置恒定 → std=0 → 相关系数无定义，必须报不可用而非给噪声值
+            var traces = new List<string?>();
+            for (int i = 0; i < 35; i++)
+            {
+                traces.Add(Trace("CentroidOffset", ("CentroidOffset", i % 2 == 0 ? 0.5 : -0.5, true)));
+            }
+
+            var audit = HeadTailFeatureAudit.Build(
+                traces, new List<bool?>(new bool?[35]),
+                Enumerable.Repeat(500.0, 35).ToList(),
+                Enumerable.Repeat(300.0, 35).ToList());
+
+            Assert.Equal(0.0, audit.Consistency.PositionStdX, 6);
+            Assert.False(audit.Consistency.PositionUsable);
+            Assert.True(double.IsNaN(audit.Consistency.PositionCorrelationX));
+        }
+
+        [Fact]
+        public void PositionCorrelation_PerfectPositiveCorrelation_Detected()
+        {
+            // 构造：位置 X 随方向规律变化 → 强相关（说明被成像链污染）
+            // 注意 Y 也必须变化——两个轴都要过 std 门槛，否则整体判"不可用"
+            var traces = new List<string?>();
+            var posX = new List<double>();
+            var posY = new List<double>();
+            for (int i = 0; i < 40; i++)
+            {
+                // i 偶 → 位置左(+0.5 方向 true)；i 奇 → 位置右(−0.5 方向 false)
+                var positive = i % 2 == 0;
+                traces.Add(Trace("CentroidOffset", ("CentroidOffset", positive ? 0.5 : -0.5, true)));
+                posX.Add(positive ? 100.0 : 900.0);
+                posY.Add(200.0 + i * 5.0);
+            }
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?>(new bool?[40]), posX, posY);
+
+            Assert.Equal(40, audit.Consistency.PositionSamples);
+            Assert.True(audit.Consistency.PositionStdX > 1.0);
+            // 方向 +1 对应小 X（左），-1 对应大 X → 负相关
+            Assert.True(Math.Abs(audit.Consistency.PositionCorrelationX) > 0.99, "应检出强相关");
+            Assert.Contains("位置相关性", audit.Consistency.Diagnosis());
+        }
+
+        [Fact]
+        public void PositionCorrelation_RandomDirection_WeakCorrelation()
+        {
+            // 方向与位置无关（伪随机）→ 相关性应弱
+            var traces = new List<string?>();
+            var posX = new List<double>();
+            var posY = new List<double>();
+            var rnd = new Random(12345);
+            for (int i = 0; i < 200; i++)
+            {
+                var positive = rnd.Next(2) == 0;
+                traces.Add(Trace("CentroidOffset", ("CentroidOffset", positive ? 0.5 : -0.5, true)));
+                posX.Add(rnd.NextDouble() * 1000);
+                posY.Add(rnd.NextDouble() * 600);
+            }
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?>(new bool?[200]), posX, posY);
+
+            Assert.True(audit.Consistency.PositionUsable);
+            var maxCorr = Math.Max(Math.Abs(audit.Consistency.PositionCorrelationX),
+                                   Math.Abs(audit.Consistency.PositionCorrelationY));
+            Assert.True(maxCorr < 0.3, $"随机数据不应有强相关，实测 {maxCorr:F3}");
+            Assert.Contains("未见污染", audit.Consistency.Diagnosis());
+        }
+
+        [Fact]
+        public void PositionArraysShorterThanTraces_PositionsDisabled()
+        {
+            // 位置序列短于 trace → 必须整体放弃（避免错位相关），而非部分使用
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(
+                traces, new List<bool?> { null, null, null },
+                new List<double> { 100.0 }, new List<double> { 200.0 });
+
+            Assert.Equal(0, audit.Consistency.PositionSamples);
+            Assert.False(audit.Consistency.PositionUsable);
+        }
+
+        [Fact]
+        public void ConsistencyMetrics_DoNotRequireTruth()
+        {
+            // 全帧无真值，自洽性指标仍须正常产出——这正是无码场景的需求
+            var traces = new List<string?>
+            {
+                Trace("CentroidOffset", ("CentroidOffset", 0.5, true), ("WidthTaper", -0.3, true)),
+                Trace("CentroidOffset", ("CentroidOffset", -0.5, true), ("WidthTaper", -0.3, true)),
+            };
+
+            var audit = HeadTailFeatureAudit.Build(traces, new List<bool?> { null, null });
+
+            Assert.Equal(0, audit.FramesWithTruth);
+            Assert.Equal(2, audit.Consistency.MultiDecisiveFrames);
+            Assert.Equal(1, audit.Consistency.DivergentFrames);
+            Assert.Equal(1, audit.Consistency.DirectionFlips);
         }
     }
 }

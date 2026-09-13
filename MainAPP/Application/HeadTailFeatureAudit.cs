@@ -98,6 +98,93 @@ namespace MainAPP.Application
     }
 
     /// <summary>
+    /// 三个自洽性指标（2026-09-13）：<b>完全不依赖 QR 真值</b>，是无码场景下唯一可用的反馈信号。
+    /// <para><b>为什么需要它</b>：<see cref="HeadTailFeatureStat.AgreeRate"/> 需要真值才能算，
+    /// 而无码帧（特征池的主战场）永远没有真值。本组指标回答的不是"判得对不对"，
+    /// 而是"<b>判得稳不稳</b>"——这是无监督能做到的极限，也是驱动在线标定的唯一闭环。</para>
+    /// <para><b>三个指标的分工</b>：分歧度低说明特征互相印证；抖动率低说明输出连续稳定；
+    /// 位置相关性接近零说明没有被成像链（镜头渐晕、传感器响应不均）污染。
+    /// 三者都异常时说明系统在"瞎猜"，但无论哪一个都<b>不能判定方向对错</b>。</para>
+    /// </summary>
+    /// <param name="MultiDecisiveFrames">≥2 个特征出死区的帧数——分歧度/位置相关性的有效分母。
+    /// 单特征帧的"分歧度"恒为 1（无分歧可言），计入会稀释指标，故单独统计。</param>
+    /// <param name="SingleDecisiveFrames">恰好 1 个特征出死区的帧数。该值偏高说明特征池退化为单特征级联。</param>
+    /// <param name="DivergentFrames">出死区特征符号不统一的帧数（分歧度指标）。</param>
+    /// <param name="DirectionFlips">相邻裁决帧之间方向发生翻转的次数（抖动率指标的分子）。</param>
+    /// <param name="ComparablePairs">可比较的相邻裁决帧对数（抖动率的分母）。</param>
+    /// <param name="PositionSamples">参与位置相关性计算的帧数（要求有裁决 + 位置有效）。</param>
+    /// <param name="PositionStdX">产品画面 X 坐标的标准差——相关性计算的可用性门槛。</param>
+    /// <param name="PositionStdY">产品画面 Y 坐标的标准差。</param>
+    /// <param name="PositionCorrelationX">头向（+1/−1）与产品 X 坐标的皮尔逊相关系数；样本不足或位置无变化时为 NaN。</param>
+    /// <param name="PositionCorrelationY">头向与产品 Y 坐标的皮尔逊相关系数；同上。</param>
+    public sealed record HeadTailConsistency(
+        int MultiDecisiveFrames,
+        int SingleDecisiveFrames,
+        int DivergentFrames,
+        int DirectionFlips,
+        int ComparablePairs,
+        int PositionSamples,
+        double PositionStdX,
+        double PositionStdY,
+        double PositionCorrelationX,
+        double PositionCorrelationY)
+    {
+        /// <summary>特征分歧度 = 符号不统一的帧 / 多特征帧。0 = 特征们总是互相印证；接近 1 = 总是互相矛盾。</summary>
+        public double DivergenceRate => MultiDecisiveFrames > 0 ? (double)DivergentFrames / MultiDecisiveFrames : 0;
+
+        /// <summary>时序抖动率 = 方向翻转次数 / 相邻帧对数。
+        /// <b>仅在产品同向摆放时才有"抖动"语义</b>——混向摆放时翻转是真实行为，该值无意义。</summary>
+        public double FlipRate => ComparablePairs > 0 ? (double)DirectionFlips / ComparablePairs : 0;
+
+        /// <summary>单特征帧占比——偏高说明级联退化为单特征决策，多特征的价值未兑现。</summary>
+        public double SingleDecisiveRate
+        {
+            get
+            {
+                var d = MultiDecisiveFrames + SingleDecisiveFrames;
+                return d > 0 ? (double)SingleDecisiveFrames / d : 0;
+            }
+        }
+
+        /// <summary>位置相关性是否可评估——位置必须有足够变化，否则相关系数分母趋零、结果随机跳动。</summary>
+        public bool PositionUsable => PositionSamples >= HeadTailFeatureAudit.MinPositionSamples
+            && PositionStdX > HeadTailFeatureAudit.MinPositionStd;
+
+        /// <summary>综合诊断：把三个指标压成一句人话。</summary>
+        public string Diagnosis()
+        {
+            var parts = new List<string>();
+
+            if (MultiDecisiveFrames + SingleDecisiveFrames == 0)
+            {
+                return "无可裁决帧——特征池未产出结论";
+            }
+
+            parts.Add(SingleDecisiveRate > 0.8
+                ? $"⚠ 单特征帧占 {SingleDecisiveRate:P0}（级联退化为单特征决策）"
+                : $"分歧度 {DivergenceRate:P0}");
+
+            parts.Add(ComparablePairs > 0
+                ? $"抖动率 {FlipRate:P0}"
+                : "抖动率不可评估（无相邻裁决帧对）");
+
+            if (!PositionUsable)
+            {
+                parts.Add("位置相关性不可用（产品位置无足够变化）");
+            }
+            else
+            {
+                var maxCorr = Math.Max(Math.Abs(PositionCorrelationX), Math.Abs(PositionCorrelationY));
+                parts.Add(maxCorr > 0.3
+                    ? $"⚠ 位置相关性 {maxCorr:F2}（疑被镜头渐晕/传感器不均污染）"
+                    : $"位置相关性 {maxCorr:F2}（未见污染）");
+            }
+
+            return string.Join("；", parts);
+        }
+    }
+
+    /// <summary>
     /// 特征池自检报告（2026-09-13）：把落库的 HeadFeatures 轨迹 + HeadTruthPositive 真值
     /// 汇总成"哪个特征对区分头尾有决定性作用"的实测答案。
     /// <para><b>数据来源</b>：<c>DbModel.HeadFeatures</c>（每帧 JSON：来源特征 + 各特征 v/db/dec）
@@ -108,6 +195,13 @@ namespace MainAPP.Application
     {
         /// <summary>一致率结论所需的最少真值样本数（低于此值标注"待积累"）。</summary>
         public const int MinTruthSamples = 30;
+
+        /// <summary>位置相关性所需的最少样本数（低于此值不评估）。</summary>
+        public const int MinPositionSamples = 30;
+
+        /// <summary>位置相关性所需的最小位置标准差（像素）。低于此值说明产品总在同一位置，
+        /// 相关系数分母趋零会随机跳动，必须如实报"不可用"而非给一个噪声值。</summary>
+        public const double MinPositionStd = 1.0;
 
         /// <summary>逐特征统计（按级联优先级顺序，即 HeadTailFeaturePool 的固定顺序）。</summary>
         public IReadOnlyList<HeadTailFeatureStat> Stats { get; }
@@ -128,10 +222,13 @@ namespace MainAPP.Application
         /// 用于回答"新机制到底改变了多少帧的裁决"，是评估该机制实际影响力的直接口径。</summary>
         public int TakeOverFrames { get; }
 
+        /// <summary>自洽性指标（2026-09-13，<b>不依赖真值</b>）——无码场景下唯一可用的反馈信号。</summary>
+        public HeadTailConsistency Consistency { get; }
+
         private HeadTailFeatureAudit(
             IReadOnlyList<HeadTailFeatureStat> stats,
             int totalFrames, int framesWithTruth, int allDeadbandFrames, int malformedFrames,
-            int takeOverFrames)
+            int takeOverFrames, HeadTailConsistency consistency)
         {
             Stats = stats;
             TotalFrames = totalFrames;
@@ -139,6 +236,7 @@ namespace MainAPP.Application
             AllDeadbandFrames = allDeadbandFrames;
             MalformedFrames = malformedFrames;
             TakeOverFrames = takeOverFrames;
+            Consistency = consistency;
         }
 
         /// <summary>级联全死区率 = 无人裁决的帧占比。</summary>
@@ -154,6 +252,19 @@ namespace MainAPP.Application
         /// <param name="truths">与 <paramref name="traces"/> 逐帧对齐的真值符号
         /// （null = 该帧无真值）。长度不一致时按较短者截断。</param>
         public static HeadTailFeatureAudit Build(IReadOnlyList<string?> traces, IReadOnlyList<bool?> truths)
+            => Build(traces, truths, null, null);
+
+        /// <summary>
+        /// 汇总统计（含自洽性指标，纯函数，internal 供单测）。
+        /// </summary>
+        /// <param name="traces">每帧的 HeadFeatures JSON（null/空串 = 特征池未运行，跳过）。</param>
+        /// <param name="truths">与 <paramref name="traces"/> 逐帧对齐的真值符号（null = 无真值）。</param>
+        /// <param name="posXs">与 <paramref name="traces"/> 逐帧对齐的产品画面 X 坐标（null = 不评估位置相关性，
+        /// 或长度不足）。用于"头向-位置相关性"自检。</param>
+        /// <param name="posYs">产品画面 Y 坐标，同 <paramref name="posXs"/>。</param>
+        public static HeadTailFeatureAudit Build(
+            IReadOnlyList<string?> traces, IReadOnlyList<bool?> truths,
+            IReadOnlyList<double>? posXs, IReadOnlyList<double>? posYs)
         {
             // 特征表的列集合与优先级顺序，取自首次出现的顺序（与 BuildFeatures 的插入顺序一致）
             var order = new List<string>();
@@ -167,6 +278,20 @@ namespace MainAPP.Application
             var yielded = new Dictionary<string, int>();
 
             int totalFrames = 0, framesWithTruth = 0, allDeadband = 0, malformed = 0, takeOverFrames = 0;
+
+            // 自洽性累加器
+            int multiDecisive = 0, singleDecisive = 0, divergent = 0;
+            int flips = 0, comparablePairs = 0;
+            bool hasPrevDirection = false;
+            bool prevDirection = false;
+            var corrXs = new List<double>();
+            var corrYs = new List<double>();
+            var corrDirs = new List<int>();
+
+            // 位置序列必须与 trace 严格对齐才可用（长度不足则整体放弃，避免错位相关）
+            var usePositions = posXs is not null && posYs is not null
+                && posXs.Count >= traces.Count && posYs.Count >= traces.Count;
+
             int n = Math.Min(traces.Count, truths.Count);
 
             for (int i = 0; i < n; i++)
@@ -263,6 +388,48 @@ namespace MainAPP.Application
                     takeOver[source!] = takeOver.GetValueOrDefault(source!) + 1;
                     yielded[firstDecisive.Name] = yielded.GetValueOrDefault(firstDecisive.Name) + 1;
                 }
+
+                // ── 自洽性指标（不依赖真值）──
+                // ① 分歧度：只看多特征帧——单特征帧"分歧度"恒为 1，计入会稀释指标。
+                var decisiveFeatures = features.Where(f => f.Decisive).ToList();
+                if (decisiveFeatures.Count >= 2)
+                {
+                    multiDecisive++;
+                    var posCount = decisiveFeatures.Count(f => f.ValuePositive);
+                    if (posCount != 0 && posCount != decisiveFeatures.Count)
+                    {
+                        divergent++;
+                    }
+                }
+                else if (decisiveFeatures.Count == 1)
+                {
+                    singleDecisive++;
+                }
+
+                // ② 抖动率：相邻"有裁决帧"之间的方向翻转。方向 = 裁决者（source）的符号。
+                var adjudicator = features.FirstOrDefault(f => string.Equals(f.Name, source, StringComparison.Ordinal));
+                var direction = adjudicator.Name is not null ? adjudicator.ValuePositive : firstDecisive.ValuePositive;
+                // 正常情况 adjudicator 必然命中（source 就是本帧裁决者名）；未命中仅见于脏数据
+                // （src 指向不在特征表里的名字），此时退用首个出死区特征的符号，仍计入翻转对比以如实反映不稳定。
+                if (hasPrevDirection)
+                {
+                    comparablePairs++;
+                    if (direction != prevDirection)
+                    {
+                        flips++;
+                    }
+                }
+
+                prevDirection = direction;
+                hasPrevDirection = true;
+
+                // ③ 位置相关性：收集 (位置X, 位置Y, 方向±1)，阈值判定放在收尾处做。
+                if (usePositions)
+                {
+                    corrXs.Add(posXs![i]);
+                    corrYs.Add(posYs![i]);
+                    corrDirs.Add(direction ? 1 : -1);
+                }
             }
 
             var stats = order.Select(name => new HeadTailFeatureStat(
@@ -276,20 +443,100 @@ namespace MainAPP.Application
                 takeOver.GetValueOrDefault(name),
                 yielded.GetValueOrDefault(name))).ToList();
 
-            return new HeadTailFeatureAudit(stats, totalFrames, framesWithTruth, allDeadband, malformed, takeOverFrames);
+            var consistency = BuildConsistency(
+                multiDecisive, singleDecisive, divergent, flips, comparablePairs, corrXs, corrYs, corrDirs);
+
+            return new HeadTailFeatureAudit(
+                stats, totalFrames, framesWithTruth, allDeadband, malformed, takeOverFrames, consistency);
+        }
+
+        /// <summary>
+        /// 收尾计算位置相关性（样本不足/位置无变化时如实返回 NaN，而非给一个随机数）。
+        /// </summary>
+        private static HeadTailConsistency BuildConsistency(
+            int multiDecisive, int singleDecisive, int divergent, int flips, int comparablePairs,
+            List<double> xs, List<double> ys, List<int> dirs)
+        {
+            var samples = xs.Count;
+            var stdX = StdDev(xs);
+            var stdY = StdDev(ys);
+
+            double corrX = double.NaN, corrY = double.NaN;
+            // 双门槛：样本够 + 位置有足够变化。缺任一都不能计算——否则分母趋零，结果随机跳动。
+            if (samples >= MinPositionSamples && stdX > MinPositionStd && stdY > MinPositionStd)
+            {
+                corrX = Pearson(dirs, xs);
+                corrY = Pearson(dirs, ys);
+            }
+
+            return new HeadTailConsistency(
+                multiDecisive, singleDecisive, divergent, flips, comparablePairs,
+                samples, stdX, stdY, corrX, corrY);
+        }
+
+        /// <summary>总体标准差（n 为分母，非样本标准差——这里描述的是观测数据集本身离散程度）。</summary>
+        private static double StdDev(IReadOnlyList<double> values)
+        {
+            if (values.Count == 0)
+            {
+                return 0.0;
+            }
+
+            var mean = values.Average();
+            var sumSq = values.Sum(v => (v - mean) * (v - mean));
+            return Math.Sqrt(sumSq / values.Count);
+        }
+
+        /// <summary>
+        /// 皮尔逊相关系数。<paramref name="dirs"/> 是 ±1 的方向序列。
+        /// 任一序列方差为零时返回 NaN（相关无定义）——调用方已用 std 门槛预先排除，此处仅防御。
+        /// </summary>
+        private static double Pearson(IReadOnlyList<int> dirs, IReadOnlyList<double> values)
+        {
+            var n = Math.Min(dirs.Count, values.Count);
+            if (n < 2)
+            {
+                return double.NaN;
+            }
+
+            double meanD = 0, meanV = 0;
+            for (int i = 0; i < n; i++)
+            {
+                meanD += dirs[i];
+                meanV += values[i];
+            }
+
+            meanD /= n;
+            meanV /= n;
+
+            double cov = 0, varD = 0, varV = 0;
+            for (int i = 0; i < n; i++)
+            {
+                var dd = dirs[i] - meanD;
+                var dv = values[i] - meanV;
+                cov += dd * dv;
+                varD += dd * dd;
+                varV += dv * dv;
+            }
+
+            var denom = Math.Sqrt(varD * varV);
+            return denom > 0 ? cov / denom : double.NaN;
         }
 
         /// <summary>
         /// 从检测记录列表构建自检报告（便捷入口——调用方拿 <c>BarcodeDataService</c> 的
         /// 查询结果直接喂进来即可，无需自行拆列）。
-        /// <para>只消费 <c>HeadFeatures</c>（轨迹 JSON）与 <c>HeadTruthPositive</c>（QR 真值符号）两列，
-        /// 其余字段忽略。</para>
+        /// <para>消费 <c>HeadFeatures</c>（轨迹 JSON）、<c>HeadTruthPositive</c>（QR 真值符号）、
+        /// <c>ImageX</c>/<c>ImageY</c>（产品画面位置，供位置相关性自检）三组字段，其余忽略。</para>
+        /// <para><b>调用方须按 DetectTime 升序传入</b>——抖动率依赖"相邻帧"语义，乱序会得出错误翻转率。</para>
         /// </summary>
-        /// <param name="records">检测记录（可为任意时间范围/配方的子集）。</param>
+        /// <param name="records">检测记录（可为任意时间范围/配方的子集，需按时间升序）。</param>
         public static HeadTailFeatureAudit Build(IReadOnlyList<Models.DbModel> records)
             => Build(
                 records.Select(r => r.HeadFeatures).ToList(),
-                records.Select(r => r.HeadTruthPositive).ToList());
+                records.Select(r => r.HeadTruthPositive).ToList(),
+                records.Select(r => r.ImageX).ToList(),
+                records.Select(r => r.ImageY).ToList());
 
         /// <summary>轨迹里的单特征最小投影：只取一致率计算所需字段。
         /// <paramref name="ValuePositive"/> 是该特征有符号值是否 &gt; 0（"数值大的一侧是头部"的体现），

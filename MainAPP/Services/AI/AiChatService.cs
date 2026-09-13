@@ -503,9 +503,10 @@ namespace MainAPP.Services.AI
                 query = query.Where(x => x.RecipeName == recipeFilter);
             }
 
+            // 升序取——抖动率依赖"相邻帧"语义，必须按时间序
             var rows = await query
-                .OrderByDescending(x => x.DetectTime)
-                .Select(x => new { x.HeadFeatures, x.HeadTruthPositive })
+                .OrderBy(x => x.DetectTime)
+                .Select(x => new { x.HeadFeatures, x.HeadTruthPositive, x.ImageX, x.ImageY })
                 .ToListAsync().ConfigureAwait(false);
 
             if (rows.Count == 0)
@@ -520,7 +521,9 @@ namespace MainAPP.Services.AI
 
             var audit = Application.HeadTailFeatureAudit.Build(
                 rows.Select(r => r.HeadFeatures).ToList(),
-                rows.Select(r => r.HeadTruthPositive).ToList());
+                rows.Select(r => r.HeadTruthPositive).ToList(),
+                rows.Select(r => r.ImageX).ToList(),
+                rows.Select(r => r.ImageY).ToList());
 
             var stats = audit.Stats.Select(s => new
             {
@@ -549,11 +552,29 @@ namespace MainAPP.Services.AI
                 malformedFrames = audit.MalformedFrames,
                 takeOverFrames = audit.TakeOverFrames,
                 takeOverRate = Math.Round(audit.TakeOverRate * 100, 1),
+                consistency = new
+                {
+                    divergenceRate = Math.Round(audit.Consistency.DivergenceRate * 100, 1),
+                    singleDecisiveRate = Math.Round(audit.Consistency.SingleDecisiveRate * 100, 1),
+                    flipRate = Math.Round(audit.Consistency.FlipRate * 100, 1),
+                    positionUsable = audit.Consistency.PositionUsable,
+                    positionStdX = Math.Round(audit.Consistency.PositionStdX, 2),
+                    positionStdY = Math.Round(audit.Consistency.PositionStdY, 2),
+                    positionCorrelation = audit.Consistency.PositionUsable
+                        ? (double?)Math.Round(Math.Max(
+                            Math.Abs(audit.Consistency.PositionCorrelationX),
+                            Math.Abs(audit.Consistency.PositionCorrelationY)), 3)
+                        : null,
+                    diagnosis = audit.Consistency.Diagnosis(),
+                },
                 byAdjudication = ranked,
                 note = "agreeRate 的分母是该特征出死区且有 QR 真值的帧数；" +
                        "truthSamples 低于 30 时一致率仅供参考。decidableRate 低 = 该特征对本产品无区分力。" +
                        "takeOverFrames = 弱信号让位机制生效的帧数（最终裁决者不是首个出死区特征）；" +
-                       "takeOver/yielded 是逐特征的抢来/让出次数，长期观察可判断该机制是常态修正还是偶发兜底。",
+                       "takeOver/yielded 是逐特征的抢来/让出次数，长期观察可判断该机制是常态修正还是偶发兜底。" +
+                       "consistency 三项【不依赖真值】，是无码场景唯一的反馈信号：divergenceRate 低 = 特征互相印证；" +
+                       "flipRate 仅在【产品同向摆放】时才有抖动语义（混向时翻转是真实行为）；" +
+                       "positionCorrelation 需 positionUsable=true 才有效（产品位置需有足够变化）。",
             }, JsonOpts);
         }
 

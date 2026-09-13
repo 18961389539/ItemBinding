@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Extensions;
 using MainAPP.Benchmarks.Benchmarks;
 using BenchmarkDotNet.Running;
 using OpenCvSharp;
@@ -13,6 +14,7 @@ if (args.Contains("--probe"))
     RunProbe();
     RunBreakdown();
     RunMaskScaling();
+    RunMonoRoundTrip();
     return;
 }
 
@@ -230,4 +232,128 @@ static void RunMaskScaling()
     }
 
     Console.WriteLine("（单位 ms；掩码比例 1.0 = 宽 75% × 高 60% 的居中椭圆，即主探针的默认形态）");
+}
+
+/// <summary>
+/// 灰度往返开销（2026-09-13）：相机是 Mono8，但当前管线的形状是
+/// 「Mono8 展开 → Image&lt;Rgb24&gt;（1→3 字节/像素）→ ToMat 为 CV_8UC3 →
+///  HeadTailFeaturePool 内 CvtColor(BGR2GRAY) 折回 1 通道」。
+/// <para>本段测量"展开"与"ToMat 拷贝"两步（CvtColor 已在成本分解里单列），
+/// 用于判断这条往返是否值得动架构（如让管线保留单通道）。</para>
+/// </summary>
+static void RunMonoRoundTrip()
+{
+    Console.WriteLine();
+    Console.WriteLine("── 灰度往返开销：Mono8 → Rgb24 → Mat(CV_8UC3) → CvtColor 折回 ──");
+    Console.WriteLine("相机实为单通道，但 DecodeImageData 先把 Mono8 逐像素展开为 Rgb24（1→3 字节），");
+    Console.WriteLine("特征池内再用 CvtColor(BGR2GRAY) 折回单通道。本段量化这条往返各步的成本。");
+    Console.WriteLine();
+    Console.WriteLine($"{"画幅",-14}{"Mono8→Rgb24 展开",-20}{"Rgb24→Mat 拷贝",-18}{"CvtColor 折回",-16}");
+
+    foreach (var (w, h) in new[] { (1280, 960), (1920, 1080), (2448, 2048) })
+    {
+        var pixels = w * (long)h;
+        var mono = new byte[pixels];
+        for (long i = 0; i < pixels; i++)
+        {
+            mono[i] = (byte)(i & 0xFF);
+        }
+
+        // ① 复刻 DecodeImageData 的 Mono8 分支：逐像素展开为 Rgb24（ImageSharp ProcessPixelRows 同构循环）
+        var expandMs = TimeMonoOp(() =>
+        {
+            var rgb = new byte[pixels * 3];
+            for (long i = 0; i < pixels; i++)
+            {
+                var v = mono[i];
+                rgb[i * 3] = v;
+                rgb[i * 3 + 1] = v;
+                rgb[i * 3 + 2] = v;
+            }
+
+            return rgb;
+        });
+
+        // 供 ② 使用的 Rgb24 缓冲（与展开结果同形状）
+        var rgbForMat = new byte[pixels * 3];
+        for (long i = 0; i < pixels; i++)
+        {
+            var v = mono[i];
+            rgbForMat[i * 3] = v;
+            rgbForMat[i * 3 + 1] = v;
+            rgbForMat[i * 3 + 2] = v;
+        }
+
+        // ② 真实的 ToMat 路径（Rgb24→CV_8UC3）：实现是【逐像素 3 次 Marshal.WriteByte】，
+        //    不是一次拷贝 —— 若用单次 Marshal.Copy 会把这一步测低数倍。故直接调真实扩展方法。
+        var img = SixLabors.ImageSharp.Image.WrapMemory<SixLabors.ImageSharp.PixelFormats.Rgb24>(
+            rgbForMat, w, h);
+        var copyMs = TimeMatOp(() => img.ToMat());
+
+        // ③ CvtColor 折回单通道（与成本分解里的"转灰度"同参数，便于对照）
+        using var bgr = new Mat(h, w, MatType.CV_8UC3);
+        var grayMs = TimeMatOp(() =>
+        {
+            var g = new Mat();
+            Cv2.CvtColor(bgr, g, ColorConversionCodes.BGR2GRAY);
+            return g;
+        });
+
+        Console.WriteLine(
+            $"{$"{w}x{h}",-14}{expandMs,-20:F1}{copyMs,-18:F1}{grayMs,-16:F1}");
+    }
+
+    Console.WriteLine("（单位 ms/帧。注：① 是「逐像素托管循环 + 3 倍内存写入」，与 ImageSharp 的");
+    Console.WriteLine(" ProcessPixelRows 同构；② 是一次性 Marshal.Copy。这两步发生在图像解码阶段，");
+    Console.WriteLine(" 不包含在特征池的 130 ms 里 —— 它们是这条灰度往返真正未计入的部分。）");
+}
+
+/// <summary>计时返回 byte[] 的操作（含分配），取中位数。</summary>
+static double TimeMonoOp(Func<byte[]> op)
+{
+    const int Warmup = 3;
+    const int Iters = 10;
+    for (int i = 0; i < Warmup; i++)
+    {
+        op();
+    }
+
+    var samples = new List<double>(Iters);
+    var sw = new Stopwatch();
+    for (int i = 0; i < Iters; i++)
+    {
+        sw.Restart();
+        var r = op();
+        sw.Stop();
+        samples.Add(sw.Elapsed.TotalMilliseconds);
+        GC.KeepAlive(r);
+    }
+
+    samples.Sort();
+    return samples[samples.Count / 2];
+}
+
+/// <summary>计时返回 Mat 的操作（含分配与释放），取中位数。</summary>
+static double TimeMatOp(Func<Mat> op)
+{
+    const int Warmup = 3;
+    const int Iters = 10;
+    for (int i = 0; i < Warmup; i++)
+    {
+        op().Dispose();
+    }
+
+    var samples = new List<double>(Iters);
+    var sw = new Stopwatch();
+    for (int i = 0; i < Iters; i++)
+    {
+        sw.Restart();
+        var m = op();
+        sw.Stop();
+        m.Dispose();
+        samples.Add(sw.Elapsed.TotalMilliseconds);
+    }
+
+    samples.Sort();
+    return samples[samples.Count / 2];
 }

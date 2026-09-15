@@ -227,7 +227,8 @@ namespace MainAPP.Services.AI
             var roots = new List<string>
             {
                 MainAPP.Models.Settings.Instance.Ai.KnowledgeDocsFolder,
-                Path.Combine(AppContext.BaseDirectory, "Saves", "Knowledge"),
+                // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+                MainAPP.Services.DataPaths.KnowledgeDir,
             };
 
             var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

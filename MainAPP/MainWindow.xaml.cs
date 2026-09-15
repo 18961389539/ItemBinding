@@ -123,11 +123,18 @@ namespace MainAPP
         private void ApplyWindowSettings()
         {
             var settings = Settings.Instance;
-            // L368c: 验证窗口尺寸合法性，避免异常设置导致窗口过小无法显示
-            // 与 XAML MinWidth/MinHeight 保持一致
-            Width = Math.Max(1024, settings.WindowWidth);
-            Height = Math.Max(700, settings.WindowHeight);
+            // 2026-09-15 分辨率适配：窗口尺寸按当前显示器工作区夹取，并同步下调 MinWidth/MinHeight。
+            // 原先只做 Math.Max(1024, …) / Math.Max(700, …) 下限保护，在 1024×768 小屏上会让
+            // 1200×800 的默认窗口大于屏幕，导航栏与顶栏按钮落在可视区外且无法拖拽缩小。
+            // 夹取规则见 WindowSizing（含单元测试）。
+            WindowSizing.Apply(this, settings.WindowWidth, settings.WindowHeight);
             Title = settings.WindowTitle;
+
+            // 记录实际生效的尺寸，便于在 1024×768 等小屏现场直接比对"期望值 vs 应用值"
+            var workArea = SystemParameters.WorkArea;
+            LogService.Instance.Info(
+                $"[窗口] 期望 {settings.WindowWidth}×{settings.WindowHeight} → 应用 {Width:0}×{Height:0}" +
+                $"（工作区 {workArea.Width:0}×{workArea.Height:0}，最小 {MinWidth:0}×{MinHeight:0}）");
         }
 
         private void EnsureWindowMinimized()

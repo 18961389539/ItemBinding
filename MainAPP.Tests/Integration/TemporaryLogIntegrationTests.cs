@@ -10,7 +10,8 @@ namespace MainAPP.Tests.Integration;
 /// TemporaryLog 集成测试。
 /// 验证临时日志的文件创建、写入和关闭行为。
 /// TemporaryLog 为静态类，在静态构造函数中创建 Serilog 文件日志，
-/// 日志文件位于 AppContext.BaseDirectory/Saves/temp-logs/temp-log-{date}.txt。
+/// 日志文件位于统一数据根下的 temp-logs/temp-log-{date}.txt（见 <see cref="DataPaths.TempLogsDir"/>）。
+/// 2026-09-15 数据根改造后不再固定在 AppContext.BaseDirectory。
 /// 注意：CloseAndFlush 后 Log 字段不可再使用，这些测试验证初始化和写入行为。
 /// </summary>
 public class TemporaryLogIntegrationTests : IDisposable
@@ -19,7 +20,7 @@ public class TemporaryLogIntegrationTests : IDisposable
 
     public TemporaryLogIntegrationTests()
     {
-        _tempLogDir = Path.Combine(AppContext.BaseDirectory, "Saves", "temp-logs");
+        _tempLogDir = DataPaths.TempLogsDir;
     }
 
     public void Dispose()

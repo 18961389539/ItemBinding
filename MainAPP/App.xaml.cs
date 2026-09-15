@@ -83,8 +83,17 @@ namespace MainAPP
                     System.Diagnostics.Debug.WriteLine($"禁用电源节流失败: {ex}");
                 }
                 RenderOptions.ProcessRenderMode = RenderMode.Default;
+                // 2026-09-15: 数据根解析与历史数据搬运必须在日志初始化之前完成——
+                // 日志库本身也要落到新数据根，且 SQLite 文件不能在句柄打开后再搬运。
+                var migrationNote = RunDataRootMigration();
                 ConfigureImageSharpMemory();
                 InitializeLogging();
+                // 数据根结论在日志可用后回填输出，方便现场核对数据到底落在哪
+                Log.Information($"[数据根] {DataPaths.Root} | {DataPaths.ResolutionNote}");
+                if (!string.IsNullOrEmpty(migrationNote))
+                {
+                    Log.Warning($"[数据根] {migrationNote}");
+                }
                 // DI 容器初始化：注册现有单例服务，为后续渐进式迁移到构造函数注入打基础
                 // 不改变现有 .Instance 调用方式，DI 容器与新基础设施共存
                 ConfigureServices();
@@ -163,17 +172,34 @@ namespace MainAPP
             }
         }
 
-        protected override async void OnExit(ExitEventArgs e)
+        protected override void OnExit(ExitEventArgs e)
         {
+            // ★ 2026-09-15 修复：由 async void 改为同步方法 + 有界阻塞等待。
+            //
+            // 原因：WPF 调用 OnExit 时**不会 await 它**。原实现是 `async void`，命中第一个真正
+            // 让出线程的 await 后，WPF 继续走完关闭流程并结束进程；该 await 的续体被投递到已在
+            // 关闭的 Dispatcher 上，永远不会被调度 —— 后面的代码等于不存在。
+            //
+            // 修复前的实际后果（全部被跳过）：设置落盘、待处理条码落盘、ToVGT/配方TCP/相机/AI/
+            // 运维门户/llama-server 各服务停止、扫码枪关闭（含 AutoReconnect 禁用与 SDK 清理窗口）、
+            // DI 容器释放、日志刷盘。
+            //
+            // 为何同步阻塞是安全的：等待对象都是后台 Task，且 MemoryDiagnostics.RunPeriodicSnapshotAsync
+            // 与 DataRetentionService.RunPeriodicCleanupAsync 内部均已 ConfigureAwait(false)，
+            // 不会回调 Dispatcher；所有等待都有超时上限，即使个别任务卡住也不会永久挂起。
+            // 退出期间界面本就不需要响应，阻塞是可接受的。
+#pragma warning disable VSTHRD002 // 退出流程必须同步等待，异步等待在此处等价于不等待
+            SaveCriticalStateBeforeShutdown();
+
             // M322a: 分段包 try-catch，避免单个清理操作抛出跳过后续清理
             try { _memorySnapshotCts.Cancel(); }
             catch (Exception ex) { LogService.Instance.Error($"取消内存快照任务失败: {ex}"); }
-            try { await (_memorySnapshotTask?.WaitAsync(TimeSpan.FromSeconds(OnExitMemorySnapshotWaitSec)) ?? Task.CompletedTask); }
+            try { (_memorySnapshotTask?.WaitAsync(TimeSpan.FromSeconds(OnExitMemorySnapshotWaitSec)) ?? Task.CompletedTask).GetAwaiter().GetResult(); }
             catch (Exception ex) { LogService.Instance.Error($"等待内存快照任务退出失败: {ex}"); }
             // H63: 等待任务完全退出后再 Dispose CTS，避免任务访问已释放的 token 造成 use-after-dispose
             if (_memorySnapshotTask is not null && !_memorySnapshotTask.IsCompleted)
             {
-                try { await _memorySnapshotTask.WaitAsync(TimeSpan.FromSeconds(OnExitMemorySnapshotFinalWaitSec)); }
+                try { _memorySnapshotTask.WaitAsync(TimeSpan.FromSeconds(OnExitMemorySnapshotFinalWaitSec)).GetAwaiter().GetResult(); }
                 catch (Exception ex) { LogService.Instance.Error($"等待内存快照任务最终退出失败: {ex}"); }
             }
             try { _memorySnapshotCts.Dispose(); }
@@ -181,11 +207,11 @@ namespace MainAPP
             // 数据/日志清理任务取消与等待
             try { _dataCleanupCts.Cancel(); }
             catch (Exception ex) { LogService.Instance.Error($"取消数据清理任务失败: {ex}"); }
-            try { await (_dataCleanupTask?.WaitAsync(TimeSpan.FromSeconds(OnExitDataCleanupWaitSec)) ?? Task.CompletedTask); }
+            try { (_dataCleanupTask?.WaitAsync(TimeSpan.FromSeconds(OnExitDataCleanupWaitSec)) ?? Task.CompletedTask).GetAwaiter().GetResult(); }
             catch (Exception ex) { LogService.Instance.Error($"等待数据清理任务退出失败: {ex}"); }
             if (_dataCleanupTask is not null && !_dataCleanupTask.IsCompleted)
             {
-                try { await _dataCleanupTask.WaitAsync(TimeSpan.FromSeconds(OnExitDataCleanupFinalWaitSec)); }
+                try { _dataCleanupTask.WaitAsync(TimeSpan.FromSeconds(OnExitDataCleanupFinalWaitSec)).GetAwaiter().GetResult(); }
                 catch (Exception ex) { LogService.Instance.Error($"等待数据清理任务最终退出失败: {ex}"); }
             }
             try { _dataCleanupCts.Dispose(); }
@@ -215,7 +241,7 @@ namespace MainAPP
                     try
                     {
                         // M293a: 显式超时，避免无超时阻塞退出流程
-                        await saveTask.WaitAsync(TimeSpan.FromSeconds(OnExitSaveTimeoutSec));
+                        saveTask.WaitAsync(TimeSpan.FromSeconds(OnExitSaveTimeoutSec)).GetAwaiter().GetResult();
                     }
                     catch (Exception ex)
                     {
@@ -224,7 +250,7 @@ namespace MainAPP
                     // H63: 确保任务已退出后再 Dispose，避免 use-after-dispose
                     if (!saveTask.IsCompleted)
                     {
-                        try { await saveTask.WaitAsync(TimeSpan.FromSeconds(OnExitSaveFinalWaitSec)); }
+                        try { saveTask.WaitAsync(TimeSpan.FromSeconds(OnExitSaveFinalWaitSec)).GetAwaiter().GetResult(); }
                         catch (Exception ex) { LogService.Instance.Error($"等待保存任务最终退出失败: {ex}"); }
                     }
                 }
@@ -241,7 +267,7 @@ namespace MainAPP
             {
                 // 通过 DI 获取 IToVGTService 并释放（替代原 ToVGT.StopAsync() 静态调用）
                 var toVgt = Services.GetRequiredService<IToVGTService>();
-                await toVgt.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(OnExitToVGTStopSec));
+                toVgt.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(OnExitToVGTStopSec)).GetAwaiter().GetResult();
             }
             catch (Exception ex)
             {
@@ -274,12 +300,12 @@ namespace MainAPP
             catch (Exception ex) { LogService.Instance.Error($"取消扫码枪初始化 CTS 失败: {ex}"); }
             if (_scannerInitializeTask is not null)
             {
-                try { await _scannerInitializeTask.WaitAsync(TimeSpan.FromSeconds(OnExitScannerInitWaitSec)); }
+                try { _scannerInitializeTask.WaitAsync(TimeSpan.FromSeconds(OnExitScannerInitWaitSec)).GetAwaiter().GetResult(); }
                 catch (Exception ex) { LogService.Instance.Error($"等待扫码枪初始化任务退出失败: {ex}"); }
                 // H64: 即使超时也等待任务最终退出（较短二次等待），确保不再访问设备后再 Close
                 if (!_scannerInitializeTask.IsCompleted)
                 {
-                    try { await _scannerInitializeTask.WaitAsync(TimeSpan.FromSeconds(OnExitScannerInitFinalWaitSec)); }
+                    try { _scannerInitializeTask.WaitAsync(TimeSpan.FromSeconds(OnExitScannerInitFinalWaitSec)).GetAwaiter().GetResult(); }
                     catch (Exception ex) { LogService.Instance.Error($"等待扫码枪初始化任务最终退出失败: {ex}"); }
                 }
             }
@@ -306,7 +332,7 @@ namespace MainAPP
             // FIX(2026-08-13): 给海康 SDK 短暂清理窗口。CloseDevice/DestroyHandle 已同步调用，
             // 但 SDK 内部非托管线程完成网络会话拆除需要时间；若进程立刻退出会截断该流程，
             // 设备会被驱动标记为占用（MVS 等打不开），需等 SDK 会话超时才恢复。
-            try { await Task.Delay(500); }
+            try { Thread.Sleep(500); }
             catch (Exception ex) { LogService.Instance.Error($"等待 SDK 清理失败: {ex}"); }
 
             Log.Information("应用程序退出");
@@ -321,31 +347,16 @@ namespace MainAPP
             }
             // L120: base.OnExit 移到 CloseAndFlush 之前调用，确保基类退出逻辑在日志系统仍可用时执行
             base.OnExit(e);
-            // M18: Settings.Save() 可能抛 IOException（磁盘满/文件锁定），需保护以确保 Log.CloseAndFlush 执行
-            // M342b: 仅在设置成功加载后才保存，避免启动失败时用默认值覆盖用户配置
-            try
-            {
-                if (_settingsLoaded)
-                {
-                    Settings.Instance.Save();
-                }
-                else
-                {
-                    Log.Warning("设置未成功加载，跳过 OnExit 保存以避免覆盖用户配置");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "退出时保存设置失败");
-            }
-            finally
-            {
-                // H78b/L380a: TemporaryLog.CloseAndFlush 移至此处并包 try-catch，
-                // 与 Log.CloseAndFlush 相邻，确保 OnExit 清理过程中的日志已落盘后再关闭
-                try { TemporaryLog.CloseAndFlush(); }
-                catch (Exception ex) { try { Log.Error(ex, "TemporaryLog.CloseAndFlush 失败"); } catch { } }
-                Log.CloseAndFlush();
-            }
+            // 2026-09-15: 原先在此处的 Settings.Save() 已上移到 OnExit 开头同步执行
+            // （此处位于多个 await 之后，实际从未被执行到）。日志落盘另由 ProcessExit 兜底，
+            // 因此这一段即使跑不到也不会丢失用户配置。
+            // H78b/L380a: TemporaryLog.CloseAndFlush 与 Log.CloseAndFlush 相邻，
+            // 确保 OnExit 清理过程中的日志已落盘后再关闭
+            try { TemporaryLog.CloseAndFlush(); }
+            catch (Exception ex) { try { Log.Error(ex, "TemporaryLog.CloseAndFlush 失败"); } catch { } }
+            try { Log.CloseAndFlush(); }
+            catch { /* 日志系统已关闭，失败无上报途径 */ }
+#pragma warning restore VSTHRD002
         }
 
         private void RecipesManage_CurrentRecipeChanged(Recipe? recipe)
@@ -361,12 +372,55 @@ namespace MainAPP
             }
         }
 
+        /// <summary>
+        /// 2026-09-15: 解析统一数据根并把 exe 目录下的历史数据搬运过去。
+        /// 任何异常都不阻断启动——最坏情况是"不迁移"，历史数据仍完整留在原位。
+        /// </summary>
+        private static string? RunDataRootMigration()
+        {
+            try
+            {
+                return DataRootMigrator.MigrateIfNeeded();
+            }
+            catch (Exception ex)
+            {
+                return $"数据根迁移检查失败（不影响启动）：{ex}";
+            }
+        }
+
+        /// <summary>
+        /// 2026-09-15: 退出时"必须落盘"的动作，必须在 <see cref="OnExit"/> 的任何 await 之前同步执行
+        /// （原因见 OnExit 顶部注释：WPF 不 await OnExit，首个 await 之后的代码不会执行）。
+        /// 本方法自身绝不抛异常，避免影响后续清理。
+        /// </summary>
+        private static void SaveCriticalStateBeforeShutdown()
+        {
+            try
+            {
+                // M342b: 仅在设置成功加载后才保存，避免启动失败时用默认值覆盖用户配置
+                if (_settingsLoaded)
+                {
+                    Settings.Instance.Save();
+                    Log.Information("[退出] 设置已保存");
+                }
+                else
+                {
+                    Log.Warning("[退出] 设置未成功加载，跳过保存以避免覆盖用户配置");
+                }
+            }
+            catch (Exception ex)
+            {
+                try { Log.Error(ex, "[退出] 保存设置失败"); } catch { /* 日志不可用则放弃 */ }
+            }
+        }
+
         private static void InitializeLogging()
         {
-            var databaseDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Saves", "DataBase");
+            // 2026-09-15: 日志路径跟随统一数据根（DataPaths），不再写死在 exe 目录
+            var databaseDirectory = DataPaths.DatabaseDir;
             Directory.CreateDirectory(databaseDirectory);
-            var logDbPath = Path.Combine(databaseDirectory, "Logs.db");
-            var logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+            var logDbPath = DataPaths.LogDatabase;
+            var logDirectory = DataPaths.LogsDir;
             Directory.CreateDirectory(logDirectory);
 
             Log.Logger = new LoggerConfiguration()
@@ -383,6 +437,15 @@ namespace MainAPP
                                     batchSize: LogBatchSize,
                                     maxDatabaseSize: LogMaxDbSizeMb)
                 .CreateLogger();
+
+            // 2026-09-15 兜底：OnExit 里的 Log.CloseAndFlush() 位于多个 await 之后，
+            // 而 WPF 不 await async void OnExit —— 那段代码可能来不及执行，导致最后一段日志丢失。
+            // ProcessExit 在进程真正结束前触发，此处再刷一次；CloseAndFlush 可重复调用。
+            AppDomain.CurrentDomain.ProcessExit += static (_, _) =>
+            {
+                try { Log.CloseAndFlush(); }
+                catch { /* 进程已进入退出流程，失败也不再有上报途径 */ }
+            };
         }
 
         /// <summary>
@@ -609,7 +672,8 @@ namespace MainAPP
 
         private void InitializeRecipes()
         {
-            var recipesPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Saves", "Recipes");
+            // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+            var recipesPath = DataPaths.RecipesDir;
             // M267: 先订阅事件再 Initialize，避免 Initialize 设置默认配方时事件丢失，无需手动补偿调用
             RecipesManage.Instance.CurrentRecipeChanged += RecipesManage_CurrentRecipeChanged;
             RecipesManage.Instance.Initialize(recipesPath);

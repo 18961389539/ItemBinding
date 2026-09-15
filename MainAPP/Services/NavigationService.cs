@@ -204,10 +204,9 @@ namespace MainAPP.Services
                 var window = MainWindow;
                 if (window is null) return;
                 var settings = Settings.Instance;
-                // L368c: 验证窗口尺寸合法性，避免异常设置导致窗口过小无法显示
-                // 与 XAML MinWidth/MinHeight 保持一致
-                window.Width = Math.Max(1024, settings.WindowWidth);
-                window.Height = Math.Max(700, settings.WindowHeight);
+                // 2026-09-15 分辨率适配：与 MainWindow.ApplyWindowSettings 共用同一套夹取规则，
+                // 避免两处各写一份 Math.Max(1024/700) 下限再次分叉（详见 WindowSizing）。
+                WindowSizing.Apply(window, settings.WindowWidth, settings.WindowHeight);
                 window.Title = settings.WindowTitle;
             });
         }

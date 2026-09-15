@@ -15,8 +15,8 @@
     Title="配方详情"
     Width="1200"
     Height="800"
-    MinWidth="1024"
-    MinHeight="680"
+    MinWidth="900"
+    MinHeight="600"
     d:DataContext="{d:DesignInstance vm:RecipeViewModel}"
     WindowStartupLocation="CenterOwner"
     mc:Ignorable="d">

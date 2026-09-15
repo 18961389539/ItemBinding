@@ -72,7 +72,8 @@ public sealed class ReportService : IDisposable
     {
         var data = await LoadAsync(from, to, ct).ConfigureAwait(false);
         var html = RenderHtml(from, to, data);
-        var dir = Path.Combine(AppContext.BaseDirectory, "Saves", "Reports");
+        // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+        var dir = DataPaths.ReportsDir;
         Directory.CreateDirectory(dir);
         var path = Path.Combine(dir, $"日报_{from:yyyyMMdd}.html");
         await File.WriteAllTextAsync(path, html, Encoding.UTF8, ct).ConfigureAwait(false);

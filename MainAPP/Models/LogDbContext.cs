@@ -1,3 +1,4 @@
+using MainAPP.Services;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Globalization;
@@ -20,12 +21,13 @@ namespace MainAPP.Models
         public DbSet<LogEntry> Logs => Set<LogEntry>();
 
         /// <summary>
-        /// 配置数据库连接，使用 SQLite 并指向应用目录的 Saves/DataBase/Logs.db。
+        /// 配置数据库连接，使用 SQLite 并指向统一数据根（<see cref="DataPaths.Root"/>）的 Saves/DataBase/Logs.db。
         /// 不在此处创建目录：Serilog 首次写入时自行创建，未写入前查询应返回空。
+        /// 2026-09-15 起不再固定写死在 exe 目录。
         /// </summary>
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            var dbPath = Path.Combine(AppContext.BaseDirectory, "Saves", "DataBase", "Logs.db");
+            var dbPath = DataPaths.LogDatabase;
             optionsBuilder.UseSqlite($"Data Source={dbPath}");
         }
 

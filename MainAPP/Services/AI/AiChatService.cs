@@ -812,7 +812,8 @@ namespace MainAPP.Services.AI
 
             try
             {
-                var dir = Path.Combine(AppContext.BaseDirectory, "Saves", "Knowledge", "Cases");
+                // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+                var dir = DataPaths.KnowledgeCasesDir;
                 Directory.CreateDirectory(dir);
 
                 var safe = string.Join("_", title.Split(Path.GetInvalidFileNameChars()));

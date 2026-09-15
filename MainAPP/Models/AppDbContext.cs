@@ -1,3 +1,4 @@
+using MainAPP.Services;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
@@ -24,18 +25,18 @@ namespace MainAPP.Models
         public DbSet<DbModel> BarcodeData { get; private set; } = null!;
 
         /// <summary>
-        /// 配置数据库连接，使用 SQLite 并将数据库文件存放在应用目录的 DataBase 子目录下
+        /// 配置数据库连接，使用 SQLite 并将数据库文件存放在统一数据根（<see cref="DataPaths.Root"/>）的
+        /// DataBase 子目录下。2026-09-15 起不再固定写死在 exe 目录。
         /// </summary>
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            var baseDir = AppContext.BaseDirectory;
-            var dbDir = Path.Combine(baseDir, "DataBase");
+            var dbDir = DataPaths.DatabaseDir;
             // L39: 使用 Interlocked.CompareExchange 确保目录创建只执行一次，避免重复的系统调用
             if (Interlocked.CompareExchange(ref _directoryEnsured, 1, 0) == 0)
             {
                 Directory.CreateDirectory(dbDir);
             }
-            var dbPath = Path.Combine(dbDir, "barcode_data.db");
+            var dbPath = DataPaths.BarcodeDatabase;
             // REVIEW-FIX: 连接串显式设置 Default Timeout=30（秒），Microsoft.Data.Sqlite 打开连接时
             // 据此执行 PRAGMA busy_timeout=30000，避免多写并发（检测入队 flush / 清库 / 批量删除 /
             // CSV 导入）时立即抛 SQLITE_BUSY 导致已出队记录静默丢失。

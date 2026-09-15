@@ -11,8 +11,8 @@
     Title="Chart Analysis"
     Width="1600"
     Height="1000"
-    MinWidth="1200"
-    MinHeight="800"
+    MinWidth="900"
+    MinHeight="600"
     Background="{StaticResource TechPageBackgroundBrush}"
     WindowStartupLocation="CenterScreen"
     mc:Ignorable="d">

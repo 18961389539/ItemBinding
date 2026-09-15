@@ -1,3 +1,4 @@
+using MainAPP.Services;
 using System.IO;
 
 namespace MainAPP.Models
@@ -23,8 +24,10 @@ namespace MainAPP.Models
         public int MinRecentDays { get; set; } = 3;
 
         /// <summary>
-        /// 检测结果图像的保存目录
+        /// 检测结果图像的保存目录。
+        /// 2026-09-15: 默认值跟随统一数据根（DataPaths）；已保存的设置文件里若含旧的绝对路径，
+        /// 由设置页迁移逻辑处理（见 SettingsViewModel）。
         /// </summary>
-        public string PicturesSaveFolder { get; set; } = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Saves", "Pictures");
+        public string PicturesSaveFolder { get; set; } = DataPaths.PicturesDir;
     }
 }

@@ -22,9 +22,11 @@ public static class LicenseService
         -----END PUBLIC KEY-----
         """;
 
-    private static readonly string LicenseFilePath =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ItemBinding", "license.txt");
+    // 2026-09-15: 授权文件从 %LOCALAPPDATA%（按用户隔离）迁到统一数据根（按机器）。
+    // 原先"业务数据跟机器走、授权文件跟人走"的作用域错配，正是现场
+    // "换 Windows 账户运行就要求重新激活"（授权文件与指纹双重失配）的根因。
+    // 旧位置仅作为读取回退保留，保证老机器上已激活的文件仍能被识别；写入只写新位置。
+    private static string LicenseFilePath => DataPaths.LicenseFile;
 
     /// <summary>最近一次校验结果（供 UI 展示授权状态）。</summary>
     public static LicenseCheckResult? LastResult { get; private set; }
@@ -35,13 +37,43 @@ public static class LicenseService
     /// <summary>是否已激活且当前有效（缓存启动时结果，避免每帧采集硬件指纹）。</summary>
     public static bool IsActivated { get; private set; }
 
+    /// <summary>
+    /// 读取已保存的激活码。优先新位置（数据根），为空时回退旧位置（%LOCALAPPDATA%），
+    /// 兼容升级前已激活的机器。
+    /// </summary>
+    private static string? ReadStoredCode()
+    {
+        if (File.Exists(LicenseFilePath))
+        {
+            var current = File.ReadAllText(LicenseFilePath).Trim();
+            if (!string.IsNullOrEmpty(current))
+            {
+                return current;
+            }
+        }
+
+        // 兼容回退：旧版按用户存放的授权文件
+        var legacyPath = DataPaths.LegacyLicenseFile;
+        if (File.Exists(legacyPath))
+        {
+            var legacy = File.ReadAllText(legacyPath).Trim();
+            if (!string.IsNullOrEmpty(legacy))
+            {
+                LogService.Instance.Info($"[LIC] 在旧位置发现授权文件，已沿用：{legacyPath}（下次激活将写入数据根 {LicenseFilePath}）");
+                return legacy;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>程序启动时调用：加载已保存激活码并校验。有效则记录激活状态。</summary>
     public static bool ValidateAtStartup()
     {
         string? code;
         try
         {
-            code = File.Exists(LicenseFilePath) ? File.ReadAllText(LicenseFilePath).Trim() : null;
+            code = ReadStoredCode();
         }
         catch
         {

@@ -30,8 +30,8 @@ namespace MainAPP.Services
             // 避免 TypeInitializationException 使类型永久不可用
             try
             {
-                // L353: 统一使用 AppContext.BaseDirectory，与项目中其他路径拼接保持一致
-                var tempLogDir = Path.Combine(AppContext.BaseDirectory, "Saves/temp-logs");
+                // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+                var tempLogDir = DataPaths.TempLogsDir;
                 Directory.CreateDirectory(tempLogDir);
 
                 Log = new LoggerConfiguration()
@@ -39,6 +39,12 @@ namespace MainAPP.Services
                     .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
                     .WriteTo.File(Path.Combine(tempLogDir, "temp-log-.txt"), rollingInterval: RollingInterval.Day, retainedFileCountLimit: 7)
                     .CreateLogger();
+
+                // 2026-09-15 兜底：App.OnExit 中的 CloseAndFlush 位于多个 await 之后，
+                // 而 WPF 不 await async void OnExit —— 那段代码可能来不及执行。
+                // 这里在"本类型确实被使用过"的前提下注册进程退出兜底，保证临时日志不丢；
+                // 未使用过 TemporaryLog 时不会走到静态构造函数，因而也不会多生成空日志文件。
+                AppDomain.CurrentDomain.ProcessExit += static (_, _) => CloseAndFlush();
             }
             catch (Exception ex)
             {

@@ -10,7 +10,7 @@ namespace MainAPP.Tests.Integration;
 /// 验证日志数据库的读取和清空操作。
 /// 由于 Serilog SQLite sink 为异步批量写入，测试通过 ADO.NET 直接插入日志记录，
 /// 绕过 Serilog 的缓冲机制，以验证 LoadLogsAsync/ClearLogsAsync 的 SQL 和解析逻辑。
-/// 注意：LogDatabaseService 为单例，数据库路径固定在 Saves/DataBase/Logs.db。
+/// 注意：LogDatabaseService 为单例，数据库路径固定在统一数据根下的 Saves/DataBase/Logs.db。
 /// </summary>
 public class LogDatabaseServiceIntegrationTests : IAsyncDisposable
 {
@@ -20,9 +20,10 @@ public class LogDatabaseServiceIntegrationTests : IAsyncDisposable
 
     public LogDatabaseServiceIntegrationTests()
     {
-        // LogDatabaseService 使用的数据库路径：Saves/DataBase/Logs.db（AppContext.BaseDirectory 下）
-        _dbDir = Path.Combine(AppContext.BaseDirectory, "Saves", "DataBase");
-        _dbPath = Path.Combine(_dbDir, "Logs.db");
+        // 2026-09-15 数据根改造：与 LogDatabaseService 使用同一路径来源，
+        // 不再固定在 AppContext.BaseDirectory。业务库与日志库现已同目录。
+        _dbDir = DataPaths.DatabaseDir;
+        _dbPath = DataPaths.LogDatabase;
         Directory.CreateDirectory(_dbDir);
         // 每次测试前重建数据库，确保干净状态
         ResetDatabase();

@@ -38,7 +38,8 @@ namespace MainAPP.Services
 
         private AuthService()
         {
-            _storePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Saves", "Security", "users.json");
+            // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+            _storePath = Path.Combine(DataPaths.SecurityDir, "users.json");
             Reload();
         }
 

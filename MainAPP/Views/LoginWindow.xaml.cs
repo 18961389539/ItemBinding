@@ -18,6 +18,10 @@ namespace MainAPP.Views
         public LoginWindow()
         {
             InitializeComponent();
+            // 2026-09-15 分辨率适配：920×600 在 1024×768 @100% 下可放，
+            // 但目标机若为 125% 缩放（有效宽 819 DIP）就会超出屏幕。
+            // 仅收敛尺寸、不改动本窗口自定义的最小尺寸策略。
+            WindowSizing.ApplySizeOnly(this, Width, Height);
             // L260: Loaded lambda 改为命名方法
             Loaded += LoginWindow_Loaded;
         }

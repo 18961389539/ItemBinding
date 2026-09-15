@@ -22,9 +22,10 @@ namespace MainAPP.Models
     {
         private static volatile Settings? _instance;
         private static readonly JsonSerializerOptions s_jsonOpts = new JsonSerializerOptions { WriteIndented = true };
-        // L266: 路径使用多参数 Path.Combine，避免正斜杠跨平台兼容性问题
-        private static readonly string SettingsFolder = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Saves", "Settings");
-        private static readonly string SettingsFile = Path.Combine(SettingsFolder, "settings.json");
+        // 2026-09-15: 改为跟随统一数据根（DataPaths），不再写死在 exe 目录。
+        // 用计算属性而非静态字段，确保取值发生在数据根解析与历史数据迁移之后。
+        private static string SettingsFolder => DataPaths.SettingsDir;
+        private static string SettingsFile => DataPaths.SettingsFile;
 
         // ===== 子配置类实例（不参与 JSON 序列化，保持扁平结构）=====
         // 子配置类的数据通过下方的转发属性被序列化/反序列化

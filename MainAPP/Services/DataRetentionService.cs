@@ -173,7 +173,8 @@ namespace MainAPP.Services
         /// </summary>
         private static async Task VacuumLogDatabaseAsync(CancellationToken cancellationToken)
         {
-            var dbPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Saves", "DataBase", "Logs.db");
+            // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+            var dbPath = DataPaths.LogDatabase;
             if (!System.IO.File.Exists(dbPath)) return;
 
             using var connection = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={dbPath}");

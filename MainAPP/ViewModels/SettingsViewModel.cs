@@ -587,7 +587,8 @@ namespace MainAPP.ViewModels
             ExistLoginTimeout = DefaultExistLoginTimeout;
             BackupExpireDays = DefaultBackupExpireDays;
             // L109: Path.Combine 改为多参数形式，避免路径分隔符硬编码
-            PicturesSaveFolder = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Saves", "Pictures");
+            // 2026-09-15: 恢复默认值改为跟随统一数据根，不再写死在 exe 目录
+            PicturesSaveFolder = DataPaths.PicturesDir;
             WindowWidth = DefaultWindowWidth;
             WindowHeight = DefaultWindowHeight;
             WindowTitle = DefaultWindowTitle;

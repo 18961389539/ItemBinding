@@ -18,6 +18,10 @@ namespace MainAPP.Views
         public RecipeWindow()
         {
             InitializeComponent();
+            // 2026-09-15 分辨率适配：XAML 的 1200×800 在 1024×768 上会超出屏幕，
+            // 且原 MinWidth=1024 恰等于屏宽、零余量导致底部按钮不可达。
+            // 这里按当前工作区夹取并下调最小尺寸，细节见 WindowSizing。
+            WindowSizing.Apply(this, Width, Height);
             Closing += RecipeWindow_Closing;
         }
 

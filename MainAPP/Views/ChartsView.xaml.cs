@@ -25,6 +25,10 @@ namespace MainAPP.Views
         public ChartsView(IEnumerable<DbModel> dbModels)
         {
             InitializeComponent();
+            // 2026-09-15 分辨率适配：XAML 声明的 1600×1000 是按大屏设计的，
+            // 在 1024×768 上会超出屏幕且原 MinWidth=1200 让用户无法拖拽缩小。
+            // 这里按当前工作区夹取（同时下调 MinWidth/MinHeight），细节见 WindowSizing。
+            WindowSizing.Apply(this, Width, Height);
             MainTabControl.SelectionChanged += MainTabControl_SelectionChanged;
 
             _viewModel = new ChartsViewModel(dbModels);

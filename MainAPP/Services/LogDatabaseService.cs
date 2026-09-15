@@ -15,7 +15,8 @@ namespace MainAPP.Services
 
         private LogDatabaseService()
         {
-            _databasePath = Path.Combine(AppContext.BaseDirectory, "Saves", "DataBase", "Logs.db");
+            // 2026-09-15: 跟随统一数据根，不再写死在 exe 目录
+            _databasePath = DataPaths.LogDatabase;
         }
 
         /// <summary>

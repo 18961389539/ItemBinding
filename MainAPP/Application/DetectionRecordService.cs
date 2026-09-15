@@ -202,15 +202,18 @@ public sealed class DetectionRecordService
                                                                 float offsetAngle,
                                                                 bool angleDetectionEnabled,
                                                                 CancellationToken cancellationToken = default,
-                                                                // REVIEW(2026-08-05): 配方平移补偿（mm），ImageToPhysical 转换后加在最终世界坐标上
-                                                                float offsetX = 0,
-                                                                float offsetY = 0,
+                                                                // 2026-09-15: 原先的 offsetX/offsetY（世界坐标系常量平移补偿）已移除 ——
+                                                                // 世界系常量方向固定，只在单一产品角度下成立，现改由产品局部坐标系的抓取点偏移承担。
                                                                 // 2026-09-07: 配方级面积过滤覆盖（YoloTool.EdgeDetection，null=回退全局 Settings.Algorithm 值）
                                                                 double? recipeMinMaskAreaPixels = null,
                                                                 double? recipeMaxMaskAreaPixels = null,
                                                                 // 2026-09-08: 配方级灰度判向覆盖（YoloTool.IsBrightnessDirectionEnabled，null=回退全局
                                                                 // Settings.Algorithm.BrightnessDirectionEnabled；仅在未启用角度检测时参与，见 else 分支）
-                                                                bool? recipeBrightnessDirectionEnabled = null)
+                                                                bool? recipeBrightnessDirectionEnabled = null,
+                                                                // 2026-09-15: 配方级抓取点偏移（产品局部坐标系，mm）。
+                                                                // 长轴正值 = 朝产品头部；短轴正值 = 面朝头部时的右手侧；均为 0 时抓取点即矩形中心。
+                                                                float grabOffsetLongMm = 0,
+                                                                float grabOffsetShortMm = 0)
     {
         ArgumentNullException.ThrowIfNull(scanerResult);
         ArgumentNullException.ThrowIfNull(edgeResults);
@@ -264,6 +267,8 @@ public sealed class DetectionRecordService
         int passedFilterCount = 0;        // 通过 边界+面积 过滤的有效目标数
         int filteredByBoundaryCount = 0;  // 因越界（距边缘不足边距）被拒数
         int filteredByAreaCount = 0;      // 因掩码面积超范围被拒数
+        // 2026-09-15: 因朝向不可信而把"抓取点长轴偏移"退化为 0 的目标数（策略：宁可抓在中心，也不抓反）
+        int grabLongSuppressedByUntrustedHead = 0;
         var detectLogFrame = scanerResult.FrameNumber;
 
         int idx = 0;
@@ -375,10 +380,10 @@ public sealed class DetectionRecordService
                 (contourWorldX, contourWorldY) = transformer.ImageToPhysical(imageX, imageY);
             }
 
-            // REVIEW(2026-08-05): 配方平移补偿（OffsetX/OffsetY，mm），加在图像→世界坐标转换之后、落库/发送之前。
-            // 全局常量偏移属同构变换，不影响位置/角度去重匹配（相对差不变）。
-            contourWorldX += offsetX;
-            contourWorldY += offsetY;
+            // 2026-09-15: 原先在此处叠加的世界坐标系常量平移补偿（OffsetX/OffsetY）已移除。
+            // 抓取点偏移改由产品局部坐标系表达，且必须在头尾朝向确定之后才能计算
+            // （长轴是无向轴，不带头尾符号会有 50% 概率偏到反方向），见下方消歧链收口之后的
+            // GrabPointCalculator 调用。此处 contourWorld 保持为"矩形中心"，供角度去重与 UI 使用。
             var barcode = "noread";
             var barcodeScore = 0d;
             var imageBarcodeX = 0d;
@@ -620,6 +625,49 @@ public sealed class DetectionRecordService
                           ?? fallbackAngle;
             // 头尾翻转标记：与实发角完全同源（二维码 → 模型 → 特征池），供 UI 箭头复现朝向
             headFlipped = IsHeadOppositeDegrees(modelAngle.Value, fallbackAngle);
+
+            // ── 抓取点（2026-09-15）：产品局部坐标系偏移，必须在头尾朝向确定之后计算 ──
+            // 长轴是无向轴（MinAreaRect.Angle 已做 ±180° 二义消除），不带头尾符号会有 50% 概率偏到反方向。
+            // 矩形在推理图坐标系上算出，而 imageX/imageY 已按缩放比还原到原图坐标系；
+            // 非等比缩放（ResizeScale != ResizeScaleY）会改变方向，故先把长轴方向按同一比例换算过去。
+            var rectAngleRad = maskMinAreaRect.Angle * Math.PI / 180.0;
+            var longAxisDirX = Math.Cos(rectAngleRad);
+            var longAxisDirY = Math.Sin(rectAngleRad);
+            if (isResize)
+            {
+                longAxisDirX *= resizeWidth;
+                longAxisDirY *= resizeHeight;
+            }
+
+            // 朝向是否可信：至少一条消歧路径给出明确信号；全部回退到无向角时不可信。
+            var headDirectionTrusted = barcodeAngle.HasValue
+                                    || modelFlipAngle.HasValue
+                                    || (poolDecision is { Decisive: true });
+            var effectiveGrabLongMm = grabOffsetLongMm;
+            if (!headDirectionTrusted && grabOffsetLongMm != 0)
+            {
+                // 策略 A：宁可抓在中心，也不要抓反 —— 朝向不可信时长轴偏移退化，短轴偏移仍生效
+                effectiveGrabLongMm = 0;
+                grabLongSuppressedByUntrustedHead++;
+            }
+
+            var (grabImageX, grabImageY) = GrabPointCalculator.ComputeImagePoint(
+                transformer, imageX, imageY, longAxisDirX, longAxisDirY, headFlipped == true,
+                effectiveGrabLongMm, grabOffsetShortMm);
+
+            double grabWorldX, grabWorldY;
+            if (transformer.IsInitialized)
+            {
+                (grabWorldX, grabWorldY) = transformer.ImageToPhysical(grabImageX, grabImageY);
+            }
+            else
+            {
+                // 未标定：世界坐标即原图像素坐标（与上方 contourWorld 同口径）
+                grabWorldX = grabImageX;
+                grabWorldY = grabImageY;
+            }
+
+            // 注意：角度去重仍用矩形中心（contourWorld），与本改动无关，避免影响既有锁角行为。
             angle = _angleTracker.Resolve(
                 scanerResult.EncoderValue, contourWorldX, contourWorldY, modelAngle);
             angleDrawInfos.Add(angleDrawInfo);
@@ -627,10 +675,13 @@ public sealed class DetectionRecordService
 
             var dbModel = new DbModel
             {
+                // ImageX/ImageY 仍为「产品中心」：二维码到产品的距离统计等分析依赖它，不随抓取点变化。
                 ImageX = imageX,
                 ImageY = imageY,
-                WorldX = contourWorldX,
-                WorldY = contourWorldY,
+                // 2026-09-15: WorldX/WorldY 改为「抓取点」—— 它就是要发送给机器人的坐标，
+                // 机器人协议 $X/$Y、VGT 发送、位置去重与范围查询都消费这两个字段。
+                WorldX = grabWorldX,
+                WorldY = grabWorldY,
                 Angle = angle,
                 ImageBarcodeX = imageBarcodeX,
                 ImageBarcodeY = imageBarcodeY,
@@ -690,9 +741,13 @@ public sealed class DetectionRecordService
         if (idx > 0)
         {
             var filteredTotal = idx - passedFilterCount;
+            // 2026-09-15: 朝向不可信时抓取点长轴偏移会退化为中心（策略 A），此处显式提示，避免现场"配了没效果"困惑
+            var grabNote = grabLongSuppressedByUntrustedHead > 0
+                ? $" 抓取点长轴偏移退化={grabLongSuppressedByUntrustedHead}(朝向不可信)"
+                : string.Empty;
             LogService.Instance.Info(
                 $"[识别] 帧={detectLogFrame} 检出={idx} 有效={passedFilterCount} " +
-                $"被过滤={filteredTotal}(边界={filteredByBoundaryCount},面积={filteredByAreaCount})");
+                $"被过滤={filteredTotal}(边界={filteredByBoundaryCount},面积={filteredByAreaCount}){grabNote}");
         }
 
         // M175: 将 cancellationToken 传递给 AddRangeAsync，支持取消批量写入

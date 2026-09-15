@@ -876,8 +876,10 @@ namespace MainAPP.Services.AI
                 : new
                 {
                     name = current.Name,
-                    offsetX = current.OffsetX,
-                    offsetY = current.OffsetY,
+                    // 2026-09-15: 抓取点偏移（产品局部坐标系，mm）。原世界系常量平移补偿 OffsetX/OffsetY 已移除，
+                    // 旧配方值在加载时已一次性迁移到这两项。
+                    grabOffsetLongMm = current.GrabOffsetLongMm,
+                    grabOffsetShortMm = current.GrabOffsetShortMm,
                     offsetAngle = current.OffsetAngle,
                     edgeDetection = current.YoloTool?.EdgeDetection is null
                         ? null

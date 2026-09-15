@@ -30,12 +30,15 @@ namespace MainAPP.Models
         public uint Encode { get; set; }
 
         /// <summary>
-        /// 产品中心在世界坐标系中的X坐标（物理坐标，单位mm）
+        /// 抓取点在世界坐标系中的 X 坐标（物理坐标，单位 mm）—— 即<b>发送给机器人的 X</b>。
+        /// <para>2026-09-15 起语义为「抓取点」：默认为掩码最小外接旋转矩形中心，
+        /// 配方可配置产品局部坐标系偏移（夹爪偏心 / 抓取点不在中心）。
+        /// 产品中心（图像坐标）见 <see cref="ImageX"/>。</para>
         /// </summary>
         public double WorldX { get; set; }
 
         /// <summary>
-        /// 产品中心在世界坐标系中的Y坐标（物理坐标，单位mm）
+        /// 抓取点在世界坐标系中的 Y 坐标（物理坐标，单位 mm）。见 <see cref="WorldX"/>。
         /// </summary>
         public double WorldY { get; set; }
 

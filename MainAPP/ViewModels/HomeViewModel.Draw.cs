@@ -61,6 +61,11 @@ namespace MainAPP.ViewModels
         // 仅可视化，不参与过滤（实际过滤见 DetectionRecordService.BuildAndSaveAsync 越界判定）。
         private static readonly SixLabors.ImageSharp.Color EdgeMarginLineColor = SixLabors.ImageSharp.Color.Yellow;
         private const float EdgeMarginLineWidth = 2f;
+
+        // 2026-09-15: 抓取点标记颜色（洋红）。与已有标记区分：
+        // 红=特征质心、蓝=产品质心、绿=头尾分割线、橙=发送方向箭头、黄=边界禁入线。
+        private static readonly SixLabors.ImageSharp.Color GrabPointMarkColor = SixLabors.ImageSharp.Color.Magenta;
+        private const float GrabPointMarkLineWidth = 2f;
         /// <summary>
         /// 条码标签绘制字体。2026-09-09: 由 32 缩小为 18，避免大字号遮挡画面
         /// （当前全文件仅条码 DrawText 使用本字体）。
@@ -128,6 +133,71 @@ namespace MainAPP.ViewModels
                     // 提取一次供轮廓多边形与下方"掩码主轴参考线"复用，避免对掩码重复全扫描。
                     var maskRect = edgeResult.GetMaskMinAreaRect();
                     x.DrawPolygon(drawColor, DrawPolygonLineWidth, maskRect.Points);
+
+                    // ── 抓取点标记（2026-09-15）──
+                    // 抓取点即实际发送给机器人的 X/Y。画出来现场才能核对与标定偏移量 ——
+                    // 没有画面反馈时只能靠"发过去抓一下看结果"试错，效率极低。
+                    // 几何与生产同源（GrabPointCalculator：产品局部系 + 头尾符号 + 标定换算）。
+                    var grabRecipe = MainAPP.Services.RecipesManage.Instance.CurrentRecipe;
+                    var grabLongMm = grabRecipe?.GrabOffsetLongMm ?? 0f;
+                    var grabShortMm = grabRecipe?.GrabOffsetShortMm ?? 0f;
+                    if ((grabLongMm != 0 || grabShortMm != 0) && maskRect.MaskArea > 0)
+                    {
+                        bool? flipForGrab = headFlips is not null && edgeIdx < headFlips.Count
+                            ? headFlips[edgeIdx]
+                            : null;
+
+                        // 矩形在推理图坐标系，而标定换算针对原图坐标系：非等比缩放会改变方向，
+                        // 故先把长轴方向按缩放比折算到原图系，用原图系的尺度算完偏移，再折回绘制坐标系。
+                        var gDirX = Math.Cos(maskRect.Angle * Math.PI / 180.0);
+                        var gDirY = Math.Sin(maskRect.Angle * Math.PI / 180.0);
+                        var gDirOrigX = edge.IsResize ? gDirX * edge.ResizeScale : gDirX;
+                        var gDirOrigY = edge.IsResize ? gDirY * edge.ResizeScaleY : gDirY;
+                        var gDirLen = Math.Sqrt((gDirOrigX * gDirOrigX) + (gDirOrigY * gDirOrigY));
+
+                        double kGrabLong = 1.0, kGrabShort = 1.0;
+                        if (_transformer.IsInitialized && gDirLen > 1e-12)
+                        {
+                            var cOrigX = edge.IsResize ? maskRect.Center.X * edge.ResizeScale : maskRect.Center.X;
+                            var cOrigY = edge.IsResize ? maskRect.Center.Y * edge.ResizeScaleY : maskRect.Center.Y;
+                            kGrabLong = GrabPointCalculator.PixelsPerMmAlong(
+                                _transformer, cOrigX, cOrigY, gDirOrigX / gDirLen, gDirOrigY / gDirLen);
+                            kGrabShort = GrabPointCalculator.PixelsPerMmAlong(
+                                _transformer, cOrigX, cOrigY, -gDirOrigY / gDirLen, gDirOrigX / gDirLen);
+                        }
+
+                        var (offOrigX, offOrigY) = GrabPointCalculator.ComputeImageOffset(
+                            gDirOrigX, gDirOrigY, flipForGrab == true,
+                            grabLongMm, grabShortMm, kGrabLong, kGrabShort);
+                        var offDrawX = edge.IsResize ? offOrigX / edge.ResizeScale : offOrigX;
+                        var offDrawY = edge.IsResize ? offOrigY / edge.ResizeScaleY : offOrigY;
+
+                        var grabPt = new PointF(
+                            (float)(maskRect.Center.X + offDrawX),
+                            (float)(maskRect.Center.Y + offDrawY));
+
+                        // 十字 + 方框（沿用 DrawPolygon 方块，兼容 ImageSharp 3.x 无 DrawCircle）。
+                        const float GrabMarkHalf = 7f;
+                        x.DrawLine(GrabPointMarkColor, GrabPointMarkLineWidth,
+                            new PointF(grabPt.X - GrabMarkHalf, grabPt.Y), new PointF(grabPt.X + GrabMarkHalf, grabPt.Y));
+                        x.DrawLine(GrabPointMarkColor, GrabPointMarkLineWidth,
+                            new PointF(grabPt.X, grabPt.Y - GrabMarkHalf), new PointF(grabPt.X, grabPt.Y + GrabMarkHalf));
+                        x.DrawPolygon(GrabPointMarkColor, GrabPointMarkLineWidth, new[]
+                        {
+                            new PointF(grabPt.X - 11f, grabPt.Y - 11f),
+                            new PointF(grabPt.X + 11f, grabPt.Y - 11f),
+                            new PointF(grabPt.X + 11f, grabPt.Y + 11f),
+                            new PointF(grabPt.X - 11f, grabPt.Y + 11f),
+                        });
+
+                        // 偏移非零时用细线连回矩形中心，直观显示偏移方向与量级。
+                        // 朝向不可信时生产会把长轴偏移退化为中心，此处画出的点自然落回中心 —— 画面即提示。
+                        if (Math.Abs(offDrawX) > 0.5 || Math.Abs(offDrawY) > 0.5)
+                        {
+                            x.DrawLine(GrabPointMarkColor, 1f,
+                                new PointF(maskRect.Center.X, maskRect.Center.Y), grabPt);
+                        }
+                    }
 
                     // 目标是否有效（通过边界/面积过滤 → 入 UI 列表/落库/发送）。仅有效目标画方向参考线，
                     // 被过滤目标（半个产品/面积异常误检）不强调方向，避免误导现场人员。

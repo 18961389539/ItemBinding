@@ -375,8 +375,10 @@ namespace MainAPP.ViewModels
                     productPixel = default;
                 }
 
-                // 世界坐标换算：三点标定完成→按主流程口径转 mm 并叠加配方平移补偿（真实值）；
-                // 未标定→图像像素坐标并明确提示（非真实坐标，仅供联调比对）
+                // 世界坐标换算（矩形中心版，作为"无有效掩码"时的兜底）：
+                // 三点标定完成→按主流程口径转 mm；未标定→图像像素坐标并明确提示（非真实坐标，仅供联调比对）。
+                // 2026-09-15: 有有效掩码时，下方判向完成后会按"抓取点"重算并覆盖这里的结果
+                // （抓取点需要在头尾朝向确定之后才能算）。
                 string coordText = "无产品";
                 string remark;
                 double? worldX = null, worldY = null;
@@ -386,11 +388,9 @@ namespace MainAPP.ViewModels
                     if (protoCalibTf is not null)
                     {
                         var phys = protoCalibTf.ImageToPhysical(productPixel);
-                        double wx = phys.X + OffsetX;
-                        double wy = phys.Y + OffsetY;
-                        worldX = wx;
-                        worldY = wy;
-                        coordText = $"X={wx:F2} mm, Y={wy:F2} mm";
+                        worldX = phys.X;
+                        worldY = phys.Y;
+                        coordText = $"X={phys.X:F2} mm, Y={phys.Y:F2} mm";
                     }
                     else
                     {
@@ -486,6 +486,58 @@ namespace MainAPP.ViewModels
                         sendAngle = ToVGT.ToRobotAngle(fallbackAngle);
                     }
                     angleFromMaskFallback = true;
+                }
+
+                // ── 抓取点（2026-09-15）：与生产 BuildAndSaveAsync 同口径 ──
+                // 配方页必须与实际发送一致（"所见即所发"不变式），故产品坐标从矩形中心改算为抓取点。
+                // 朝向判定与生产同源：模型翻转 → 特征池 → 无向回退角；全部回退时（朝向不可信）
+                // 长轴偏移不生效、自动退化为中心，避免抓反。
+                if (maskArea > 0)
+                {
+                    var rawSendAngle = modelFlipAngle
+                        ?? (testPoolDecision is { Decisive: true } pdx ? pdx.Angle : (double?)null)
+                        ?? fallbackAngle;
+                    var headTrustedForGrab = modelFlipAngle.HasValue || testPoolDecision is { Decisive: true };
+                    var headFlippedForGrab = DetectionRecordService.IsHeadOppositeDegrees(rawSendAngle, fallbackAngle);
+                    var effectiveGrabLong = headTrustedForGrab ? GrabOffsetLongMm : 0d;
+
+                    // 矩形在推理图坐标系上算出，productPixel 已按缩放比还原到原图坐标系；
+                    // 非等比缩放（ResizeScale != ResizeScaleY）会改变方向，故长轴方向按同一比例换算。
+                    var grabDirX = Math.Cos(maskRectAngleDeg * Math.PI / 180.0);
+                    var grabDirY = Math.Sin(maskRectAngleDeg * Math.PI / 180.0);
+                    if (edgeTool.IsResize)
+                    {
+                        grabDirX *= edgeTool.ResizeScale;
+                        grabDirY *= edgeTool.ResizeScaleY;
+                    }
+
+                    var grabDirLen = Math.Sqrt((grabDirX * grabDirX) + (grabDirY * grabDirY));
+                    double kGrabLong = 1.0, kGrabShort = 1.0;
+                    if (calibForAngle is not null && grabDirLen > 1e-12)
+                    {
+                        kGrabLong = GrabPointCalculator.PixelsPerMmAlong(
+                            calibForAngle, productPixel.X, productPixel.Y, grabDirX / grabDirLen, grabDirY / grabDirLen);
+                        kGrabShort = GrabPointCalculator.PixelsPerMmAlong(
+                            calibForAngle, productPixel.X, productPixel.Y, -grabDirY / grabDirLen, grabDirX / grabDirLen);
+                    }
+
+                    var (grabPxX, grabPxY) = GrabPointCalculator.ComputeImagePoint(
+                        productPixel.X, productPixel.Y, grabDirX, grabDirY, headFlippedForGrab,
+                        effectiveGrabLong, GrabOffsetShortMm, kGrabLong, kGrabShort);
+
+                    if (calibForAngle is not null)
+                    {
+                        var (gx, gy) = calibForAngle.ImageToPhysical(grabPxX, grabPxY);
+                        worldX = gx;
+                        worldY = gy;
+                        coordText = $"X={gx:F2} mm, Y={gy:F2} mm";
+                    }
+                    else
+                    {
+                        worldX = null;
+                        worldY = null;
+                        coordText = $"X={grabPxX:F1} px, Y={grabPxY:F1} px（未标定，非真实坐标）";
+                    }
                 }
 
                 // 判向完成（两侧均有像素）时附上亮度统计，页面上直接核对头端明暗与死区是否合适。

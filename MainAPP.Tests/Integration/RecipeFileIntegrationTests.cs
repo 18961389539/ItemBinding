@@ -89,8 +89,9 @@ public class RecipeFileIntegrationTests : IDisposable
         {
             Name = "Roundtrip",
             Description = "测试描述",
-            OffsetX = 12.5f,
-            OffsetY = -7.5f,
+            // 2026-09-15: 抓取点偏移（产品局部坐标系）取代了原世界系平移补偿 OffsetX/OffsetY
+            GrabOffsetLongMm = 12.5f,
+            GrabOffsetShortMm = -7.5f,
             OffsetAngle = 90.0f,
             ImageTool = new ImageTool { ExposureTime = 500, Gain = 2.5f },
             YoloTool = new YoloTools
@@ -107,14 +108,44 @@ public class RecipeFileIntegrationTests : IDisposable
         Assert.NotNull(loaded);
         Assert.Equal("Roundtrip", loaded!.Name);
         Assert.Equal("测试描述", loaded.Description);
-        Assert.Equal(12.5f, loaded.OffsetX);
-        Assert.Equal(-7.5f, loaded.OffsetY);
+        Assert.Equal(12.5f, loaded.GrabOffsetLongMm);
+        Assert.Equal(-7.5f, loaded.GrabOffsetShortMm);
         Assert.Equal(90.0f, loaded.OffsetAngle);
         Assert.NotNull(loaded.ImageTool);
         Assert.Equal(500, loaded.ImageTool!.ExposureTime);
         Assert.Equal(2.5f, loaded.ImageTool.Gain);
         Assert.NotNull(loaded.YoloTool);
         Assert.True(loaded.YoloTool!.IsAngleDetectionEnabled);
+    }
+
+    /// <summary>
+    /// 加载含旧字段 OffsetX/OffsetY 的配方文件时，必须自动迁移为产品局部系抓取点偏移 ——
+    /// 否则现场已填过补偿值的配方会凭空失去补偿，产品坐标整体偏移（属产线事故）。
+    /// </summary>
+    [Fact]
+    public void LoadFromFile_LegacyWorldOffsets_AreMigratedIntoGrabOffsets()
+    {
+        var path = Path.Combine(_tempDir, "legacy-offsets.recipe");
+        File.WriteAllText(path, """
+        {
+          "Name": "旧配方",
+          "Description": "",
+          "OffsetX": 8.0,
+          "OffsetY": -4.0,
+          "OffsetAngle": 1.5
+        }
+        """);
+
+        var loaded = Recipe.LoadFromFile(path);
+
+        Assert.NotNull(loaded);
+        Assert.Equal(8.0f, loaded!.GrabOffsetLongMm);
+        Assert.Equal(-4.0f, loaded.GrabOffsetShortMm);
+        Assert.Equal(0f, loaded.OffsetX);
+        Assert.Equal(0f, loaded.OffsetY);
+        Assert.True(loaded.GrabOffsetMigrated);
+        // 角度偏移不属于本次迁移范围，原样保留
+        Assert.Equal(1.5f, loaded.OffsetAngle);
     }
 
     [Fact]

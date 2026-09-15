@@ -193,14 +193,15 @@ namespace MainAPP.ViewModels
                             CurrentRecipe?.OffsetAngle ?? 0f,
                             angleEnabled,
                             _cts.Token,
-                            // REVIEW(2026-08-05): 配方平移补偿（mm），ImageToPhysical 转换后加在最终世界坐标上
-                            CurrentRecipe?.OffsetX ?? 0f,
-                            CurrentRecipe?.OffsetY ?? 0f,
                             // 2026-09-07: 配方级面积过滤覆盖（null=回退全局设置）
                             edge.MinMaskAreaPixels,
                             edge.MaxMaskAreaPixels,
                             // 2026-09-08: 配方级灰度判向覆盖（null=回退全局 Algorithm.BrightnessDirectionEnabled）
-                            brightnessOverride).ConfigureAwait(false);
+                            brightnessOverride,
+                            // 2026-09-15: 配方级抓取点偏移（产品局部坐标系，mm）。
+                            // 原先的 OffsetX/OffsetY（世界系常量）已移除，旧配方值在加载时一次性迁移到这两项。
+                            CurrentRecipe?.GrabOffsetLongMm ?? 0f,
+                            CurrentRecipe?.GrabOffsetShortMm ?? 0f).ConfigureAwait(false);
                         timings.Split("BuildAndSave");
 
                         // H17: 发送 AI 识别计数到 MainWindow（经 ProductTracker 去重后仅计新增产品）

@@ -270,35 +270,40 @@ namespace MainAPP.ViewModels
         }
 
         /// <summary>
-        /// REVIEW(2026-08-05): 平移补偿 X（mm）。图像→世界坐标转换后加在最终 X 上，
-        /// 校准相机/机械坐标系安装偏差（正负均可）。
+        /// 抓取点沿产品长轴的偏移（mm，正值 = 朝产品头部）。
+        /// <para>产品局部坐标系，随产品角度旋转 —— 用于表达夹爪偏心、抓取点不在产品中心。
+        /// 0 = 抓取点即掩码最小外接旋转矩形中心（默认，与改造前一致）。</para>
+        /// <para>2026-09-15 起取代原"世界坐标系常量平移补偿 OffsetX/OffsetY"；
+        /// 旧配方的补偿值在加载时已一次性自动迁移到本项与 <see cref="GrabOffsetShortMm"/>。</para>
+        /// <para>朝向不可信（消歧链全部回退到无向角）时本项不生效，自动退化为中心，避免抓反。</para>
         /// </summary>
-        public double OffsetX
+        public double GrabOffsetLongMm
         {
-            get => _recipe.OffsetX;
+            get => _recipe.GrabOffsetLongMm;
             set
             {
                 var v = (float)value;
-                if (Math.Abs(_recipe.OffsetX - v) > 0.001)
+                if (Math.Abs(_recipe.GrabOffsetLongMm - v) > 0.001)
                 {
-                    _recipe.OffsetX = v;
+                    _recipe.GrabOffsetLongMm = v;
                     OnPropertyChanged();
                 }
             }
         }
 
         /// <summary>
-        /// REVIEW(2026-08-05): 平移补偿 Y（mm）。图像→世界坐标转换后加在最终 Y 上。
+        /// 抓取点沿产品短轴的偏移（mm，正值 = 面朝头部时的右手侧）。
+        /// 若现场方向与预期相反，直接填负值即可（图像的"左右"取决于相机安装朝向，代码无法自行判断）。
         /// </summary>
-        public double OffsetY
+        public double GrabOffsetShortMm
         {
-            get => _recipe.OffsetY;
+            get => _recipe.GrabOffsetShortMm;
             set
             {
                 var v = (float)value;
-                if (Math.Abs(_recipe.OffsetY - v) > 0.001)
+                if (Math.Abs(_recipe.GrabOffsetShortMm - v) > 0.001)
                 {
-                    _recipe.OffsetY = v;
+                    _recipe.GrabOffsetShortMm = v;
                     OnPropertyChanged();
                 }
             }

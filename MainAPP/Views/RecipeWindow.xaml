@@ -863,25 +863,37 @@
                                         Style="{StaticResource NumericUpDownExtend}"
                                         ToolTip="放置已知朝向产品，期望角度-系统显示角度（允许负值）。对所有角度路径生效：启用角度模型时加在 atan2 结果上；未启用(掩码回退)时加在掩码主轴角上（回退角=主轴角+OffsetAngle），用于校准安装偏差。"
                                         Value="{Binding OffsetAngle, UpdateSourceTrigger=PropertyChanged}" />
-                                    <!--  平移补偿(mm):图像→世界坐标转换后加在最终 X/Y 上,校准安装偏差(同样不依赖角度模型)  -->
+                                </StackPanel>
+                            </GroupBox>
+                            <!--  抓取点(2026-09-15)：产品局部坐标系偏移，随产品角度一起旋转 ——
+                                用于补偿夹爪偏心、或抓取点不在产品中心。
+                                取代原先的"世界坐标系常量平移补偿 OffsetX/OffsetY"（方向固定，只在单一角度成立，
+                                已移除；旧配方值在加载时一次性自动迁移到本组）。
+                                0 / 0 = 抓取点即掩码最小外接旋转矩形的几何中心（默认，与改造前一致）。  -->
+                            <GroupBox Margin="0,0,0,8" Header="抓取点（产品局部坐标系，随角度旋转）">
+                                <StackPanel Margin="4">
+                                    <!--  长轴偏移：正 = 朝产品头部；朝向不可信时会自动退化为中心（宁可抓中心也不抓反）  -->
                                     <hc:NumericUpDown
                                         Margin="0,0,0,8"
-                                        hc:InfoElement.Title="平移补偿 X OffsetX(mm)"
+                                        hc:InfoElement.Title="长轴偏移 朝头部(mm)"
                                         DecimalPlaces="2"
                                         Increment="0.1"
                                         Maximum="1000"
                                         Minimum="-1000"
                                         Style="{StaticResource NumericUpDownExtend}"
-                                        Value="{Binding OffsetX, UpdateSourceTrigger=PropertyChanged}" />
+                                        ToolTip="抓取点沿产品长轴的偏移，正值朝产品头部。属于产品局部坐标系、随产品角度旋转，用于补偿夹爪偏心或抓取点不在产品中心。0 = 抓取点即矩形几何中心。注意：当二维码、角度模型、特征池都无法判定头尾（朝向不可信）时，本项自动不生效以避免把产品抓反，画面与日志会提示。"
+                                        Value="{Binding GrabOffsetLongMm, UpdateSourceTrigger=PropertyChanged}" />
+                                    <!--  短轴偏移：正 = 面朝头部时的右手侧；方向取决于相机安装朝向，相反时填负值  -->
                                     <hc:NumericUpDown
                                         Margin="0,0,0,0"
-                                        hc:InfoElement.Title="平移补偿 Y OffsetY(mm)"
+                                        hc:InfoElement.Title="短轴偏移 右为正(mm)"
                                         DecimalPlaces="2"
                                         Increment="0.1"
                                         Maximum="1000"
                                         Minimum="-1000"
                                         Style="{StaticResource NumericUpDownExtend}"
-                                        Value="{Binding OffsetY, UpdateSourceTrigger=PropertyChanged}" />
+                                        ToolTip="抓取点沿产品短轴的偏移，正值 = 面朝产品头部时的右手侧。同样随产品角度旋转。图像的「左右」取决于相机安装朝向，若现场发现方向与预期相反，直接填负值即可（无需改程序）。"
+                                        Value="{Binding GrabOffsetShortMm, UpdateSourceTrigger=PropertyChanged}" />
                                 </StackPanel>
                             </GroupBox>
                             <!--  操作按钮  -->

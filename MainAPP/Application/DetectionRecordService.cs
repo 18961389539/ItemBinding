@@ -258,6 +258,9 @@ public sealed class DetectionRecordService
         // 语义 = 本方法对实发角**实际施加**的翻转（二维码优先 → 灰度兜底）。UI 方向箭头据此复现同一次翻转，
         // 与实发角严格同源；此前 UI 自行按灰度统计判定，在二维码链路启用后会与实发角相差 180°（所见非所发）。
         var headFlips = new List<bool?>();
+        // 2026-09-15: 与 headFlips 同序。头尾朝向是否可信（至少一条消歧路径给出明确信号）。
+        // 画面标记据此决定是否施加抓取点偏移，保证"画面上的点 = 实际发送的点"。
+        var headTrusted = new List<bool>();
         // P0-1/2: 条码候选列表——每个条码只能被一个检测框消费，防止同一条码被多个产品重复绑定
         // 原始 BarcodeResults 可能包含同一帧中多个产品的条码，逐个匹配后从候选列表移除
         var availableBarcodes = new List<HikBarcodeResult>(scanerResult.BarcodeResults ?? Array.Empty<HikBarcodeResult>());
@@ -267,8 +270,8 @@ public sealed class DetectionRecordService
         int passedFilterCount = 0;        // 通过 边界+面积 过滤的有效目标数
         int filteredByBoundaryCount = 0;  // 因越界（距边缘不足边距）被拒数
         int filteredByAreaCount = 0;      // 因掩码面积超范围被拒数
-        // 2026-09-15: 因朝向不可信而把"抓取点长轴偏移"退化为 0 的目标数（策略：宁可抓在中心，也不抓反）
-        int grabLongSuppressedByUntrustedHead = 0;
+        // 2026-09-15: 因朝向不可信而把"抓取点偏移"整体退化为 0 的目标数（策略：宁可抓在中心，也不抓反）
+        int grabSuppressedByUntrustedHead = 0;
         var detectLogFrame = scanerResult.FrameNumber;
 
         int idx = 0;
@@ -308,6 +311,7 @@ public sealed class DetectionRecordService
                 indexedRecords.Add(null);
                 angleDrawInfos.Add(null);
                 headFlips.Add(null);
+                headTrusted.Add(false);
                 continue;
             }
 
@@ -341,6 +345,7 @@ public sealed class DetectionRecordService
                 indexedRecords.Add(null);
                 angleDrawInfos.Add(null);
                 headFlips.Add(null);
+                headTrusted.Add(false);
                 continue;
             }
 
@@ -628,32 +633,29 @@ public sealed class DetectionRecordService
 
             // ── 抓取点（2026-09-15）：产品局部坐标系偏移，必须在头尾朝向确定之后计算 ──
             // 长轴是无向轴（MinAreaRect.Angle 已做 ±180° 二义消除），不带头尾符号会有 50% 概率偏到反方向。
-            // 矩形在推理图坐标系上算出，而 imageX/imageY 已按缩放比还原到原图坐标系；
-            // 非等比缩放（ResizeScale != ResizeScaleY）会改变方向，故先把长轴方向按同一比例换算过去。
-            var rectAngleRad = maskMinAreaRect.Angle * Math.PI / 180.0;
-            var longAxisDirX = Math.Cos(rectAngleRad);
-            var longAxisDirY = Math.Sin(rectAngleRad);
-            if (isResize)
-            {
-                longAxisDirX *= resizeWidth;
-                longAxisDirY *= resizeHeight;
-            }
-
-            // 朝向是否可信：至少一条消歧路径给出明确信号；全部回退到无向角时不可信。
+            // 方向折算与尺度换算统一走 GrabPointCalculator.ResolveOriginalImagePoint，
+            // 与画面标记、配方页预览共用同一实现（非等比缩放时三处必须完全一致，否则"所见"≠"所发"）。
             var headDirectionTrusted = barcodeAngle.HasValue
                                     || modelFlipAngle.HasValue
                                     || (poolDecision is { Decisive: true });
+            headTrusted.Add(headDirectionTrusted);
+
             var effectiveGrabLongMm = grabOffsetLongMm;
-            if (!headDirectionTrusted && grabOffsetLongMm != 0)
+            var effectiveGrabShortMm = grabOffsetShortMm;
+            if (!headDirectionTrusted && (grabOffsetLongMm != 0 || grabOffsetShortMm != 0))
             {
-                // 策略 A：宁可抓在中心，也不要抓反 —— 朝向不可信时长轴偏移退化，短轴偏移仍生效
+                // 策略 A（2026-09-15 修正）：长轴与短轴**一起**退化为中心。
+                // 短轴 = 长轴旋转 90°，语义是"面朝头部时的右手侧"，方向同样依赖头尾；
+                // 头尾不可信时短轴有 50% 概率落到反侧 —— 抓取点会偏到产品另一侧，可能撞夹具或抓空。
                 effectiveGrabLongMm = 0;
-                grabLongSuppressedByUntrustedHead++;
+                effectiveGrabShortMm = 0;
+                grabSuppressedByUntrustedHead++;
             }
 
-            var (grabImageX, grabImageY) = GrabPointCalculator.ComputeImagePoint(
-                transformer, imageX, imageY, longAxisDirX, longAxisDirY, headFlipped == true,
-                effectiveGrabLongMm, grabOffsetShortMm);
+            var (grabImageX, grabImageY) = GrabPointCalculator.ResolveOriginalImagePoint(
+                transformer, imageX, imageY, maskMinAreaRect.Angle,
+                isResize, resizeWidth, resizeHeight, headFlipped == true,
+                effectiveGrabLongMm, effectiveGrabShortMm);
 
             double grabWorldX, grabWorldY;
             if (transformer.IsInitialized)
@@ -742,8 +744,8 @@ public sealed class DetectionRecordService
         {
             var filteredTotal = idx - passedFilterCount;
             // 2026-09-15: 朝向不可信时抓取点长轴偏移会退化为中心（策略 A），此处显式提示，避免现场"配了没效果"困惑
-            var grabNote = grabLongSuppressedByUntrustedHead > 0
-                ? $" 抓取点长轴偏移退化={grabLongSuppressedByUntrustedHead}(朝向不可信)"
+            var grabNote = grabSuppressedByUntrustedHead > 0
+                ? $" 抓取点偏移退化={grabSuppressedByUntrustedHead}(朝向不可信)"
                 : string.Empty;
             LogService.Instance.Info(
                 $"[识别] 帧={detectLogFrame} 检出={idx} 有效={passedFilterCount} " +
@@ -752,7 +754,7 @@ public sealed class DetectionRecordService
 
         // M175: 将 cancellationToken 传递给 AddRangeAsync，支持取消批量写入
         await _barcodeData.AddRangeAsync(records, cancellationToken).ConfigureAwait(false);
-        return new DetectionBuildResult(records, indexedRecords, angleDrawInfos, maskAreaByEdgeIndex, headFlips);
+        return new DetectionBuildResult(records, indexedRecords, angleDrawInfos, maskAreaByEdgeIndex, headFlips, headTrusted);
     }
 
     /// <summary>二维码中心离产品质心的最小像素距离比（相对产品长轴长度），低于此值无法判定头尾。</summary>
@@ -999,5 +1001,9 @@ public sealed record DetectionBuildResult(
     IReadOnlyList<DbModel?> IndexedRecords,
     IReadOnlyList<AngleDrawInfo?> AngleDrawInfos,
     IReadOnlyDictionary<int, double> MaskAreaByEdgeIndex,
-    IReadOnlyList<bool?> HeadFlips);
+    IReadOnlyList<bool?> HeadFlips,
+    /// <summary>2026-09-15：与 edgeResults 严格同序的头尾"朝向是否可信"标记。
+    /// false 表示消歧链全部回退到无向角，生产会把抓取点偏移整体退化为中心；
+    /// 画面标记据此同步退化，保证画面上的抓取点就是实际发送的点。</summary>
+    IReadOnlyList<bool> HeadTrusted);
 

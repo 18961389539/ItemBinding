@@ -23,6 +23,27 @@ namespace MainAPP.Views
             // 这里按当前工作区夹取并下调最小尺寸，细节见 WindowSizing。
             WindowSizing.Apply(this, Width, Height);
             Closing += RecipeWindow_Closing;
+
+            // 2026-09-15 画面示教：勾选示教后点击图像，把点击处设为抓取点。
+            // 用 PreviewMouseLeftButtonUp（隧道事件）确保不被控件内部处理吞掉。
+            imageViewer.PreviewMouseLeftButtonUp += imageViewer_PreviewMouseLeftButtonUp;
+        }
+
+        /// <summary>
+        /// 画面示教：点击测试推理图像，把点击处反算为长/短轴偏移并写入配方。
+        /// 图像像素坐标由 ImageViewer.ImageContainer 提供（缩放/平移由其内部变换吸收）。
+        /// </summary>
+        private void imageViewer_PreviewMouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (DataContext is not RecipeViewModel vm || !vm.IsGrabTeachMode)
+            {
+                return;
+            }
+
+            // ImageContainer 的坐标空间即图像像素（缩放/平移变换作用于该元素自身）
+            var pt = e.GetPosition(imageViewer.ImageContainer);
+            vm.SetGrabPointByImagePosition(pt.X, pt.Y);
+            e.Handled = true;
         }
 
         public RecipeWindow(RecipeViewModel viewModel) : this()

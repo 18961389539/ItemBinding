@@ -223,7 +223,7 @@ namespace MainAPP.ViewModels
                             timings.Split("SaveSourceQueued");
                         }
                         // 直接在 sourceImg 上绘制，省掉 CloneAs 的 0.89MB LOH 分配
-                        await DrawImage(sourceImg, scanerResult, edgeResults!, buildResult.AngleDrawInfos, buildResult.HeadFlips, buildResult.IndexedRecords, folder, timings, edge).ConfigureAwait(false);
+                        await DrawImage(sourceImg, scanerResult, edgeResults!, buildResult.AngleDrawInfos, buildResult.HeadFlips, buildResult.HeadTrusted, buildResult.IndexedRecords, folder, timings, edge).ConfigureAwait(false);
                         // 在推理完成后更新结果列表（在 finally 释放 edgeResults 之前完成数据拷贝）
                         // 传入 IndexedRecords：与 edgeResults 严格同序，UI 按索引直接取值避免 Width×Height 错配
                         // 2026-09-07: 一并传入 MaskAreaByEdgeIndex，让主页表格能显示过滤后目标的掩码面积

@@ -61,6 +61,161 @@ namespace MainAPP.Application
         }
 
         /// <summary>
+        /// 反算（<b>画面示教</b>用，带标定换算）：由示教点位反推出长/短轴偏移（mm）。
+        /// 矩形角在<b>推理图坐标系</b>下给出，中心在<b>原图坐标系</b>下给出 —— 与生产同口径；
+        /// 未标定时（<c>transformer.IsInitialized == false</c>）尺度退化为 1 像素/mm。
+        /// </summary>
+        internal static (double OffsetLongMm, double OffsetShortMm) ComputeOffsetsFromImagePoint(
+            CoordinateTransformer transformer,
+            double grabPointImageX,
+            double grabPointImageY,
+            double centerImageX,
+            double centerImageY,
+            double rectAngleDeg,
+            bool isResize,
+            double resizeScaleX,
+            double resizeScaleY,
+            bool headFlipped)
+        {
+            var theta = rectAngleDeg * Math.PI / 180.0;
+            var dirX = Math.Cos(theta);
+            var dirY = Math.Sin(theta);
+            if (isResize)
+            {
+                dirX *= resizeScaleX;
+                dirY *= resizeScaleY;
+            }
+
+            return ComputeOffsetsFromImagePoint(
+                grabPointImageX, grabPointImageY, centerImageX, centerImageY, dirX, dirY,
+                headFlipped,
+                PixelsPerMmAlong(transformer, centerImageX, centerImageY, dirX, dirY),
+                PixelsPerMmAlong(transformer, centerImageX, centerImageY, -dirY, dirX));
+        }
+
+        /// <summary>
+        /// 反算（<b>画面示教</b>用）：由示教点位反推出产品局部坐标系的长/短轴偏移（mm）。
+        ///
+        /// <para>用途：操作员在画面上点"我要抓这里"，调用方把示教点的图像坐标与本组几何参数传入，
+        /// 得到可直接写回配方的长/短轴偏移。与 <see cref="ComputeImagePoint(double,double,double,double,bool,double,double,double,double)"/>
+        /// 互为逆运算 —— 设进去再算出来应回到同一点（有专门的单测验证往返一致性）。</para>
+        /// </summary>
+        /// <param name="grabPointImageX/Y">示教点位（图像坐标，与 center 同坐标系）。</param>
+        /// <param name="centerImageX/Y">矩形中心（图像坐标）。</param>
+        /// <param name="longAxisDirX/Y">长轴方向（已含头部朝向，无需归一化；0,0 视为退化）。</param>
+        /// <param name="pixelsPerMmLong/Short">两轴的像素/mm。</param>
+        /// <returns>(长轴偏移 mm, 短轴偏移 mm)。</returns>
+        internal static (double OffsetLongMm, double OffsetShortMm) ComputeOffsetsFromImagePoint(
+            double grabPointImageX,
+            double grabPointImageY,
+            double centerImageX,
+            double centerImageY,
+            double longAxisDirX,
+            double longAxisDirY,
+            bool headFlipped,
+            double pixelsPerMmLong,
+            double pixelsPerMmShort)
+        {
+            var dx = grabPointImageX - centerImageX;
+            var dy = grabPointImageY - centerImageY;
+
+            var len = Math.Sqrt((longAxisDirX * longAxisDirX) + (longAxisDirY * longAxisDirY));
+            if (len <= 1e-12)
+            {
+                return (0, 0);
+            }
+
+            var luX = longAxisDirX / len;
+            var luY = longAxisDirY / len;
+            if (headFlipped)
+            {
+                // 与正向计算一致：头尾翻转时两轴同时反向，否则反算出的偏移符号相反
+                luX = -luX;
+                luY = -luY;
+            }
+            var svX = -luY;
+            var svY = luX;
+
+            // 先把偏移投影到两轴（得到像素数），再各自除以该轴的 像素/mm
+            var longPx = (dx * luX) + (dy * luY);
+            var shortPx = (dx * svX) + (dy * svY);
+
+            return (longPx / pixelsPerMmLong, shortPx / pixelsPerMmShort);
+        }
+
+        /// <summary>
+        /// <b>统一入口</b>：由矩形几何（推理图坐标系下的长轴角）+ 缩放比 + 标定 + 头尾标志 + mm 偏移，
+        /// 算出抓取点相对矩形中心的偏移向量（<b>原图坐标系</b>）。
+        ///
+        /// <para>把"方向按缩放比折算 → 求两轴局部像素/mm → 算偏移"这条链路收敛到一处，
+        /// 避免生产发送、画面标记、配方页预览三处各写一遍后改漏（非等比缩放时最难发现）。</para>
+        ///
+        /// <para>注意 <paramref name="rectAngleDeg"/> 是<b>推理图坐标系</b>下的矩形长轴角，
+        /// 而返回的偏移在<b>原图坐标系</b>：<paramref name="isResize"/> 时非等比缩放会改变方向，
+        /// 故内部先把方向按缩放比折算过去再求尺度。</para>
+        /// </summary>
+        internal static (double Dx, double Dy) ResolveOriginalImageOffset(
+            CoordinateTransformer transformer,
+            double centerOriginalX,
+            double centerOriginalY,
+            double rectAngleDeg,
+            bool isResize,
+            double resizeScaleX,
+            double resizeScaleY,
+            bool headFlipped,
+            double offsetLongMm,
+            double offsetShortMm)
+        {
+            if (offsetLongMm == 0 && offsetShortMm == 0)
+            {
+                return (0, 0);
+            }
+
+            var theta = rectAngleDeg * Math.PI / 180.0;
+            var dirX = Math.Cos(theta);
+            var dirY = Math.Sin(theta);
+            if (isResize)
+            {
+                dirX *= resizeScaleX;
+                dirY *= resizeScaleY;
+            }
+
+            var len = Math.Sqrt((dirX * dirX) + (dirY * dirY));
+            double kLong = 1.0, kShort = 1.0;
+            if (transformer.IsInitialized && len > 1e-12)
+            {
+                // 尺度与该方向的长度比例有关、与位置无关（标定的线性部分不含平移），
+                // 取矩形中心求值即可。
+                kLong = PixelsPerMmAlong(transformer, centerOriginalX, centerOriginalY, dirX / len, dirY / len);
+                kShort = PixelsPerMmAlong(transformer, centerOriginalX, centerOriginalY, -dirY / len, dirX / len);
+            }
+
+            return ComputeImageOffset(dirX, dirY, headFlipped, offsetLongMm, offsetShortMm, kLong, kShort);
+        }
+
+        /// <summary>
+        /// <b>统一入口</b>：抓取点坐标（原图坐标系）。偏移全 0 时逐位返回矩形中心。
+        /// </summary>
+        internal static (double X, double Y) ResolveOriginalImagePoint(
+            CoordinateTransformer transformer,
+            double centerOriginalX,
+            double centerOriginalY,
+            double rectAngleDeg,
+            bool isResize,
+            double resizeScaleX,
+            double resizeScaleY,
+            bool headFlipped,
+            double offsetLongMm,
+            double offsetShortMm)
+        {
+            var (dx, dy) = ResolveOriginalImageOffset(
+                transformer, centerOriginalX, centerOriginalY, rectAngleDeg,
+                isResize, resizeScaleX, resizeScaleY, headFlipped, offsetLongMm, offsetShortMm);
+
+            return (centerOriginalX + dx, centerOriginalY + dy);
+        }
+
+        /// <summary>
         /// 纯计算：抓取点相对矩形中心的<b>偏移向量</b>（与 <paramref name="longAxisDirX"/> 同坐标系）。
         ///
         /// <para>单独暴露偏移量是为了让画面叠加能复用同一套几何 —— 绘制发生在推理图分辨率上，

@@ -109,6 +109,21 @@ public static class ProtocolTemplateRenderer
             return "0".ToString(CultureInfo.InvariantCulture);
         }
 
+        // 2026-09-15: 改为"十进制四舍五入"（AwayFromZero），与协议说明及单元测试一致。
+        // 原先直接 Math.Round(v, decimals) 有两重问题：
+        //   1) 默认是银行家舍入（中点取偶），与文档写的"四舍五入"不符；
+        //   2) 即便改成 AwayFromZero 也修不好 —— double 的二进制表示会让 12.345 这类值
+        //      略小于十进制中点（≈12.34499999999999975），12.345 仍然输出 12.34。
+        // 做法：先取 double 的最短往返十进制表示（.NET Core 3.0+ 的 "R"），在 decimal 上舍入，
+        // 使输出符合现场对"四舍五入"的常规定义。
+        if (decimal.TryParse(v.ToString("R", CultureInfo.InvariantCulture),
+                             NumberStyles.Float, CultureInfo.InvariantCulture, out var dec))
+        {
+            return Math.Round(dec, decimals, MidpointRounding.AwayFromZero)
+                       .ToString("F" + decimals, CultureInfo.InvariantCulture);
+        }
+
+        // decimal 表示范围（±7.9e28 量级）装不下时的兜底：退回 double 舍入，避免因格式化失败丢报文
         return Math.Round(v, decimals).ToString("F" + decimals, CultureInfo.InvariantCulture);
     }
 

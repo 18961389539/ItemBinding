@@ -66,6 +66,10 @@ namespace MainAPP.ViewModels
         // 红=特征质心、蓝=产品质心、绿=头尾分割线、橙=发送方向箭头、黄=边界禁入线。
         private static readonly SixLabors.ImageSharp.Color GrabPointMarkColor = SixLabors.ImageSharp.Color.Magenta;
         private const float GrabPointMarkLineWidth = 2f;
+
+        // 2026-09-15: 抓取点偏移因"头尾朝向不可信"被退化为中心时的标记颜色（灰）。
+        // 此时生产实际发送的就是矩形中心 —— 用灰色与正常洋红区分，现场一眼能看出"配了偏移但没生效"。
+        private static readonly SixLabors.ImageSharp.Color GrabPointSuppressedColor = SixLabors.ImageSharp.Color.Gray;
         /// <summary>
         /// 条码标签绘制字体。2026-09-09: 由 32 缩小为 18，避免大字号遮挡画面
         /// （当前全文件仅条码 DrawText 使用本字体）。
@@ -95,6 +99,7 @@ namespace MainAPP.ViewModels
         /// </example>
         private async Task DrawImage(Image<Rgb24> drawImg, FrameResult scanerResult, YoloResult<Segmentation> edgeResults,
             IReadOnlyList<AngleDrawInfo?>? angleDrawInfos, IReadOnlyList<bool?>? headFlips,
+            IReadOnlyList<bool>? headTrusted,
             IReadOnlyList<DbModel?>? indexedRecords,
             string? folder, TimingLogger timings, YoloTool edge)
         {
@@ -137,7 +142,8 @@ namespace MainAPP.ViewModels
                     // ── 抓取点标记（2026-09-15）──
                     // 抓取点即实际发送给机器人的 X/Y。画出来现场才能核对与标定偏移量 ——
                     // 没有画面反馈时只能靠"发过去抓一下看结果"试错，效率极低。
-                    // 几何与生产同源（GrabPointCalculator：产品局部系 + 头尾符号 + 标定换算）。
+                    // 几何与生产同源：统一走 GrabPointCalculator.ResolveOriginalImageOffset，
+                    // 并同样按"朝向是否可信"决定是否施加偏移 —— 保证画面上的点就是实际发送的点。
                     var grabRecipe = MainAPP.Services.RecipesManage.Instance.CurrentRecipe;
                     var grabLongMm = grabRecipe?.GrabOffsetLongMm ?? 0f;
                     var grabShortMm = grabRecipe?.GrabOffsetShortMm ?? 0f;
@@ -146,29 +152,21 @@ namespace MainAPP.ViewModels
                         bool? flipForGrab = headFlips is not null && edgeIdx < headFlips.Count
                             ? headFlips[edgeIdx]
                             : null;
+                        // 朝向不可信 ⇒ 生产会把两个偏移一起退化为中心；画面必须同步，否则会画出"没真正发出的点"。
+                        bool trustedForGrab = headTrusted is not null && edgeIdx < headTrusted.Count
+                            && headTrusted[edgeIdx];
+                        bool grabSuppressed = !trustedForGrab;
+                        var effLong = grabSuppressed ? 0f : grabLongMm;
+                        var effShort = grabSuppressed ? 0f : grabShortMm;
 
-                        // 矩形在推理图坐标系，而标定换算针对原图坐标系：非等比缩放会改变方向，
-                        // 故先把长轴方向按缩放比折算到原图系，用原图系的尺度算完偏移，再折回绘制坐标系。
-                        var gDirX = Math.Cos(maskRect.Angle * Math.PI / 180.0);
-                        var gDirY = Math.Sin(maskRect.Angle * Math.PI / 180.0);
-                        var gDirOrigX = edge.IsResize ? gDirX * edge.ResizeScale : gDirX;
-                        var gDirOrigY = edge.IsResize ? gDirY * edge.ResizeScaleY : gDirY;
-                        var gDirLen = Math.Sqrt((gDirOrigX * gDirOrigX) + (gDirOrigY * gDirOrigY));
-
-                        double kGrabLong = 1.0, kGrabShort = 1.0;
-                        if (_transformer.IsInitialized && gDirLen > 1e-12)
-                        {
-                            var cOrigX = edge.IsResize ? maskRect.Center.X * edge.ResizeScale : maskRect.Center.X;
-                            var cOrigY = edge.IsResize ? maskRect.Center.Y * edge.ResizeScaleY : maskRect.Center.Y;
-                            kGrabLong = GrabPointCalculator.PixelsPerMmAlong(
-                                _transformer, cOrigX, cOrigY, gDirOrigX / gDirLen, gDirOrigY / gDirLen);
-                            kGrabShort = GrabPointCalculator.PixelsPerMmAlong(
-                                _transformer, cOrigX, cOrigY, -gDirOrigY / gDirLen, gDirOrigX / gDirLen);
-                        }
-
-                        var (offOrigX, offOrigY) = GrabPointCalculator.ComputeImageOffset(
-                            gDirOrigX, gDirOrigY, flipForGrab == true,
-                            grabLongMm, grabShortMm, kGrabLong, kGrabShort);
+                        // 标定换算针对原图坐标系，而绘制发生在推理图坐标系：
+                        // 统一入口返回原图系的偏移向量，再按缩放比折回绘制坐标系。
+                        var cOrigX = edge.IsResize ? maskRect.Center.X * edge.ResizeScale : maskRect.Center.X;
+                        var cOrigY = edge.IsResize ? maskRect.Center.Y * edge.ResizeScaleY : maskRect.Center.Y;
+                        var (offOrigX, offOrigY) = GrabPointCalculator.ResolveOriginalImageOffset(
+                            _transformer, cOrigX, cOrigY, maskRect.Angle,
+                            edge.IsResize, edge.ResizeScale, edge.ResizeScaleY,
+                            flipForGrab == true, effLong, effShort);
                         var offDrawX = edge.IsResize ? offOrigX / edge.ResizeScale : offOrigX;
                         var offDrawY = edge.IsResize ? offOrigY / edge.ResizeScaleY : offOrigY;
 
@@ -177,12 +175,15 @@ namespace MainAPP.ViewModels
                             (float)(maskRect.Center.Y + offDrawY));
 
                         // 十字 + 方框（沿用 DrawPolygon 方块，兼容 ImageSharp 3.x 无 DrawCircle）。
+                        // 朝向不可信导致偏移被退化时改用灰色实心小方框：与"正常着色的抓取点"区分，
+                        // 现场一眼能看出"配了偏移但没生效"，不必去翻日志。
                         const float GrabMarkHalf = 7f;
-                        x.DrawLine(GrabPointMarkColor, GrabPointMarkLineWidth,
+                        var markColor = grabSuppressed ? GrabPointSuppressedColor : GrabPointMarkColor;
+                        x.DrawLine(markColor, GrabPointMarkLineWidth,
                             new PointF(grabPt.X - GrabMarkHalf, grabPt.Y), new PointF(grabPt.X + GrabMarkHalf, grabPt.Y));
-                        x.DrawLine(GrabPointMarkColor, GrabPointMarkLineWidth,
+                        x.DrawLine(markColor, GrabPointMarkLineWidth,
                             new PointF(grabPt.X, grabPt.Y - GrabMarkHalf), new PointF(grabPt.X, grabPt.Y + GrabMarkHalf));
-                        x.DrawPolygon(GrabPointMarkColor, GrabPointMarkLineWidth, new[]
+                        x.DrawPolygon(markColor, GrabPointMarkLineWidth, new[]
                         {
                             new PointF(grabPt.X - 11f, grabPt.Y - 11f),
                             new PointF(grabPt.X + 11f, grabPt.Y - 11f),
@@ -190,11 +191,10 @@ namespace MainAPP.ViewModels
                             new PointF(grabPt.X - 11f, grabPt.Y + 11f),
                         });
 
-                        // 偏移非零时用细线连回矩形中心，直观显示偏移方向与量级。
-                        // 朝向不可信时生产会把长轴偏移退化为中心，此处画出的点自然落回中心 —— 画面即提示。
+                        // 偏移生效时用细线连回矩形中心，直观显示偏移方向与量级。
                         if (Math.Abs(offDrawX) > 0.5 || Math.Abs(offDrawY) > 0.5)
                         {
-                            x.DrawLine(GrabPointMarkColor, 1f,
+                            x.DrawLine(markColor, 1f,
                                 new PointF(maskRect.Center.X, maskRect.Center.Y), grabPt);
                         }
                     }

@@ -491,7 +491,8 @@ namespace MainAPP.ViewModels
                 // ── 抓取点（2026-09-15）：与生产 BuildAndSaveAsync 同口径 ──
                 // 配方页必须与实际发送一致（"所见即所发"不变式），故产品坐标从矩形中心改算为抓取点。
                 // 朝向判定与生产同源：模型翻转 → 特征池 → 无向回退角；全部回退时（朝向不可信）
-                // 长轴偏移不生效、自动退化为中心，避免抓反。
+                // 两个偏移一起退化为中心 —— 短轴方向同样依赖头尾，只退化长轴会让抓取点偏到产品另一侧。
+                // 几何统一走 GrabPointCalculator.ResolveOriginalImagePoint，与生产/画面标记共用实现。
                 if (maskArea > 0)
                 {
                     var rawSendAngle = modelFlipAngle
@@ -500,30 +501,15 @@ namespace MainAPP.ViewModels
                     var headTrustedForGrab = modelFlipAngle.HasValue || testPoolDecision is { Decisive: true };
                     var headFlippedForGrab = DetectionRecordService.IsHeadOppositeDegrees(rawSendAngle, fallbackAngle);
                     var effectiveGrabLong = headTrustedForGrab ? GrabOffsetLongMm : 0d;
+                    var effectiveGrabShort = headTrustedForGrab ? GrabOffsetShortMm : 0d;
 
-                    // 矩形在推理图坐标系上算出，productPixel 已按缩放比还原到原图坐标系；
-                    // 非等比缩放（ResizeScale != ResizeScaleY）会改变方向，故长轴方向按同一比例换算。
-                    var grabDirX = Math.Cos(maskRectAngleDeg * Math.PI / 180.0);
-                    var grabDirY = Math.Sin(maskRectAngleDeg * Math.PI / 180.0);
-                    if (edgeTool.IsResize)
-                    {
-                        grabDirX *= edgeTool.ResizeScale;
-                        grabDirY *= edgeTool.ResizeScaleY;
-                    }
-
-                    var grabDirLen = Math.Sqrt((grabDirX * grabDirX) + (grabDirY * grabDirY));
-                    double kGrabLong = 1.0, kGrabShort = 1.0;
-                    if (calibForAngle is not null && grabDirLen > 1e-12)
-                    {
-                        kGrabLong = GrabPointCalculator.PixelsPerMmAlong(
-                            calibForAngle, productPixel.X, productPixel.Y, grabDirX / grabDirLen, grabDirY / grabDirLen);
-                        kGrabShort = GrabPointCalculator.PixelsPerMmAlong(
-                            calibForAngle, productPixel.X, productPixel.Y, -grabDirY / grabDirLen, grabDirX / grabDirLen);
-                    }
-
-                    var (grabPxX, grabPxY) = GrabPointCalculator.ComputeImagePoint(
-                        productPixel.X, productPixel.Y, grabDirX, grabDirY, headFlippedForGrab,
-                        effectiveGrabLong, GrabOffsetShortMm, kGrabLong, kGrabShort);
+                    // 未标定时需要一个"未初始化"的变换器：其尺度换算退化为 1 像素/mm，
+                    // 与未标定分支"坐标即像素"的既有语义一致（不能传 null）。
+                    var calibForGrab = calibForAngle ?? new CoordinateTransformer();
+                    var (grabPxX, grabPxY) = GrabPointCalculator.ResolveOriginalImagePoint(
+                        calibForGrab, productPixel.X, productPixel.Y, maskRectAngleDeg,
+                        edgeTool.IsResize, edgeTool.ResizeScale, edgeTool.ResizeScaleY,
+                        headFlippedForGrab, effectiveGrabLong, effectiveGrabShort);
 
                     if (calibForAngle is not null)
                     {
@@ -538,6 +524,13 @@ namespace MainAPP.ViewModels
                         worldY = null;
                         coordText = $"X={grabPxX:F1} px, Y={grabPxY:F1} px（未标定，非真实坐标）";
                     }
+
+                    // 记录几何快照供画面示教（点击图像反算长/短轴偏移）
+                    _grabTeachGeometry = new GrabTeachGeometry(
+                        productPixel.X, productPixel.Y, maskRectAngleDeg,
+                        edgeTool.IsResize, edgeTool.ResizeScale, edgeTool.ResizeScaleY,
+                        headFlippedForGrab, headTrustedForGrab, calibForAngle);
+                    OnPropertyChanged(nameof(CanTeachGrabPoint));
                 }
 
                 // 判向完成（两侧均有像素）时附上亮度统计，页面上直接核对头端明暗与死区是否合适。

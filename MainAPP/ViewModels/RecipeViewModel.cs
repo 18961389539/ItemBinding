@@ -309,6 +309,61 @@ namespace MainAPP.ViewModels
             }
         }
 
+        // ── 画面示教（2026-09-15）：点击测试推理图像设置抓取点 ──
+
+        /// <summary>最近一次有效测试推理的几何快照，供画面示教反算长/短轴偏移。</summary>
+        private sealed record GrabTeachGeometry(
+            double CenterOriginalX,
+            double CenterOriginalY,
+            double RectAngleDeg,
+            bool IsResize,
+            double ResizeScaleX,
+            double ResizeScaleY,
+            bool HeadFlipped,
+            bool HeadTrusted,
+            CoordinateTransformer? Transformer);
+
+        private GrabTeachGeometry? _grabTeachGeometry;
+
+        /// <summary>画面示教开关：勾选后点击测试推理图像，会把点击处设为抓取点。</summary>
+        public bool IsGrabTeachMode { get; set; }
+
+        /// <summary>是否具备示教条件（已做过一次带有效掩码的测试推理）。</summary>
+        public bool CanTeachGrabPoint => _grabTeachGeometry is not null;
+
+        /// <summary>
+        /// 画面示教：把图像坐标系上的示教点反算为长/短轴偏移并写入配方。
+        /// 需先执行过一次测试推理（否则无从知道矩形几何），且朝向须可信。
+        /// </summary>
+        public void SetGrabPointByImagePosition(double imageX, double imageY)
+        {
+            if (_grabTeachGeometry is not { } g)
+            {
+                NotificationService.Info("请先执行一次测试推理，再点击图像设置抓取点。");
+                return;
+            }
+
+            if (!g.HeadTrusted)
+            {
+                NotificationService.Warning(
+                    "头尾朝向不可信（消歧链全部回退），此时抓取点偏移不生效，示教已被忽略。");
+                return;
+            }
+
+            // 未标定时用"未初始化"的变换器：尺度退化为 1 像素/mm，与未标定分支语义一致
+            var transformer = g.Transformer ?? new CoordinateTransformer();
+            var (longMm, shortMm) = GrabPointCalculator.ComputeOffsetsFromImagePoint(
+                transformer,
+                grabPointImageX: imageX, grabPointImageY: imageY,
+                centerImageX: g.CenterOriginalX, centerImageY: g.CenterOriginalY,
+                rectAngleDeg: g.RectAngleDeg,
+                isResize: g.IsResize, resizeScaleX: g.ResizeScaleX, resizeScaleY: g.ResizeScaleY,
+                headFlipped: g.HeadFlipped);
+
+            GrabOffsetLongMm = (float)longMm;
+            GrabOffsetShortMm = (float)shortMm;
+        }
+
         public Recipe Recipe => _recipe;
 
         /// <summary>

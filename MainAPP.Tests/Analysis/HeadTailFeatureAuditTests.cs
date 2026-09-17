@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MainAPP.Analysis;
 using MainAPP.Application;
 using Xunit;
 
-namespace MainAPP.Tests.Application
+namespace MainAPP.Tests.Analysis
 {
     /// <summary>
     /// 特征池自检统计测试（2026-09-13）。

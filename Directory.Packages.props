@@ -1,0 +1,100 @@
+<Project>
+
+  <!--
+    中央包版本管理（Central Package Management, CPM）—— 2026-09-16 引入。
+
+    为什么需要：此前每个 .csproj 各自写 Version，于是同一包在不同工程出现多个版本
+    （见下方"冲突裁决"），既无法回答"这台机器到底装了哪个版本"，也让构建不可重现。
+    现在**版本只在本文档出现一次**；各 .csproj 只写 <PackageReference Include="X" />。
+
+    用法：
+      - 加新包 → 在这里加 <PackageVersion Include="X" Version="Y" />，再在 csproj 加无版本的 PackageReference。
+      - 临时单工程用不同版本 → 该 PackageReference 上加 VersionOverride（**例外**，请写明理由）。
+      - 改版本 → 只改这里一处。
+
+    例外（刻意不纳入 CPM）：
+      ScottPlot5/ 与 ScottPlot.WPF/ 是上游源码快照（vendored），其包的版本按 TargetFramework 条件分支
+      （如 OpenTK 3.3.1 用于 netstandard2.0、4.9.4 用于 net8.0），纳入中央管理反而更容易改错。
+      这两个目录各有自己的 Directory.Packages.props 关掉 CPM（就近生效）。
+
+    冲突裁决（原各工程版本不一致，此处统一；括号内为裁决依据）：
+      OpenCvSharp4 / OpenCvSharp4.runtime.win  ...20250507  （多数派）
+      Microsoft.Extensions.DependencyInjection  10.0.1      （多数派，且与 MainAPP 运行期一致）
+      Microsoft.NET.Test.Sdk                     17.11.1     （多数派；可验证的三个测试工程版本不变）
+      xunit                                      2.9.2       （多数派）
+      xunit.runner.visualstudio                  2.8.2       （多数派）
+      coverlet.collector                         6.0.4       （各 2 个工程，取较新）
+  -->
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="UI / MVVM">
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.0" />
+    <PackageVersion Include="DataGridExtensions" Version="2.9.1" />
+    <PackageVersion Include="HandyControl" Version="3.4.0" />
+    <PackageVersion Include="MahApps.Metro.IconPacks" Version="6.2.1" />
+    <PackageVersion Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
+    <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+  </ItemGroup>
+
+  <ItemGroup Label="数据 / 日志">
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="8.0.24" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.24" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.24" />
+    <PackageVersion Include="Serilog" Version="4.3.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Sinks.SQLite" Version="6.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="AI / 推理（ORT 变体：由 JinlongYolo 的 OnnxRuntimePackage 属性选择其中之一）">
+    <PackageVersion Include="Microsoft.Agents.AI" Version="1.21.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.28.0" />
+    <!-- 下面三个是同一 ORT 的不同打包形态，版本必须保持一致（JinlongYolo 按属性二选一） -->
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.Managed" Version="1.28.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime.Gpu" Version="1.28.0" />
+    <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+    <!-- REVIEW(2026-09-05): OpenVINO provider 停更在 1.24.1（Intel 自 ORT 1.25 起不再发
+         Intel.ML.OnnxRuntime.OpenVino 独立包），故固定 1.24.1 不随主 ORT 升级。
+         其依赖 Managed >= 1.24.1，与主 ORT 1.28.0 共存不冲突；OpenVINO 仅为降级备选路径。 -->
+    <PackageVersion Include="Intel.ML.OnnxRuntime.OpenVino" Version="1.24.1" />
+    <PackageVersion Include="Clipper2" Version="2.0.0" />
+    <PackageVersion Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <PackageVersion Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
+  </ItemGroup>
+
+  <ItemGroup Label="基础设施">
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageVersion Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.13.61" />
+  </ItemGroup>
+
+  <ItemGroup Label="图像 / 视觉">
+    <PackageVersion Include="OpenCvSharp4" Version="4.11.0.20250507" />
+    <PackageVersion Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
+    <PackageVersion Include="OpenCvSharp4.WpfExtensions" Version="4.11.0.20250507" />
+    <PackageVersion Include="System.Drawing.Common" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="MEAI/MCP 依赖链（HikCodeReader 等间接使用）">
+    <PackageVersion Include="System.Collections.Immutable" Version="8.0.0" />
+    <PackageVersion Include="System.Composition" Version="9.0.0" />
+    <PackageVersion Include="System.Composition.AttributedModel" Version="9.0.0" />
+    <PackageVersion Include="System.Composition.Convention" Version="9.0.0" />
+    <PackageVersion Include="System.Composition.Hosting" Version="9.0.0" />
+    <PackageVersion Include="System.Composition.Runtime" Version="9.0.0" />
+    <PackageVersion Include="System.Composition.TypedParts" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="测试 / 基准">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageVersion Include="xunit" Version="2.9.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />
+  </ItemGroup>
+
+</Project>

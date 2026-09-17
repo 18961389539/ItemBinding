@@ -10,11 +10,8 @@
 
 	<PropertyGroup>
 		<PackageName>YoloSharp</PackageName>
-		<OnnxRuntimeVersion>1.28.0</OnnxRuntimeVersion>
-		<!-- REVIEW(2026-09-05): OpenVINO provider 停更在 1.24.1（Intel 自 ORT 1.25 起不再发
-		     Intel.ML.OnnxRuntime.OpenVino 独立包），无 1.28.0 版本，故固定 1.24.1 不随主 ORT 升级。
-		     其依赖 Managed >= 1.24.1，与主 ORT 1.28.0 共存不冲突；OpenVINO 仅为降级备选路径。 -->
-		<OpenVinoOnnxRuntimeVersion>1.24.1</OpenVinoOnnxRuntimeVersion>
+		<!-- 2026-09-16: ORT 相关版本已集中到根 Directory.Packages.props（CPM）。
+		     此处只保留"选哪个 ORT 打包形态"的属性——它是名称选择而非版本，且需按命令行开关分支。 -->
 		<OnnxRuntimePackage>Microsoft.ML.OnnxRuntime.Managed</OnnxRuntimePackage>
 		<PackageName Condition="'$(GpuPackage)' == 'true'">$(PackageName).Gpu</PackageName>
 		<PackageName Condition="'$(OpenVinoPackage)' == 'true'">$(PackageName).OpenVino</PackageName>
@@ -43,12 +40,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Clipper2" Version="2.0.0" />
-		<PackageReference Include="Intel.ML.OnnxRuntime.OpenVino" Version="$(OpenVinoOnnxRuntimeVersion)" Condition="'$(GpuPackage)' != 'true' and '$(CorePackage)' != 'true' and '$(OpenVinoPackage)' != 'false'" />
-		<PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
-		<PackageReference Include="SixLabors.ImageSharp.Drawing" Version="2.1.7" />
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-		<PackageReference Include="$(OnnxRuntimePackage)" Version="$(OnnxRuntimeVersion)" />
+		<PackageReference Include="Clipper2" />
+		<PackageReference Include="Intel.ML.OnnxRuntime.OpenVino" Condition="'$(GpuPackage)' != 'true' and '$(CorePackage)' != 'true' and '$(OpenVinoPackage)' != 'false'" />
+		<PackageReference Include="SixLabors.ImageSharp" />
+		<PackageReference Include="SixLabors.ImageSharp.Drawing" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+		<PackageReference Include="$(OnnxRuntimePackage)" />
 	</ItemGroup>
 
 	<ItemGroup>

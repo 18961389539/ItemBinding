@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Windows;
 
 namespace MainAPP.Models
@@ -20,7 +21,6 @@ namespace MainAPP.Models
     /// </summary>
     public class Settings : IAlgorithmSettings, INetworkSettings, IStorageSettings
     {
-        private static volatile Settings? _instance;
         private static readonly JsonSerializerOptions s_jsonOpts = new JsonSerializerOptions { WriteIndented = true };
         // 2026-09-15: 改为跟随统一数据根（DataPaths），不再写死在 exe 目录。
         // 用计算属性而非静态字段，确保取值发生在数据根解析与历史数据迁移之后。
@@ -115,6 +115,8 @@ namespace MainAPP.Models
         public string Password { get => Security.Password; set => Security.Password = value; }
         public int ExistLoginTimeout { get => Security.ExistLoginTimeout; set => Security.ExistLoginTimeout = value; }
         public string CurrentRecipeName { get => Security.CurrentRecipeName; set => Security.CurrentRecipeName = value; }
+        /// <summary>2026-09-16: 授权门禁开关（运行期，默认启用）。替代原 App 内的编译期常量。</summary>
+        public bool LicenseRequired { get => Security.LicenseRequired; set => Security.LicenseRequired = value; }
 
         // --- AI 对话模块（2026-09-12 新增，扁平转发以参与 JSON 序列化）---
         public bool AiEnabled { get => Ai.Enabled; set => Ai.Enabled = value; }
@@ -156,42 +158,136 @@ namespace MainAPP.Models
         private Settings() { }
 
         /// <summary>
-        /// 单例实例，首次访问时从 JSON 文件加载
+        /// 单例实例，首次访问时从 JSON 文件加载。
+        ///
+        /// <para>2026-09-16: 由"双重检查 + volatile"改为 <see cref="Lazy{T}"/>。
+        /// 原写法是 <c>if (_instance == null) _instance = Load();</c> —— <b>没有锁</b>，
+        /// 多线程同时首访会各自 <c>Load()</c> 出不同实例，后写入者覆盖先写入者；
+        /// 更麻烦的是先拿到的调用方可能一直握着那个被丢弃的实例（订阅/写了属性都不会生效）。
+        /// <see cref="LazyThreadSafetyMode.ExecutionAndPublication"/> 保证只执行一次且各线程拿到同一实例。</para>
         /// </summary>
-        public static Settings Instance
+        public static Settings Instance => s_instance.Value;
+
+        private static readonly Lazy<Settings> s_instance = new(Load, LazyThreadSafetyMode.ExecutionAndPublication);
+
+        /// <summary>
+        /// 串行化 <see cref="Save"/> 与 <see cref="Reload"/>：
+        /// 两者都读写同一批属性、并操作同一个文件，并发时可能写出"半更新"状态
+        /// （例如 Reload 正把新实例的属性拷回，Save 已把中间态序列化落盘），
+        /// 或两个 Save 同时走 <c>File.Replace</c> 互相踩踏。
+        /// </summary>
+        private readonly object _persistLock = new();
+
+        /// <summary>定期落盘的间隔（秒）。</summary>
+        private const int PeriodicPersistIntervalSec = 60;
+
+        private Timer? _persistTimer;
+        private int _persistRunning;
+
+        /// <summary>最近一次实际写入文件的 JSON（用于"内容未变则不写"判断）。</summary>
+        private string? _lastWrittenJson;
+
+        /// <summary>
+        /// 将当前设置序列化为 JSON 并原子写入文件，同时触发 Changed 事件。
+        /// </summary>
+        public void Save()
         {
-            get
+            var json = SerializeAndWrite();
+            _lastWrittenJson = json;
+            RaiseChanged();
+        }
+
+        /// <summary>
+        /// 序列化并原子写入（不触发 Changed）。
+        /// L15: 先写临时文件再替换，避免崩溃导致配置文件损坏。
+        /// </summary>
+        private string SerializeAndWrite()
+        {
+            var json = JsonSerializer.Serialize(this, s_jsonOpts);
+            lock (_persistLock)
             {
-                if (_instance == null)
+                if (!Directory.Exists(SettingsFolder))
+                    Directory.CreateDirectory(SettingsFolder);
+
+                var tempFile = SettingsFile + ".tmp";
+                File.WriteAllText(tempFile, json);
+                if (File.Exists(SettingsFile))
                 {
-                    _instance = Load();
+                    File.Replace(tempFile, SettingsFile, destinationBackupFileName: null);
                 }
-                // volatile 字段不做 null-state 流跟踪，但 Load() 要么返回非空实例要么抛异常，此处断言安全
-                return _instance!;
+                else
+                {
+                    File.Move(tempFile, SettingsFile);
+                }
+            }
+
+            return json;
+        }
+
+        /// <summary>
+        /// 内容有变化才落盘，返回是否真的写了文件。
+        ///
+        /// <para>2026-09-16: 用于<b>定期落盘</b>，消除"配置只在显式 Save() 时才保存"的丢失窗口——
+        /// 原先只有设置页/切配方/退出三处会调 <see cref="Save"/>，
+        /// 任何"直接改了属性但没调 Save"的路径在进程崩溃/断电时都会静默丢失。
+        /// 现在由 <see cref="StartPeriodicPersist"/> 起的定时器周期性调用本方法，
+        /// 把任何运行期改动的最长丢失窗口收敛到 <see cref="PeriodicPersistIntervalSec"/> 秒。</para>
+        ///
+        /// <para>两个刻意的设计：① <b>内容相同就不写</b>（避免无谓的磁盘写入与 mtime 抖动）；
+        /// ② <b>不触发 Changed 事件</b>——纯持久化刷新并不是"设置被改动了"，
+        /// 若在此处发事件，订阅方（UI/算法）会每隔一个周期被无意义地触发一次。</para>
+        /// </summary>
+        /// <returns>true = 内容有变化并已落盘；false = 无变化，未写盘。</returns>
+        public bool TryFlushToDiskIfChanged()
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(this, s_jsonOpts);
+                if (string.Equals(json, _lastWrittenJson, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                SerializeAndWrite();
+                _lastWrittenJson = json;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                // 落盘失败不抛给调用方（定时器回调里抛异常会静默丢失）：记日志，下一轮会重试
+                try { LogService.Instance.Warning($"设置定期落盘失败（下一周期重试）: {ex.Message}"); } catch { }
+                return false;
             }
         }
 
         /// <summary>
-        /// 将当前设置序列化为 JSON 并写入文件，同时触发 Changed 事件
+        /// 启动定期落盘定时器（幂等）。由 <c>App.ReloadSettingsAndStartCleanup</c> 在设置加载完成后调用。
         /// </summary>
-        public void Save()
+        public void StartPeriodicPersist()
         {
-            if (!Directory.Exists(SettingsFolder))
-                Directory.CreateDirectory(SettingsFolder);
+            if (Interlocked.Exchange(ref _persistRunning, 1) == 1)
+            {
+                return;
+            }
 
-            var json = JsonSerializer.Serialize(this, s_jsonOpts);
-            // L15: 原子写入，先写临时文件再替换，避免崩溃导致配置文件损坏
-            var tempFile = SettingsFile + ".tmp";
-            File.WriteAllText(tempFile, json);
-            if (File.Exists(SettingsFile))
+            _persistTimer = new Timer(
+                static state => ((Settings)state!).TryFlushToDiskIfChanged(),
+                this,
+                TimeSpan.FromSeconds(PeriodicPersistIntervalSec),
+                TimeSpan.FromSeconds(PeriodicPersistIntervalSec));
+        }
+
+        /// <summary>停止定期落盘（退出流程调用；此后由显式的 <see cref="Save"/> 负责最后一次落盘）。</summary>
+        public void StopPeriodicPersist()
+        {
+            if (Interlocked.Exchange(ref _persistRunning, 0) == 0)
             {
-                File.Replace(tempFile, SettingsFile, destinationBackupFileName: null);
+                return;
             }
-            else
-            {
-                File.Move(tempFile, SettingsFile);
-            }
-            RaiseChanged();
+
+            var timer = _persistTimer;
+            _persistTimer = null;
+            timer?.Dispose();
         }
 
         /// <summary>
@@ -276,25 +372,35 @@ namespace MainAPP.Models
         /// <summary>
         /// 从文件重新加载所有设置属性到当前实例，并触发 Changed 事件
         /// M51: 使用反射自动复制所有可写公共属性，避免新增属性时遗漏同步
+        ///
+        /// <para>2026-09-16: 属性拷贝阶段整体持 <see cref="_persistLock"/>，
+        /// 避免与并发的 <see cref="Save"/> 交叉——否则 Save 可能把"重载到一半"的中间态序列化落盘。</para>
         /// </summary>
         public void Reload()
         {
             var reloaded = Load();
-            foreach (var prop in GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            lock (_persistLock)
             {
-                if (prop.CanWrite && prop.GetSetMethod() is not null)
+                foreach (var prop in GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
                 {
-                    // L298: 每个属性单独 try-catch，避免单个属性异常中断整个 Reload
-                    try
+                    if (prop.CanWrite && prop.GetSetMethod() is not null)
                     {
-                        prop.SetValue(this, prop.GetValue(reloaded));
-                    }
-                    catch (Exception ex)
-                    {
-                        LogService.Instance.Warning($"重载设置属性 {prop.Name} 失败: {ex}");
+                        // L298: 每个属性单独 try-catch，避免单个属性异常中断整个 Reload
+                        try
+                        {
+                            prop.SetValue(this, prop.GetValue(reloaded));
+                        }
+                        catch (Exception ex)
+                        {
+                            LogService.Instance.Warning($"重载设置属性 {prop.Name} 失败: {ex}");
+                        }
                     }
                 }
             }
+
+            // 重载后内存态已与文件一致：刷新基线，避免定期落盘立刻再写一次同样的内容
+            _lastWrittenJson = JsonSerializer.Serialize(this, s_jsonOpts);
+
             RaiseChanged();
         }
     }

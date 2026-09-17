@@ -127,7 +127,7 @@ namespace MainAPP.ViewModels
                 while (!_cts.Token.IsCancellationRequested)
                 {
                     // M700: 配方页打开时跳过整个取帧循环，杜绝 ReadImageOneLoop 进入 AcquireAsync 的竞态
-                    if (s_isPaused)
+                    if (MainLoopGate.Default.IsPaused)
                     {
                         await Task.Delay(200, _cts.Token).ConfigureAwait(false);
                         continue;
@@ -373,7 +373,7 @@ namespace MainAPP.ViewModels
 
         /// <summary>
         /// 供非 UI 调用方等待主循环在途推理租约全部归还（按真实状态等待，替代固定时长盲等）。
-        /// 必须与 <see cref="PauseLoop"/> 配对：先 <see cref="PauseLoop"/>，再 await 本方法，最后切换相机触发模式。
+        /// 必须与暂停配对：先 <see cref="Services.MainLoopGate.Pause"/>，再 await 本方法，最后切回。
         /// 主视图模型实例不可用或无在途推理时立即返回 true；超时返回 false，调用方应记录告警。
         /// </summary>
         /// <param name="timeout">最长等待时间（应覆盖主循环单帧取图超时 + 余量）</param>
@@ -401,12 +401,14 @@ namespace MainAPP.ViewModels
         /// <summary>
         /// 从 DI 容器获取当前主视图模型实例（<see cref="App"/> 中注册为单例）。
         /// 设计时或容器尚未构建时返回 null。
+        /// <para>2026-09-16: 改用 <see cref="App.ServicesOrNull"/> —— <see cref="App.Services"/>
+        /// 现在在容器未初始化时抛异常，本方法语义是"可能拿不到"，用可空入口。</para>
         /// </summary>
         private static HomeViewModel? TryGetCurrentViewModel()
         {
             try
             {
-                return App.Services?.GetService<HomeViewModel>();
+                return App.ServicesOrNull?.GetService<HomeViewModel>();
             }
             catch (Exception ex)
             {

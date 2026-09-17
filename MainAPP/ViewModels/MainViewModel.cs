@@ -359,9 +359,13 @@ namespace MainAPP.ViewModels
         private bool _isStartupAutoLogin;
 
         // === 构造函数 ===
-        public MainViewModel(IToVGTService? toVgtService = null)
+        /// <summary>
+        /// 2026-09-16: 依赖改为**必填构造参数**（原先为可空参数 + <c>?? App.Services.GetRequiredService&lt;&gt;()</c> 兜底，
+        /// 属 Service Locator 反模式：依赖关系不在签名上、也无法脱离容器实例化）。
+        /// </summary>
+        public MainViewModel(IToVGTService toVgtService)
         {
-            _toVgtService = toVgtService ?? App.Services.GetRequiredService<IToVGTService>();
+            _toVgtService = toVgtService;
 
             // 捕获 UI 线程 Dispatcher（ViewModel 在 UI 线程上构造）
             _dispatcher = System.Windows.Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;

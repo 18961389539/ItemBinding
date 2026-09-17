@@ -93,6 +93,19 @@
                                 <TextBlock FontFamily="Consolas" FontSize="11" Foreground="#9FE1CB" Text="{Binding DropRateDisplay}" />
                                 <TextBlock FontFamily="Consolas" FontSize="11" Foreground="#B4B2A9" Text="{Binding BindDelayDisplay}" />
                                 <TextBlock FontFamily="Consolas" FontSize="11" Foreground="#85B7EB" Text="{Binding EncoderLinkDisplay}" />
+                                <!--  2026-09-16: 当前推理后端（降级时转琥珀色）——现场判断"跑在 GPU 还是 CPU"的第一线索  -->
+                                <TextBlock FontFamily="Consolas" FontSize="11" Text="{Binding InferenceBackendDisplay}">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="#9FE1CB" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsInferenceDegraded}" Value="True">
+                                                    <Setter Property="Foreground" Value="#EF9F27" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
                             </StackPanel>
                         </Border>
                     </Grid>

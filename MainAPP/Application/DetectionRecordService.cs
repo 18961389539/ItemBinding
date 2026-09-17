@@ -34,18 +34,30 @@ public sealed class DetectionRecordService
 {
     private readonly IBarcodeDataService _barcodeData;
     private readonly AngleTracker _angleTracker;
+    private readonly IDetectionRuntimeConfig _runtimeConfig;
 
     // 2026-09-13: 标定构图（镜像与否）仅首次记录日志，让"镜像假设"可见而非改了才知道
     private static bool s_mirrorStateLogged;
 
     // 2026-09-07: 角度质量门拒绝诊断日志的节流状态。主流程不传 onRejected 时拒绝原因被静默丢弃，
     // 大量 -9999 无从定位。这里统一记录并限频（30s 一条聚合 Warning），避免高拒绝率刷爆日志。
-    private static readonly object AngleRejectLogLock = new();
-    private static DateTime _lastAngleRejectLogTime = DateTime.MinValue;
-    private static int _angleRejectCountSinceLog;
+    // 2026-09-16: 节流逻辑抽为 AggregateLogThrottle（纯逻辑 + 可注入时钟，可单测），
+    // 与下方角度推理失败的聚合日志共用同一套语义。
 
-    /// <summary>角度质量门拒绝聚合日志的限频窗口（秒）。</summary>
+    /// <summary>角度相关聚合日志的限频窗口（秒）。
+    /// ★ 必须声明在两个 gate 之前：静态字段按**文本顺序**初始化，
+    /// 若写在其后，gate 会拿到 default(TimeSpan)=0（即"每帧都输出"）。</summary>
     private static readonly TimeSpan AngleRejectLogInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>角度质量门拒绝的聚合日志门。</summary>
+    private static readonly AggregateLogThrottle AngleRejectLogGate = new(AngleRejectLogInterval);
+
+    /// <summary>
+    /// 角度模型推理失败的聚合日志门（2026-09-16）。
+    /// 原实现是逐帧 <c>LogService.Error</c>：角度推理每帧每目标调用一次，产品连续经过时
+    /// 每秒数条 Error，既淹没真正有用的日志，也把日志 IO 变成产线负担。
+    /// </summary>
+    private static readonly AggregateLogThrottle AngleInferenceFailureLogGate = new(AngleRejectLogInterval);
 
     /// <summary>
     /// 配方未配置角度检测工具（<c>YoloTool.AngleDetection</c> 为 null）时使用的默认参数实例。
@@ -53,41 +65,10 @@ public sealed class DetectionRecordService
     /// </summary>
     private static readonly YoloTool DefaultAngleTool = new();
 
-    /// <summary>
-    /// 工位标识（2026-09-12 新增，落库 <c>DbModel.Station</c>）＝ 本机机器码。
-    ///
-    /// <para>取值复用项目既有的机器身份：<see cref="LicenseService.MachineCodeText"/> —— 激活窗口里
-    /// 展示/可复制的那个「本机机器码」，由 CPU 标识 + 系统盘卷序列号 + 首个物理网卡 MAC + 机器名 + 用户名
-    /// 哈希而成（见 <c>LicenseCore.HardwareFingerprint</c>，零 WMI：注册表 + P/Invoke）。</para>
-    ///
-    /// <para>★ 必须缓存：采集含注册表读取、<c>GetVolumeInformation</c> P/Invoke 与网卡枚举，
-    /// 若写在每条检测记录的热路径上（每秒数十条）会拖慢产线。项目内既有先例——
-    /// <c>LicenseService.IsActivated</c> 的注释即为「缓存启动时结果，避免每帧采集硬件指纹」。</para>
-    ///
-    /// <para>⚠️ 注意：机器码参与了 <c>Environment.UserName</c>，因此<b>换 Windows 账户运行会使本值改变</b>，
-    /// 同一台机器在不同账户下会被记成不同工位。若需与账户无关的工位标识，应改用机器名等，
-    /// 但那会与授权指纹脱钩，需另行决策。</para>
-    /// </summary>
-    /// <summary>当前工位标识（本机机器码），供 AI 查询等跨类场景复用（采集逻辑见 StationCode）。</summary>
-    public static string? CurrentStation => StationCode.Value;
-
-    private static readonly Lazy<string?> StationCode = new(
-        static () =>
-        {
-            try
-            {
-                var code = LicenseService.MachineCodeText;
-                // 空串归一为 null：列可空，NULL 表示"未记录"，比空串更利于 SQL 过滤与导出可读
-                return string.IsNullOrWhiteSpace(code) ? null : code;
-            }
-            catch (Exception ex)
-            {
-                // 采集失败不应阻断检测与落库：Station 退化为 NULL（语义同"未记录"）
-                LogService.Instance.Warning($"采集本机机器码失败，Station 将写空: {ex.Message}");
-                return null;
-            }
-        },
-        LazyThreadSafetyMode.ExecutionAndPublication);
+    // 2026-09-16: 原先此处挂着静态的「工位标识」采集（CurrentStation + Lazy 缓存的 StationCode）。
+    // 它被 Services.AI.AiChatService 使用，构成 Services → Application 的反向依赖。
+    // 该值的本质是"本机硬件身份"，属基础设施能力，已整体下沉到 Services.StationCodeProvider；
+    // 本类改为经注入的 IDetectionRuntimeConfig.StationCode 取值（见 ResolveFrameOptions）。
 
     // 2026-09-05: 边缘最小间距已拆为四边独立（Settings.Algorithm.EdgeMargin{Left,Top,Right,Bottom}Pixels，设置页可编辑，默认各 10px）
 
@@ -170,10 +151,58 @@ public sealed class DetectionRecordService
         return Math.Atan2(w1y - w2y, w1x - w2x) * 180.0 / Math.PI;
     }
 
-    public DetectionRecordService(IBarcodeDataService barcodeData, AngleTracker angleTracker)
+    /// <summary>
+    /// 2026-09-16: 依赖改为显式注入。
+    /// <para>此前本服务在热路径上直接读进程级单例：<c>Models.Settings.Instance.Algorithm.*</c>（6 处）
+    /// 与 <c>RecipesManage.Instance.CurrentRecipe</c>（2 处），导致依赖不可见、无法脱离宿主单测、
+    /// 且同一帧内每个检测框都重读一遍配置。现改为注入 <see cref="IDetectionRuntimeConfig"/>，
+    /// 由组合根提供"读单例"的委托实现（见 <c>App.ConfigureServices</c>）。</para>
+    /// <para>工位标识（本机机器码）原先也以静态成员 <c>CurrentStation</c> 挂在类上，
+    /// 供 <c>AiChatService</c> 使用而构成 Services → Application 反向依赖；
+    /// 现已下沉到 <c>Services.StationCodeProvider</c>，本类只经
+    /// <see cref="IDetectionRuntimeConfig.StationCode"/> 取值。</para>
+    /// </summary>
+    public DetectionRecordService(
+        IBarcodeDataService barcodeData,
+        AngleTracker angleTracker,
+        IDetectionRuntimeConfig runtimeConfig)
     {
         _barcodeData = barcodeData;
         _angleTracker = angleTracker;
+        _runtimeConfig = runtimeConfig;
+    }
+
+    /// <summary>
+    /// 解析本帧生效的检测参数快照（帧首调用一次）。
+    /// <para>internal 供单元测试：钉住"取值一律来自注入的运行期配置"，
+    /// 一旦有人改回直接读全局单例，测试即失败。</para>
+    /// </summary>
+    /// <param name="recipeBrightnessDirectionEnabled">配方级灰度判向覆盖；null = 回退全局默认。</param>
+    internal DetectionFrameOptions ResolveFrameOptions(bool? recipeBrightnessDirectionEnabled)
+    {
+        // ★ 每次访问都重新解析：Settings.Reload() 会替换 Algorithm 子对象，不能跨帧缓存引用
+        var algorithm = _runtimeConfig.Algorithm;
+
+        return new DetectionFrameOptions(
+            // 2026-09-08: 灰度判向有效开关 = 配方级覆盖 ?? 全局设置（与 HomeViewModel 的
+            // grayDirectionEnabled / angleMat 生成条件同口径，保证 ToMat 与判向执行不脱节）
+            BrightnessDirectionEnabled: recipeBrightnessDirectionEnabled ?? algorithm.BrightnessDirectionEnabled,
+            MarginLeft: algorithm.EdgeMarginLeftPixels,
+            MarginTop: algorithm.EdgeMarginTopPixels,
+            MarginRight: algorithm.EdgeMarginRightPixels,
+            MarginBottom: algorithm.EdgeMarginBottomPixels,
+            MaskAreaMinPixels: algorithm.MinMaskAreaPixels,
+            MaskAreaMaxPixels: algorithm.MaxMaskAreaPixels,
+            FeaturePoolEnabled: algorithm.HeadTailFeaturePoolEnabled,
+            AdaptiveDeadbandEnabled: algorithm.HeadTailAdaptiveDeadbandEnabled,
+            FeatureDeadband: algorithm.HeadTailFeatureDeadband,
+            AdaptiveDeadbandK: algorithm.HeadTailAdaptiveDeadbandK,
+            StretchEnabled: algorithm.BrightnessContrastStretchEnabled,
+            StretchLowPercentile: algorithm.BrightnessStretchLowPercentile,
+            StretchHighPercentile: algorithm.BrightnessStretchHighPercentile,
+            ResultOkScorePercent: algorithm.ResultOkScorePercent,
+            RecipeName: _runtimeConfig.CurrentRecipeName,
+            StationCode: _runtimeConfig.StationCode);
     }
 
     /// <summary>
@@ -238,10 +267,14 @@ public sealed class DetectionRecordService
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        // 2026-09-16: 本帧生效参数快照——帧首解析一次，循环内只读快照。
+        // 原先每个检测框都重读一遍 Settings.Instance.Algorithm 与 RecipesManage.Instance（单帧多目标即多读），
+        // 且这些全局单例读取使本服务无法脱离宿主单测（详见 IDetectionRuntimeConfig 的类注释）。
+        var options = ResolveFrameOptions(recipeBrightnessDirectionEnabled);
+
         // 2026-09-08: 灰度判向有效开关 = 配方级覆盖 ?? 全局设置（两处解析口径一致，见 HomeViewModel
         // grayDirectionEnabled 与 angleMat 生成条件，保证 ToMat 与判向执行不脱节）
-        bool brightnessDirectionEnabled = recipeBrightnessDirectionEnabled
-            ?? Models.Settings.Instance.Algorithm.BrightnessDirectionEnabled;
+        bool brightnessDirectionEnabled = options.BrightnessDirectionEnabled;
 
         var detectTime = DateTime.Now;
         // M40: 使用 FrameResult 中传递的真实时间戳
@@ -292,11 +325,11 @@ public sealed class DetectionRecordService
 
             // 2026-09-05: 四边独立最小间距可配置（Settings.Algorithm.EdgeMargin*Pixels，默认各 10px），
             // 检测框距对应图像边缘不足该值（含部分/完全出界）判定无效，防止抓到半个产品。
-            var edgeAlg = Models.Settings.Instance.Algorithm;
-            double marginLeft = edgeAlg.EdgeMarginLeftPixels;
-            double marginTop = edgeAlg.EdgeMarginTopPixels;
-            double marginRight = edgeAlg.EdgeMarginRightPixels;
-            double marginBottom = edgeAlg.EdgeMarginBottomPixels;
+            // 2026-09-16: 取自帧快照（原在每个检测框内重读全局设置）
+            double marginLeft = options.MarginLeft;
+            double marginTop = options.MarginTop;
+            double marginRight = options.MarginRight;
+            double marginBottom = options.MarginBottom;
             if (bounds.Left < marginLeft
                 || bounds.Top < marginTop
                 || bounds.Right > (scanerResult.Width - marginRight)
@@ -325,8 +358,9 @@ public sealed class DetectionRecordService
             // null = 未在配方设置 → 回退全局。isResize 时掩码面积处于推理图分辨率，
             // 需 ×(ResizeScale×ResizeScaleY) 换算回原图像素再比较，保证阈值口径与缩放设置无关。
             // 掩码面积为 0（阈值下无有效像素、回退外接框）的目标在启用下限(>0)时一并过滤。
-            double minMaskAreaPx = recipeMinMaskAreaPixels ?? edgeAlg.MinMaskAreaPixels;
-            double maxMaskAreaPx = recipeMaxMaskAreaPixels ?? edgeAlg.MaxMaskAreaPixels;
+            // 2026-09-16: 全局回退值取自帧快照（原在每个检测框内重读全局设置）
+            double minMaskAreaPx = recipeMinMaskAreaPixels ?? options.MaskAreaMinPixels;
+            double maxMaskAreaPx = recipeMaxMaskAreaPixels ?? options.MaskAreaMaxPixels;
             double maskAreaOriginalPixels = isResize
                 ? (double)maskMinAreaRect.MaskArea * resizeWidth * resizeHeight
                 : maskMinAreaRect.MaskArea;
@@ -557,7 +591,7 @@ public sealed class DetectionRecordService
             // 仅在模型翻转信号不可用时才需要它定头尾（模型可用帧跳过，算力与旧模型路径持平）；
             // 灰度判向已并入特征池成为 BrightnessDiff 特征（排在几何之后、梯度/纹理之前），
             // 不再作为独立兜底路径；特征池此处照常产出 BrightMean/DarkMean/BrightnessDiff 统计。
-            if (Models.Settings.Instance.Algorithm.HeadTailFeaturePoolEnabled && modelFlipAngle is null)
+            if (options.FeaturePoolEnabled && modelFlipAngle is null)
             {
                 // 2026-09-13: 画像缺失必须显式告警。曾因 HomeViewModel 的 angleMat gate 漏了
                 // 特征池开关，导致「开特征池 + 关亮度判向」时 angleMat 恒为 null，特征池每帧
@@ -571,18 +605,17 @@ public sealed class DetectionRecordService
                 }
                 else
                 {
-                    var alg = Models.Settings.Instance.Algorithm;
-
                     // 2026-09-13: 自适应死区——读窗口取本帧基准（按配方分桶，窗口未满回退固定值），
                     // 判定后把本帧各特征的 |v| 回写窗口（★全帧记录，无论是否出死区，防自锁闭环）。
                     // 读取发生在记录之前，故本帧死区由"此前 30 帧"决定，不存在自我影响。
-                    var adaptiveEnabled = alg.HeadTailAdaptiveDeadbandEnabled;
-                    var recipeKey = RecipesManage.Instance.CurrentRecipe?.Name ?? "(无配方)";
+                    // 2026-09-16: 参数取自帧快照（原先在此重读全局设置）
+                    var adaptiveEnabled = options.AdaptiveDeadbandEnabled;
+                    var recipeKey = options.RecipeName ?? "(无配方)";
                     Func<string, double>? adaptiveBase = null;
                     if (adaptiveEnabled)
                     {
                         adaptiveBase = name => HeadTailAdaptiveDeadband.Instance.GetBaseDeadband(
-                            recipeKey, name, alg.HeadTailFeatureDeadband, alg.HeadTailAdaptiveDeadbandK);
+                            recipeKey, name, options.FeatureDeadband, options.AdaptiveDeadbandK);
                     }
 
                     var codePresent = imageBarcodeX != 0 || imageBarcodeY != 0;
@@ -590,11 +623,11 @@ public sealed class DetectionRecordService
                         fallbackAngle, angleSourceImage, edgeResult,
                         maskMinAreaRect.Center.X, maskMinAreaRect.Center.Y, maskMinAreaRect.Angle, maskMinAreaRect.MaskArea,
                         longAxisPx, codePresent, imageBarcodeX, imageBarcodeY,
-                        alg.HeadTailFeatureDeadband,
+                        options.FeatureDeadband,
                         brightnessDirectionEnabled,
-                        alg.BrightnessContrastStretchEnabled,
-                        alg.BrightnessStretchLowPercentile,
-                        alg.BrightnessStretchHighPercentile,
+                        options.StretchEnabled,
+                        options.StretchLowPercentile,
+                        options.StretchHighPercentile,
                         out brightnessStats,
                         adaptiveBaseDeadband: adaptiveBase);
 
@@ -714,18 +747,18 @@ public sealed class DetectionRecordService
                 // 使「各特征判得对不对」可在离线侧直接算（无需重算投影）。
                 HeadTruthPositive = headTruthPositive,
                 // 2026-09-12: 追溯列——记录本帧检测时生效的配方名，使「某配方的合格率/耗时」
-                // 这类问题可被回答。取当前配方名，与界面/TCP 切配方同源（RecipesManage 单例）。
-                RecipeName = RecipesManage.Instance.CurrentRecipe?.Name,
+                // 这类问题可被回答。取当前配方名，与界面/TCP 切配方同源（帧首经运行期配置快照）。
+                RecipeName = options.RecipeName,
                 // 2026-09-12: OK/NG 判定（用户定义的规则：条码读取成功 且 置信度 ≥ 阈值 → OK）。
                 // 判定与量纲换算统一由 DetectionResultEvaluator 承担（Score 是 0~1，阈值是百分比）。
                 // 「条码读取成功」复用上方方法级 hasBarcode（含 "noread" 哨兵排除），单一来源。
                 Result = DetectionResultEvaluator.Evaluate(
                     hasBarcode,
                     edgeResult.Confidence,
-                    Models.Settings.Instance.Algorithm.ResultOkScorePercent),
-                // 2026-09-12: 工位 = 本机机器码（见 StationCode 字段注释：进程内只采集一次并缓存）。
+                    options.ResultOkScorePercent),
+                // 2026-09-12: 工位 = 本机机器码（见 Services.StationCodeProvider：进程内只采集一次并缓存）。
                 // 单机场景下"工位"即这台检测设备，用于把同一件产品的记录归到一条过站链上。
-                Station = StationCode.Value,
+                Station = options.StationCode,
             };
 
             if (saveDraw && !string.IsNullOrEmpty(folder))
@@ -897,8 +930,10 @@ public sealed class DetectionRecordService
         }
         catch (Exception ex)
         {
-            // 环境/模型问题（非质量门）：记 Error，避免线上问题被静默吞掉
-            LogService.Instance.Error($"角度模型推理异常，输出未知角度(-9999): {ex}");
+            // 2026-09-16: 原为逐帧 LogService.Error（角度推理每帧每目标一次，产品连续经过时每秒数条，
+            // 会把日志淹掉并给 IO 添负担）。现按"是否推理后端失效"分类 + 限频聚合，
+            // 详见 RecordAngleInferenceFailure 的注释（含"角度池为何不做自愈"的说明）。
+            RecordAngleInferenceFailure(ex, InferenceBackendFailure.IsBackendFailure(ex));
             return null;
         }
     }
@@ -910,21 +945,36 @@ public sealed class DetectionRecordService
     /// </summary>
     private static void RecordAngleReject(string reason)
     {
-        lock (AngleRejectLogLock)
+        // 窗口内只计数；到点输出一条聚合 Warning，reason 取本次（即窗口内最近一次）的拒绝原因
+        if (AngleRejectLogGate.TryFlush(out var count))
         {
-            _angleRejectCountSinceLog++;
-            var now = DateTime.Now;
-            if ((now - _lastAngleRejectLogTime) < AngleRejectLogInterval)
-            {
-                return;
-            }
-
-            _lastAngleRejectLogTime = now;
-            var count = _angleRejectCountSinceLog;
-            _angleRejectCountSinceLog = 0;
             LogService.Instance.Warning(
                 $"[角度诊断] 最近 {AngleRejectLogInterval.TotalSeconds:0}s 内" +
                 $"角度未被采信 {count} 次（质量门拒绝 / 方向退化），最近原因: {reason}");
+        }
+    }
+
+    /// <summary>
+    /// 角度模型推理失败的聚合日志（限频，2026-09-16）。
+    ///
+    /// <para>原实现在 catch 里逐帧 <c>Error</c>，改为限频聚合后仍保留可诊断性：
+    /// 输出窗口内次数 + 是否为推理后端失效 + 最近一次异常的类型与消息。</para>
+    ///
+    /// <para><b>为什么这里不做"触发后端降级重建"</b>：角度池按设计**固定纯 CPU**
+    /// （见 <c>ModelLoaderService.CreateAnglePredictorPoolAsync</c>：角度链路历史上曾因
+    /// CUDA 会话运行期崩溃而逐帧失败，且当时无自愈机制，故直接规避 CUDA）。
+    /// CPU EP 不具备"会话建得起、一跑就炸"那种失效模式，因此这里的分类型只用于诊断定位。
+    /// 若将来角度池启用 CUDA，必须同时补上运行期自愈，否则会退回"逐帧失败且永不自愈"。</para>
+    /// </summary>
+    private static void RecordAngleInferenceFailure(Exception ex, bool backendFailure)
+    {
+        if (AngleInferenceFailureLogGate.TryFlush(out var count))
+        {
+            var kind = backendFailure ? "推理后端失效" : "环境/模型问题";
+            LogService.Instance.Error(
+                $"[角度诊断] 最近 {AngleRejectLogInterval.TotalSeconds:0}s 内角度模型推理失败 {count} 次" +
+                $"（{kind}），本帧角度输出 -9999（改用其它消歧路径）。" +
+                $"最近异常: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

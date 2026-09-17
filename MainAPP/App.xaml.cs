@@ -35,17 +35,21 @@ namespace MainAPP
         private Task? _dataCleanupTask;
         private readonly CancellationTokenSource _dataCleanupCts = new();
         // RTC(2026-08-06): 配方切换 TCP 服务（上位机指令切换配方，监听 5000 端口）
-        private readonly RecipeTcpServerService _recipeTcpServer = new();
+        // 2026-09-16: 以下四个对外宿主改为由 DI 容器创建并持有（原先在此处直接 new，
+        // 与容器里注册的其它服务形成"一部分走容器、一部分手工 new"的双轨）。
+        // 字段在 ConfigureServices 中（容器建好后）赋值，容器负责 Dispose；
+        // OnExit 里仍显式 Stop()，且必须早于容器释放，保持原有关闭时序。
+        private RecipeTcpServerService? _recipeTcpServer;
         // 2026-09-11: 相机调试 Web 服务（手机实时看图 + 只读参数，监听 5188 端口）。
         // 由原 WebLiveView 独立进程的能力移植而来，改为进程内托管以复用 Devices.Scanners 单例，
         // 避免两个进程争抢同一台 GigE 读码器；使用 HttpListener 而非 Kestrel，零新增框架依赖。
-        private readonly CameraWebHost _cameraWebHost = new();
+        private CameraWebHost? _cameraWebHost;
         // 2026-09-12: AI 对话 Web 服务（浏览器级对话 UI，监听 5190 端口）。
         // 内嵌页面跑 Deep Chat（MIT），C# 侧只提供 /ai/chat 端点桥接到 AiChatService。
         // 同一份页面也暴露给手机浏览器，与 CameraWebHost（5188）同一模式、错开端口。
-        private readonly AiWebHost _aiWebHost = new();
+        private AiWebHost? _aiWebHost;
         // 2026-09-13: 统一远程运维门户（5188/5190 错开端口 5191）
-        private readonly OpsWebHost _opsWebHost = new();
+        private OpsWebHost? _opsWebHost;
         // L407b: OnExit 数据清理任务等待超时（秒）
         private const int OnExitDataCleanupWaitSec = 5;
         private const int OnExitDataCleanupFinalWaitSec = 1;
@@ -65,8 +69,25 @@ namespace MainAPP
         private const int LogBatchSize = 10;
         private const int LogMaxDbSizeMb = 2;
 
-        // DI 容器：作为新基础设施与现有 .Instance 单例共存，为后续渐进式迁移到构造函数注入打基础
-        public static IServiceProvider Services { get; private set; } = default!;
+        // DI 容器：组合根，在 ConfigureServices（App.OnStartup 内）中建立。
+        // 2026-09-16: 由 `public static IServiceProvider Services { get; private set; } = default!;`
+        // 改为"未初始化即抛明确异常"——原先的 default! 在容器建立前被访问会得到 null，
+        // 报出的是某个下游的 NullReferenceException，排查时看不出真正原因。
+        private static IServiceProvider? s_services;
+
+        /// <summary>
+        /// DI 容器。仅在 <see cref="ConfigureServices"/> 之后可用；过早访问会抛出可识别的异常。
+        /// </summary>
+        public static IServiceProvider Services =>
+            s_services ?? throw new InvalidOperationException(
+                "DI 容器尚未初始化：App.Services 只能在 App.OnStartup 的 ConfigureServices 之后访问。" +
+                "若当前处于设计时（VS 设计器）或启动早期，请改用 App.ServicesOrNull。");
+
+        /// <summary>
+        /// DI 容器；未初始化时返回 <c>null</c>。仅用于"可能尚未初始化"的场景
+        /// （设计时视图、启动早期探询），业务流程请用 <see cref="Services"/>，以免静默拿到 null。
+        /// </summary>
+        public static IServiceProvider? ServicesOrNull => s_services;
 
         protected override async void OnStartup(StartupEventArgs e)
         {
@@ -111,7 +132,7 @@ namespace MainAPP
                     Shutdown(-1);
                     return;
                 }
-                StartApplicationServices();
+                await StartApplicationServices();
                 // M61: 此处后续代码需在 UI 线程执行（InitializeRecipes 等访问 UI），不加 ConfigureAwait(false)
                 await InitializeDatabaseAsync();
                 InitializeRecipes();
@@ -133,34 +154,33 @@ namespace MainAPP
         }
 
         /// <summary>
-        /// REVIEW(2026-09-05): 激活码门禁临时停用开关。
-        /// 现场出现「激活成功后过一段时间又要求重新激活」（机器指纹成分漂移导致 MachineMismatch，
-        /// 或换 Windows 账户运行导致授权文件与指纹双重失配，详见 HardwareFingerprint 与 LicenseService）。
-        /// 在指纹策略与授权文件位置整改完成前，置 false 直接放行：
-        /// 不校验激活码、不弹激活窗口、不要求 license.txt。
-        /// 恢复授权门禁：将本字段改回 true 即可，其余代码未做任何删除。
-        /// 注：用 static readonly 而非 const——const=false 时 if(!ActivationRequired) 恒真，
-        /// 编译器把下方授权分支判为不可达代码（CS0162）。
-        /// </summary>
-        private static readonly bool ActivationRequired = false;
-
-        /// <summary>
-        /// LIC(2026-08-06): 离线授权检查。已激活且有效直接放行；否则弹出激活窗口，
-        /// 用户激活成功返回 true，取消/退出返回 false（调用方 Shutdown）。
-        /// 注意：<see cref="ActivationRequired"/> 为 false 时恒放行。
+        /// 2026-09-16: 授权门禁改为**运行期**解析，不再使用编译期常量。
+        /// <para>历史：此处原为 <c>private static readonly bool ActivationRequired = false;</c>。
+        /// 现场为规避「换 Windows 账户后要求重新激活」（机器指纹含 UserName + 授权文件按用户存放，
+        /// 双重失配）而把它置 false。但常量形态使"临时停用"实为永久停用——恢复必须改源码重编译。
+        /// 该作用域错配已由 2026-09-15 的数据根改造消除（授权文件已随数据根按机器存放），
+        /// 指纹中的 UserName 也已移除，故门禁恢复默认启用。</para>
+        /// <para>切换方式（均为运行期，无需重编译）：
+        /// ① 环境变量 <see cref="LicenseService.BypassEnvironmentVariable"/>=1 临时旁路（调试）；
+        /// ② 配置项 <c>Security.LicenseRequired</c>（settings.json）设为 false。</para>
         /// </summary>
         private bool EnsureActivated()
         {
-            if (!ActivationRequired)
+            if (!LicenseService.IsGateEnabled)
             {
-                LogService.Instance.Warning("[LIC] 激活码门禁已停用（ActivationRequired=false），跳过授权检查");
+                LogService.Instance.Warning(
+                    $"[LIC] 授权门禁已关闭（{LicenseService.GateDecisionNote}）——不校验激活码、不弹激活窗口。" +
+                    $"恢复方式：删除环境变量 {LicenseService.BypassEnvironmentVariable}，" +
+                    "并把设置项 Security.LicenseRequired 置为 true。");
                 return true;
             }
 
             try
             {
                 if (LicenseService.ValidateAtStartup())
+                {
                     return true;
+                }
 
                 var activationWindow = new ActivationWindow();
                 return activationWindow.ShowDialog() == true;
@@ -275,20 +295,20 @@ namespace MainAPP
             }
 
             // RTC(2026-08-06): 停止配方切换 TCP 服务
-            try { _recipeTcpServer.Stop(); }
+            try { _recipeTcpServer?.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止配方切换 TCP 服务失败: {ex}"); }
 
             // 2026-09-11: 停止相机调试 Web 服务。必须在扫码枪关闭之前完成，
             // 否则可能遗留"主循环暂停 + 软触发"状态阻止进程正常退出。
-            try { _cameraWebHost.Stop(); }
+            try { _cameraWebHost?.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止相机调试 Web 服务失败: {ex}"); }
 
             // 2026-09-12: 停止 AI 对话 Web 服务（与相机调试服务同一时序，须在扫码枪关闭之前）
-            try { _aiWebHost.Stop(); }
+            try { _aiWebHost?.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止 AI 对话 Web 服务失败: {ex}"); }
 
             // 2026-09-13: 停止统一运维门户（同一时序）
-            try { _opsWebHost.Stop(); }
+            try { _opsWebHost?.Stop(); }
             catch (Exception ex) { LogService.Instance.Error($"停止运维门户 Web 服务失败: {ex}"); }
 
             // 2026-09-12: 停止 llama-server 侧车（进程内推理已退役，显存由侧车持有）
@@ -339,8 +359,11 @@ namespace MainAPP
             // H79e: 释放内存诊断资源，需在 Log.CloseAndFlush 之前调用（内部可能记录日志）
             try { MemoryDiagnostics.Shutdown(); }
             catch (Exception ex) { try { Log.Error(ex, "MemoryDiagnostics.Shutdown 失败"); } catch { } }
-            // 清理 DI 容器
-            if (Services is IDisposable disposableProvider)
+            // 清理 DI 容器（含其上注册的四个对外宿主与 VM）。
+            // 2026-09-16: 用 ServicesOrNull —— Services 现已改为"未初始化即抛异常"，
+            // 若启动早期失败（容器尚未建立）本行会抛出并逃出 OnExit 的清理流程。
+            // 语义上"容器不存在"时就是无事可清理。
+            if (ServicesOrNull is IDisposable disposableProvider)
             {
                 try { disposableProvider.Dispose(); }
                 catch (Exception ex) { LogService.Instance.Error($"释放 DI 容器失败: {ex}"); }
@@ -395,6 +418,11 @@ namespace MainAPP
         /// </summary>
         private static void SaveCriticalStateBeforeShutdown()
         {
+            // 2026-09-16: 先停掉定期落盘定时器（避免退出过程中与下面的 Save 并发写同一文件），
+            // 再由本方法做最后一次显式落盘。
+            try { Settings.Instance.StopPeriodicPersist(); }
+            catch (Exception ex) { try { Log.Warning(ex, "[退出] 停止设置定期落盘失败"); } catch { } }
+
             try
             {
                 // M342b: 仅在设置成功加载后才保存，避免启动失败时用默认值覆盖用户配置
@@ -452,8 +480,10 @@ namespace MainAPP
         /// 配置 DI 容器并注册现有单例服务。
         /// 注册时直接传入 .Instance 单例实例，确保 DI 解析的对象与现有静态访问的是同一实例，
         /// 实现 DI 容器与现有 .Instance 调用共存，为后续渐进式迁移到构造函数注入打基础。
+        /// <para>2026-09-16: 对外宿主（配方 TCP / 相机 Web / AI Web / 运维门户）纳入容器，
+        /// 不再在字段初始化时手工 new —— 消除"同一批服务一半由容器管、一半手工管"的双轨。</para>
         /// </summary>
-        private static void ConfigureServices()
+        private void ConfigureServices()
         {
             var services = new ServiceCollection();
 
@@ -462,12 +492,28 @@ namespace MainAPP
             services.AddSingleton<RecipesManage>(RecipesManage.Instance);
             services.AddSingleton<LogService>(LogService.Instance);
             services.AddSingleton<BarcodeDataService>(BarcodeDataService.Instance);
-            // DetectionRecordService：通过构造函数注入 IBarcodeDataService 和 AngleTracker
-            services.AddSingleton<DetectionRecordService>(sp => new DetectionRecordService(
-                sp.GetRequiredService<IBarcodeDataService>(),
-                sp.GetRequiredService<AngleTracker>()));
             services.AddSingleton<AuthService>(AuthService.Instance);
             services.AddSingleton<LogDatabaseService>(LogDatabaseService.Instance);
+
+            // 检测运行期配置：领域层只认 IDetectionRuntimeConfig 这个端口，"去哪个单例取值"由组合根注入。
+            // ★ 必须用委托而不是直接注册 Settings.Instance.Algorithm —— Settings.Reload() 会用反射把
+            // 新实例的所有可写公共属性拷回（其中包含 Algorithm 这类子对象），也就是重载后
+            // Settings.Instance.Algorithm 指向的是**另一个对象**；若在此缓存子对象引用，
+            // 设置页每次重载都会让检测逻辑读到过期配置（静默错误）。委托每次调用都现取，永远是最新值。
+            services.AddSingleton<IDetectionRuntimeConfig>(sp =>
+            {
+                var recipes = sp.GetRequiredService<RecipesManage>();
+                return new DetectionRuntimeConfig(
+                    algorithm: () => Settings.Instance.Algorithm,
+                    currentRecipeName: () => recipes.CurrentRecipe?.Name,
+                    stationCode: () => StationCodeProvider.Current);
+            });
+
+            // DetectionRecordService：依赖全部通过构造函数注入（原先内部直读全局单例）
+            services.AddSingleton<DetectionRecordService>(sp => new DetectionRecordService(
+                sp.GetRequiredService<IBarcodeDataService>(),
+                sp.GetRequiredService<AngleTracker>(),
+                sp.GetRequiredService<IDetectionRuntimeConfig>()));
 
             // IToVGTService：通过 Settings 注入网络参数（2026-09-13：ToVGT 静态桥接已移除，仅此一处入口）
             var toVgtService = new ToVGTService(Settings.Instance);
@@ -479,11 +525,17 @@ namespace MainAPP
             // AngleTracker：跨帧角度锁定（单例，配方切换时 Clear）
             services.AddSingleton<AngleTracker>(AngleTracker.Instance);
 
+            // 对外宿主：由容器创建并持有（容器负责 Dispose），App 在下方取回引用用于启停时序控制。
+            // OpsWebHost 需要 IToVGTService（原先在请求处理里通过 App.Services 反查，现改为构造函数注入）。
+            services.AddSingleton<RecipeTcpServerService>();
+            services.AddSingleton<CameraWebHost>();
+            services.AddSingleton<AiWebHost>();
+            services.AddSingleton<OpsWebHost>();
+
             // 接口抽象注册：为后续 ViewModel 改造为构造函数注入打基础。
             // - LogService/AuthService/BarcodeDataService 均为已有 Instance 的单例类，
             //   此处复用同一单例实例注册为接口类型，保证 DI 解析的对象与现有 .Instance 调用是同一实例。
             // - NotificationService 为静态类无法实现接口，使用 NotificationServiceImpl 包装类委托给静态方法。
-            // 现有 ViewModel 中的 XxxService.Instance 静态调用方式保持不变（向后兼容）。
             services.AddSingleton<ILogService>(LogService.Instance);
             services.AddSingleton<IAuthService>(AuthService.Instance);
             services.AddSingleton<IBarcodeDataService>(BarcodeDataService.Instance);
@@ -498,14 +550,21 @@ namespace MainAPP
             services.AddSingleton<INavigationService>(provider =>
                 new NavigationService(() => System.Windows.Application.Current.MainWindow as MainWindow));
 
-            // ViewModel：当前保持无参构造函数，将来迁移到构造函数注入时由 DI 解析依赖
+            // ViewModel：依赖全部由构造函数注入（原先用 App.Services 兜底解析，属 Service Locator）
             services.AddSingleton<HomeViewModel>();
 
-            Services = services.BuildServiceProvider();
+            var provider = services.BuildServiceProvider();
+            s_services = provider;
+
+            // 取回对外宿主实例（启停时序由 App 控制，实例归容器所有）
+            _recipeTcpServer = provider.GetRequiredService<RecipeTcpServerService>();
+            _cameraWebHost = provider.GetRequiredService<CameraWebHost>();
+            _aiWebHost = provider.GetRequiredService<AiWebHost>();
+            _opsWebHost = provider.GetRequiredService<OpsWebHost>();
 
             // 为 ViewModel 设置静态 DialogService（向后兼容：DI 与现有 .Instance 调用共存）
             // VM 仍通过静态属性访问，但实例来自 DI 容器，便于未来替换实现或单元测试注入 mock
-            var dialogService = Services.GetRequiredService<IDialogService>();
+            var dialogService = provider.GetRequiredService<IDialogService>();
             RecipeManageViewModel.DialogService = dialogService;
             DatabaseViewModel.DialogService = dialogService;
             SettingsViewModel.DialogService = dialogService;
@@ -535,6 +594,10 @@ namespace MainAPP
             Settings.Instance.Reload();
             // M342b: 标记设置已成功加载，OnExit 中据此判断是否允许 Save()
             _settingsLoaded = true;
+            // 2026-09-16: 启动定期落盘（60s，内容有变化才写）。
+            // 原先配置只在设置页/切配方/退出三处显式 Save()，任何"改了属性但没调 Save"的路径
+            // 在崩溃或断电时会静默丢失；现在最长丢失窗口被收敛到 60 秒。
+            Settings.Instance.StartPeriodicPersist();
             _ = Task.Run(() =>
             {
                 // M48: fire-and-forget 任务必须有异常处理，否则变成 UnobservedTaskException
@@ -549,17 +612,23 @@ namespace MainAPP
             });
         }
 
-        private void StartApplicationServices()
+        /// <summary>
+        /// 启动常驻服务（ToVGT / 日报 / 扫码枪初始化 / 四个对外宿主）。
+        /// 2026-09-16: 由同步方法改为 async——原先对 <c>toVgt.StartAsync()</c> 用
+        /// <c>GetAwaiter().GetResult()</c> 同步等待，依据是"返回值是已完成任务、不阻塞"。
+        /// 该前提一旦哪天不再成立（StartAsync 内部新增了真正的异步 I/O），
+        /// 就会在 UI 线程上静默阻塞启动流程——而这类前提没人会记得复核。
+        /// 现改为直接 await：成立时零开销，不成立时也不会阻塞 UI。
+        /// 注意不追加 ConfigureAwait(false)：本方法体内后续动作（宿主启动、扫码枪任务编排）
+        /// 与原实现一样在 UI 线程执行。
+        /// </summary>
+        private async Task StartApplicationServices()
         {
             // 通过 DI 获取 IToVGTService 启动（替代原 ToVGT.Start() 静态调用）
             var toVgt = Services.GetRequiredService<IToVGTService>();
             try
             {
-                // StartAsync 内部同步创建 UDP 客户端并启动后台任务（仅 Task.Run 部分是异步），
-                // 返回值是已完成任务，GetResult() 不阻塞
-#pragma warning disable VSTHRD002
-                toVgt.StartAsync().GetAwaiter().GetResult();
-#pragma warning restore VSTHRD002
+                await toVgt.StartAsync().ConfigureAwait(true);
             }
             catch (Exception ex)
             {
@@ -594,7 +663,7 @@ namespace MainAPP
             // RTC(2026-08-06): 启动配方切换 TCP 服务（上位机指令切换配方）
             try
             {
-                _recipeTcpServer.Start();
+                _recipeTcpServer?.Start();
             }
             catch (Exception ex)
             {
@@ -605,7 +674,7 @@ namespace MainAPP
             // 真正接管相机发生在首个客户端接入时，故可与其他服务并列启动。
             try
             {
-                _cameraWebHost.Start();
+                _cameraWebHost?.Start();
             }
             catch (Exception ex)
             {
@@ -616,7 +685,7 @@ namespace MainAPP
             // 真正加载模型发生在首个提问时（AiChatService 按需加载）。
             try
             {
-                _aiWebHost.Start();
+                _aiWebHost?.Start();
             }
             catch (Exception ex)
             {
@@ -626,7 +695,7 @@ namespace MainAPP
             // 2026-09-13: 启动统一运维门户（5191）
             try
             {
-                _opsWebHost.Start();
+                _opsWebHost?.Start();
             }
             catch (Exception ex)
             {
@@ -637,12 +706,27 @@ namespace MainAPP
         private static async Task InitializeDatabaseAsync()
         {
             using var db = new AppDbContext();
-            await db.Database.EnsureCreatedAsync().ConfigureAwait(false);
-            await db.EnsureIndexesAsync().ConfigureAwait(false);
-            // 2026-09-08: 灰度判向统计列升级（既有库补列，幂等；EnsureCreated 不会给已存在库加列）
-            await db.EnsureBrightnessColumnsAsync().ConfigureAwait(false);
-            // 2026-09-12: 追溯列升级（RecipeName / Result / Station），AI 对话查追溯数据的前提
-            await db.EnsureTraceColumnsAsync().ConfigureAwait(false);
+            // 2026-09-16: 原先这里串着 EnsureCreated + EnsureIndexesAsync + EnsureBrightnessColumnsAsync
+            // + EnsureTraceColumnsAsync 四个手写步骤，新增字段必须记得同步改它们。
+            // 现统一为一次"模型 → 库"的增量对齐（补缺失列 + 补缺失索引），
+            // 新增列/索引只需改 DbModel 与 AppDbContext.OnModelCreating，不需要再动本方法。
+            var sync = await db.ApplySchemaSyncAsync().ConfigureAwait(false);
+            if (sync.HasChanges)
+            {
+                // 结构变更必须可见：现场排查"为什么老机器行为不同"时，这两行是直接线索
+                LogService.Instance.Warning(
+                    $"[DB] 库结构已同步：新增列 [{string.Join(", ", sync.AddedColumns)}]、" +
+                    $"新增索引 [{string.Join(", ", sync.AddedIndexes)}]");
+            }
+
+            if (sync.SkippedColumns.Count > 0)
+            {
+                // 不静默跳过：这些列在 SQLite 上无法安全自动补，必须人工给显式迁移步骤
+                LogService.Instance.Error(
+                    $"[DB] 以下模型列无法自动补（非空且无默认值，或类型无法映射）：{string.Join(", ", sync.SkippedColumns)}；" +
+                    "请为其提供显式迁移步骤，否则该列写入会报 no such column。");
+            }
+
             await MigrateLegacyAngleDomainAsync(db).ConfigureAwait(false);
             LogService.Instance.Info("应用程序启动");
         }

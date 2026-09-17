@@ -24,9 +24,18 @@ namespace MainAPP.Tests.Integration;
 /// </summary>
 public class DetectionRecordServiceIntegrationTests : IAsyncDisposable
 {
+    // 2026-09-16: DetectionRecordService 改为构造函数注入运行期配置（原先内部直读全局单例）。
+    // 本用例属集成测试、要跑真实落库，故按**生产同款接线**提供配置来源，
+    // 保证测到的行为与产线一致（软件单元测试请见 Application/DetectionRuntimeConfigTests：那里用自建委托，不碰单例）。
+    private static readonly IDetectionRuntimeConfig ProductionLikeConfig = new DetectionRuntimeConfig(
+        algorithm: () => Settings.Instance.Algorithm,
+        currentRecipeName: () => RecipesManage.Instance.CurrentRecipe?.Name,
+        stationCode: () => StationCodeProvider.Current);
+
     private readonly DetectionRecordService _service = new(
         BarcodeDataService.Instance,
-        AngleTracker.Instance);
+        AngleTracker.Instance,
+        ProductionLikeConfig);
     private readonly BarcodeDataService _dbService = BarcodeDataService.Instance;
     // BuildAndSaveAsync 的 folder 参数即使 saveDraw=false 也会校验非空，使用临时目录满足约束
     private readonly string _tempFolder = Path.Combine(Path.GetTempPath(), $"DetectionTest_{Guid.NewGuid():N}");
@@ -34,15 +43,14 @@ public class DetectionRecordServiceIntegrationTests : IAsyncDisposable
     public DetectionRecordServiceIntegrationTests()
     {
         Directory.CreateDirectory(_tempFolder);
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
         EnsureDatabaseSchema();
     }
 
     private static void EnsureDatabaseSchema()
     {
         using var ctx = new MainAPP.Models.AppDbContext();
-        ctx.EnsureTraceColumnsAsync().GetAwaiter().GetResult();
-        ctx.EnsureBrightnessColumnsAsync().GetAwaiter().GetResult();
+        ctx.ApplySchemaSyncAsync().GetAwaiter().GetResult();
     }
 
     public async ValueTask DisposeAsync()

@@ -1,5 +1,5 @@
 using System.IO;
-using MainAPP.Application;
+using MainAPP.Analysis;
 using MainAPP.Models;
 using Microsoft.Agents.AI;
 using OpenAI;
@@ -521,7 +521,7 @@ namespace MainAPP.Services.AI
                 }, JsonOpts);
             }
 
-            var audit = Application.HeadTailFeatureAudit.Build(
+            var audit = HeadTailFeatureAudit.Build(
                 rows.Select(r => r.HeadFeatures).ToList(),
                 rows.Select(r => r.HeadTruthPositive).ToList(),
                 rows.Select(r => r.ImageX).ToList(),
@@ -580,13 +580,15 @@ namespace MainAPP.Services.AI
             }, JsonOpts);
         }
 
-        /// <summary>工位/过站：station 为空时取当前机器码（本机）。</summary>
+        /// <summary>工位/过站：station 为空时取当前机器码（本机）。
+        /// 2026-09-16: 取值改走 <see cref="StationCodeProvider"/>（原为 Application 层的
+        /// DetectionRecordService.CurrentStation，构成 Services → Application 反向依赖）。</summary>
         private async Task<string> QueryByStationAsync(string station, int hours, int limit)
         {
             hours = ClampHours(hours);
             limit = ClampLimit(limit);
             var since = DateTime.Now.AddHours(-hours);
-            var target = string.IsNullOrWhiteSpace(station) ? DetectionRecordService.CurrentStation : station.Trim();
+            var target = string.IsNullOrWhiteSpace(station) ? StationCodeProvider.Current : station.Trim();
 
             await using var db = new AppDbContext();
             var rows = await db.BarcodeData.AsNoTracking()
@@ -1361,16 +1363,15 @@ hours 用整数小时数表示时间范围（例如"今天"按 24，"最近一�
         }
 
         /// <summary>
-        /// 相机参数写入的既有互斥时序：主循环未暂停时先暂停 → 排空在途推理 → 写参数 → 恢复。
-        /// 若暂停本由他方（配方页/相机调试）持有，则只写参数、不触碰主循环状态。
+        /// 相机参数写入的既有互斥时序：暂停主循环 → 排空在途推理 → 写参数 → 释放自己的暂停。
+        /// <para>2026-09-16: 原先用 "读 IsLoopPaused → 若未暂停则 PauseLoop → finally 若本次没暂停过则 ResumeLoop"
+        /// 来判断"暂停是不是自己发起的"。那是读-改-写竞态，且三方各写了一遍。
+        /// 现在 <see cref="MainLoopGate"/> 按持有者记账：本方法只释放自己持有的那份，
+        /// 他方（配方页/相机调试）持有的暂停不受影响，无需再自己记录 wasPaused。</para>
         /// </summary>
         private static async Task<string> ApplyCameraWriteAsync(Func<RecipeScannerService, Task> write)
         {
-            var wasPaused = HomeViewModel.IsLoopPaused;
-            if (!wasPaused)
-            {
-                HomeViewModel.PauseLoop();
-            }
+            MainLoopGate.Default.Pause(MainLoopGate.AiChat);
 
             try
             {
@@ -1386,10 +1387,7 @@ hours 用整数小时数表示时间范围（例如"今天"按 24，"最近一�
             }
             finally
             {
-                if (!wasPaused)
-                {
-                    HomeViewModel.ResumeLoop();
-                }
+                MainLoopGate.Default.Resume(MainLoopGate.AiChat);
             }
         }
 

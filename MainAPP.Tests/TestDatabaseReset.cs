@@ -23,7 +23,8 @@ namespace MainAPP.Tests;
 ///
 /// <para>安全性：数据根被隔离到测试 bin 目录，绝不触碰真实业务库；
 /// 删库后 schema 由 <c>EnsureCreatedAsync</c> 重建
-/// （见 <c>AppDbContext.EnsureTableAndGetColumnsAsync</c> 的自愈兜底）。</para>
+/// （见 <see cref="MainAPP.Models.AppDbContext.ApplySchemaSyncAsync"/>：它在表缺失时会先 EnsureCreated，
+/// 再按模型补齐列与索引）。</para>
 ///
 /// <para>注意：本类型是测试程序集中唯一的 <see cref="ModuleInitializerAttribute"/>，
 /// 数据根覆盖与删库必须在同一个初始化器里完成——多个 ModuleInitializer 之间执行顺序未定义，

@@ -491,7 +491,7 @@ namespace MainAPP.ViewModels
         /// </summary>
         public async Task ActivateAsync()
         {
-            HomeViewModel.PauseLoop();
+            MainLoopGate.Default.Pause(MainLoopGate.RecipePage);
             // 按真实状态等待主循环在途推理结束（原实现为固定 12 秒盲等，正常情况白等 12 秒）。
             // 12 秒上限覆盖主循环单帧取图超时（10s）+ 余量，仅在异常路径才会真正等满。
             var drained = await HomeViewModel.WaitForMainLoopDrainAsync(TimeSpan.FromSeconds(12)).ConfigureAwait(false);
@@ -523,7 +523,7 @@ namespace MainAPP.ViewModels
             {
                 LogService.Instance.Warning($"恢复硬触发失败: {ex.Message}");
             }
-            HomeViewModel.ResumeLoop();
+            MainLoopGate.Default.Resume(MainLoopGate.RecipePage);
         }
 
         /// <summary>

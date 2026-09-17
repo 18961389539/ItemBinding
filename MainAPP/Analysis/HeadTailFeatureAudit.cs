@@ -3,8 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
-namespace MainAPP.Application
+namespace MainAPP.Analysis
 {
+    // ── 分层约定（2026-09-16）──────────────────────────────────────────────
+    // 本文件原先位于 MainAPP/Application，但 AiChatService（Services 层）也要用它，
+    // 于是形成 Services → Application 的反向依赖（与 Application → Services 构成双向耦合）。
+    // 该类型是纯统计分析（无 IO、无单例、无副作用，仅依赖 System.*），因此下沉到中立层
+    // MainAPP/Analysis —— 上层（Application 与 Services）都可以依赖它，不存在反向依赖。
+    // 新增到本目录的类型请保持"纯"：不读全局单例、不做 IO、不引用上层命名空间。
+    // ──────────────────────────────────────────────────────────────────────
+
     /// <summary>
     /// 单个特征的自检统计（2026-09-13）。
     /// <para><b>回答的问题</b>：这个特征对当前产品的头尾区分到底有没有用、判得对不对。</para>
@@ -531,7 +539,7 @@ namespace MainAPP.Application
         /// <para><b>调用方须按 DetectTime 升序传入</b>——抖动率依赖"相邻帧"语义，乱序会得出错误翻转率。</para>
         /// </summary>
         /// <param name="records">检测记录（可为任意时间范围/配方的子集，需按时间升序）。</param>
-        public static HeadTailFeatureAudit Build(IReadOnlyList<Models.DbModel> records)
+        public static HeadTailFeatureAudit Build(IReadOnlyList<MainAPP.Models.DbModel> records)
             => Build(
                 records.Select(r => r.HeadFeatures).ToList(),
                 records.Select(r => r.HeadTruthPositive).ToList(),

@@ -1,0 +1,33 @@
+<Solution>
+  <!--
+    厂商无关（SDK-free）子集解决方案 —— 2026-09-16 引入，供 CI 在**没有**海康读码器 SDK 的环境里
+    也能构建并跑测试（完整解决方案见 ItemBinding.slnx）。
+
+    为什么需要单独一个解决方案文件：MainAPP 与 Extensions 直接依赖 HikScanner，而 HikScanner 编译期
+    需要不入库的厂商 SDK（DLLs/MvCodeReaderSDK.Net.dll）。因此"新克隆 + 无 SDK"只能构建下面这些工程。
+    本文件是**声明式**的，比在 CI 里列一串 csproj 更不容易漂移；新增工程时若它不依赖 HikScanner，
+    请同时加到这里。
+
+    注意：LicenseSystem/tests/LicenseCore.Tests 此前不在任何解决方案里，
+    导致 `dotnet test ItemBinding.slnx` 会**静默跳过**它（授权逻辑长期没有被 CI 覆盖）——这里补上。
+  -->
+  <Folder Name="/src/">
+    <Project Path="Blob/Blob.csproj" />
+    <Project Path="ImageViewerControl/ImageViewerControl.csproj" />
+    <Project Path="JinlongYolo/JinlongYolo.csproj" />
+    <Project Path="LicenseSystem/src/LicenseCore/LicenseCore.csproj" />
+  </Folder>
+  <Folder Name="/src/ScottPlot/">
+    <Project Path="ScottPlot.WPF/ScottPlot.WPF.csproj" />
+    <Project Path="ScottPlot5/ScottPlot.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="JinlongYolo.Tests/JinlongYolo.Tests.csproj" />
+    <Project Path="LicenseSystem/tests/LicenseCore.Tests/LicenseCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+  </Folder>
+</Solution>

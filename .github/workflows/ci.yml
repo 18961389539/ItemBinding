@@ -1,0 +1,78 @@
+name: CI
+
+# 2026-09-16 引入：此前仓库没有任何 CI，构建与测试全靠人跑
+#（"717 个测试通过"这类结论无法被自动复核，且 LicenseCore.Tests 从未被默认跑到）。
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # 关掉 .NET 首次运行体验与 workload 广告，避免污染日志
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  build-and-test:
+    # WPF + net8.0-windows + 海康 SDK 都是 Windows 专属，必须用 Windows runner
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 .NET SDK（8.0 = 运行目标，10.0 = 编译 LangVersion=latest 所需）
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            10.0.x
+
+      - name: 缓存 NuGet 包
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          # 包版本集中声明在 Directory.Packages.props（CPM），故它进哈希
+          key: nuget-${{ runner.os }}-${{ hashFiles('Directory.Packages.props', 'Directory.Build.props', '**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: 恢复（厂商无关子集）
+        run: dotnet restore ItemBinding.SdkFree.slnx
+
+      - name: 检查厂商 SDK 是否就位
+        id: vendor
+        shell: pwsh
+        run: |
+          $dll = 'HikCameraLib/HikScanner/DLLs/MvCodeReaderSDK.Net.dll'
+          if (Test-Path $dll) {
+            'present=true' >> $env:GITHUB_OUTPUT
+            Write-Host '厂商 SDK 已就位 —— 本次会额外构建/测试完整解决方案。'
+          } else {
+            'present=false' >> $env:GITHUB_OUTPUT
+            Write-Host '::notice title=厂商 SDK 未入库（设计如此）::本次只构建与厂商无关的工程。完整构建（MainAPP）需要海康读码器 SDK，恢复步骤见 HikCameraLib/HikScanner/DLLs.sha256 与 scripts/verify-vendor-dlls.ps1。'
+          }
+
+      # ── 必过部分：不依赖厂商 SDK 的工程 ─────────────────────────────
+      - name: 构建（厂商无关）
+        run: dotnet build ItemBinding.SdkFree.slnx --no-restore -v:m
+
+      - name: 测试（厂商无关）
+        run: dotnet test ItemBinding.SdkFree.slnx --no-build -v:m
+
+      # ── 条件部分：厂商 SDK 就位时才跑完整构建 ───────────────────────
+      # 若希望 CI 常驻覆盖 MainAPP：把海康 SDK 的 25 个 DLL 作为可访问的构建资产（如私有 Release/制品）
+      # 在 checkout 后下载到 HikCameraLib/HikScanner/DLLs/，本步骤即会自动生效。
+      - name: 构建完整解决方案（仅当厂商 SDK 存在）
+        if: steps.vendor.outputs.present == 'true'
+        run: dotnet build ItemBinding.slnx -v:m
+
+      - name: 测试完整解决方案（仅当厂商 SDK 存在）
+        if: steps.vendor.outputs.present == 'true'
+        run: dotnet test ItemBinding.slnx --no-build -v:m
+
+      # 说明：这里刻意**不**加 -warnaserror。
+      # 本仓库的质量红线是"0 警告"，但 AnalysisLevel=latest-recommended 的告警集合随 SDK 版本变化，
+      # 强制升级为错误会让 CI 因无关噪声变红。如需收紧，可固定 SDK feature band 后再开启。

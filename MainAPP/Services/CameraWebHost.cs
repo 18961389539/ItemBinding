@@ -30,7 +30,7 @@ namespace MainAPP.Services
     ///   GET /api/status  曝光/增益/范围/触发模式/型号/序列号/IP 的 JSON
     ///
     /// 相机互斥时序（关键，顺序不可颠倒）：
-    ///   PauseLoop() → WaitForMainLoopDrainAsync() → SwitchToSoftTriggerAsync()
+    ///   MainLoopGate.Pause() → WaitForMainLoopDrainAsync() → SwitchToSoftTriggerAsync()
     /// 颠倒会在主循环仍取帧时设置 TriggerMode，触发 0x80020106（GenICam 节点访问错误）。
     /// </summary>
     public sealed class CameraWebHost : IDisposable
@@ -82,7 +82,6 @@ namespace MainAPP.Services
 
         private bool _cameraTakenOver;
         // 暂停是否由本宿主发起；false 表示暂停本由配方页持有，释放时不得触碰主循环状态
-        private bool _pausedByHost;
         private bool _disposed;
 
         public CameraWebHost(int port = DefaultPort)
@@ -359,7 +358,9 @@ namespace MainAPP.Services
                 ["connected"] = connected,
                 ["clients"] = Volatile.Read(ref _clientCount),
                 ["streaming"] = Volatile.Read(ref _clientCount) > 0,
-                ["paused"] = HomeViewModel.IsLoopPaused,
+                ["paused"] = MainLoopGate.Default.IsPaused,
+                // 2026-09-16: 新增"谁在持有暂停"——排查"主循环不动了"时的第一线索
+                ["pausedBy"] = MainLoopGate.Default.Describe(),
                 ["model"] = Devices.Scanners.HikScaner?.DeviceInfo?.ModelName ?? string.Empty,
                 ["serial"] = Devices.Scanners.HikScaner?.DeviceInfo?.SerialNumber ?? string.Empty,
                 ["ip"] = Devices.Scanners.HikScaner?.DeviceInfo?.CurrentIp ?? string.Empty,
@@ -444,11 +445,8 @@ namespace MainAPP.Services
             float? exposure = float.TryParse(exposureRaw, System.Globalization.CultureInfo.InvariantCulture, out var e) ? e : null;
             float? gain = float.TryParse(gainRaw, System.Globalization.CultureInfo.InvariantCulture, out var g) ? g : null;
 
-            var wasPaused = HomeViewModel.IsLoopPaused;
-            if (!wasPaused)
-            {
-                HomeViewModel.PauseLoop();
-            }
+            // 2026-09-16: 按持有者记账的闸门（原先在这里手写 wasPaused 判断 + 读-改-写竞态）
+            MainLoopGate.Default.Pause(MainLoopGate.CameraDebug);
 
             try
             {
@@ -478,10 +476,8 @@ namespace MainAPP.Services
             }
             finally
             {
-                if (!wasPaused)
-                {
-                    HomeViewModel.ResumeLoop();
-                }
+                // 只释放自己那份；若配方页同时持有，主循环会保持暂停（这正是原 wasPaused 写法做不到的）
+                MainLoopGate.Default.Resume(MainLoopGate.CameraDebug);
             }
         }
 
@@ -613,9 +609,9 @@ namespace MainAPP.Services
                     return true;
                 }
 
-                // 暂停若已由配方页持有，则本次释放时不得恢复主循环（否则会破坏配方页）
-                _pausedByHost = !HomeViewModel.IsLoopPaused;
-                HomeViewModel.PauseLoop();
+                // 2026-09-16: 由闸门按持有者记账——_pausedByHost 这套"是不是我暂停的"自记标记已删除。
+                // 释放时 Resume 的返回值即"本宿主是否确实持有过"。
+                MainLoopGate.Default.Pause(MainLoopGate.CameraDebug);
 
                 var drained = await HomeViewModel
                     .WaitForMainLoopDrainAsync(TimeSpan.FromSeconds(DrainWaitSec), ct)
@@ -628,7 +624,7 @@ namespace MainAPP.Services
                 await _scannerService.SwitchToSoftTriggerAsync(ct).ConfigureAwait(false);
                 await StartFrameLoopAsync().ConfigureAwait(false);
                 _cameraTakenOver = true;
-                LogService.Instance.Info(_pausedByHost
+                LogService.Instance.Info(MainLoopGate.Default.CurrentHolders.Contains(MainLoopGate.CameraDebug)
                     ? "相机调试 Web：已接管相机（主循环由本服务暂停并切至软触发）"
                     : "相机调试 Web：已接管相机（主循环原本已由配方页暂停，释放时不恢复该状态）");
                 return true;
@@ -668,7 +664,8 @@ namespace MainAPP.Services
 
             await StopFrameLoopAsync().ConfigureAwait(false);
 
-            var restoreMainLoop = _pausedByHost;
+            // 释放自己那份暂停；true 表示本宿主确实持有过（他方持有则主循环继续保持暂停）
+            var restoreMainLoop = MainLoopGate.Default.Resume(MainLoopGate.CameraDebug);
             if (restoreMainLoop)
             {
                 try
@@ -680,11 +677,9 @@ namespace MainAPP.Services
                     LogService.Instance.Warning($"相机调试 Web：恢复硬触发失败: {ex.Message}");
                 }
 
-                HomeViewModel.ResumeLoop();
             }
 
             _cameraTakenOver = false;
-            _pausedByHost = false;
             LogService.Instance.Info(restoreMainLoop
                 ? "相机调试 Web：已释放相机（恢复硬触发并恢复主循环）"
                 : "相机调试 Web：已释放相机（暂停与软触发仍由配方页持有，未做改动）");

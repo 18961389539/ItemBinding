@@ -32,9 +32,8 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
 
         Assert.True(await ctx.Database.CanConnectAsync());
     }
@@ -44,9 +43,8 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
 
         var model = new DbModel
         {
@@ -70,9 +68,8 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
         var model = new DbModel { Barcode = "FINDME", WorldX = 99 };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();
@@ -89,9 +86,8 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
         var model = new DbModel { Barcode = "BEFORE", WorldX = 0 };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();
@@ -110,9 +106,8 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
         var model = new DbModel { Barcode = "DELETE" };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();
@@ -130,9 +125,8 @@ public class AppDbContextIntegrationTests : IDisposable
     {
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
         for (int i = 0; i < 15; i++)
         {
             ctx.BarcodeData.Add(new DbModel
@@ -153,33 +147,35 @@ public class AppDbContextIntegrationTests : IDisposable
         Assert.Equal(5, page2.Count);
     }
 
+    /// <summary>
+    /// 结构同步必须覆盖模型里的每一个列。
+    /// 这是"人肉补列"问题的**防回归哨兵**：一旦有人给 DbModel 加了个非空且无默认值的属性
+    /// （或类型无法映射到 SQLite），它会出现在 SkippedColumns 里 —— 而那种列在老库上是补不上的，
+    /// 症状是运行期 INSERT 报 "no such column"。本用例先在这里失败，并直接指出是哪一列。
+    /// </summary>
     [Fact]
-    public async Task EnsureIndexesAsync_DoesNotThrow()
+    public async Task ApplySchemaSyncAsync_LeavesNoModelColumnUnhandled()
     {
         using var ctx = new AppDbContext();
-        await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
 
-        var exception = await Record.ExceptionAsync(() => ctx.EnsureIndexesAsync());
+        var result = await ctx.ApplySchemaSyncAsync();
 
-        Assert.Null(exception);
+        Assert.Empty(result.SkippedColumns);
     }
 
+    /// <summary>结构同步必须幂等：第二次调用不应再产生任何变更。</summary>
     [Fact]
-    public async Task EnsureIndexesAsync_IsIdempotent()
+    public async Task ApplySchemaSyncAsync_IsIdempotent()
     {
         using var ctx = new AppDbContext();
-        await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        await ctx.ApplySchemaSyncAsync();
 
-        await ctx.EnsureIndexesAsync();
-        var exception = await Record.ExceptionAsync(() => ctx.EnsureIndexesAsync());
+        var second = await ctx.ApplySchemaSyncAsync();
 
-        Assert.Null(exception);
+        Assert.False(second.HasChanges);
+        Assert.Empty(second.AddedColumns);
+        Assert.Empty(second.AddedIndexes);
+        Assert.Empty(second.SkippedColumns);
     }
 
     [Fact]
@@ -189,9 +185,8 @@ public class AppDbContextIntegrationTests : IDisposable
         // EF Core 不会自动将 null 转空字符串，此处验证空字符串能正常持久化
         using var ctx = new AppDbContext();
         await ctx.Database.EnsureCreatedAsync();
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
-        await ctx.EnsureTraceColumnsAsync();
-        await ctx.EnsureBrightnessColumnsAsync();
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
+        await ctx.ApplySchemaSyncAsync();
         var model = new DbModel { Barcode = string.Empty };
         ctx.BarcodeData.Add(model);
         await ctx.SaveChangesAsync();

@@ -13,15 +13,14 @@ public class BarcodeDataServiceIntegrationTests : IAsyncDisposable
 {
     public BarcodeDataServiceIntegrationTests()
     {
-        // 与生产启动行为对齐：EnsureCreated 不补列，既有库必须显式 ALTER（模型加列后旧库文件同步）
+        // 与生产启动行为对齐：库结构由模型对齐（补列 + 补索引），见 AppDbContext.ApplySchemaSyncAsync
         EnsureDatabaseSchema();
     }
 
     private static void EnsureDatabaseSchema()
     {
         using var ctx = new MainAPP.Models.AppDbContext();
-        ctx.EnsureTraceColumnsAsync().GetAwaiter().GetResult();
-        ctx.EnsureBrightnessColumnsAsync().GetAwaiter().GetResult();
+        ctx.ApplySchemaSyncAsync().GetAwaiter().GetResult();
     }
 
     private readonly BarcodeDataService _service = BarcodeDataService.Instance;

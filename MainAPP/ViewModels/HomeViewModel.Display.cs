@@ -182,6 +182,64 @@ namespace MainAPP.ViewModels
     private string _encoderLinkDisplay = "编码器链路: --";
 
     /// <summary>
+    /// 状态栏显示：当前推理后端（2026-09-16 新增）。
+    ///
+    /// <para>背景：推理后端会随自愈降级（CUDA → OpenVINO GPU → OpenVINO CPU → CPU），
+    /// 但此前只写进 Timing 日志字段与降级通知，<b>界面上没有任何指示</b>——
+    /// 现场遇到"变慢了 / 判定变得不一样"时，无法一眼判断此刻跑在 GPU 还是 CPU，
+    /// 而这恰恰是排查该类问题的第一条线索。</para>
+    /// </summary>
+    public string InferenceBackendDisplay
+    {
+        get => _inferenceBackendDisplay;
+        private set => SetProperty(ref _inferenceBackendDisplay, value);
+    }
+    private string _inferenceBackendDisplay = "推理后端: 初始化中…";
+
+    /// <summary>当前推理后端是否已降级（非 CUDA）。HUD 据此变色提示。</summary>
+    public bool IsInferenceDegraded
+    {
+        get => _isInferenceDegraded;
+        private set => SetProperty(ref _isInferenceDegraded, value);
+    }
+    private bool _isInferenceDegraded;
+
+    /// <summary>
+    /// 更新"当前推理后端"的唯一入口（可从任意线程调用；非 UI 线程会转发到 UI 线程再通知属性）。
+    /// 同时更新 <c>_inferenceDevice</c>（Timing 日志用），保证画面与日志同源。
+    /// </summary>
+    /// <param name="deviceName">后端显示名，如 CUDA / OpenVINO GPU / CPU。</param>
+    /// <param name="backend">后端枚举；非 CUDA 视为已降级。为 null 时按 CUDA 处理（模型加载器未给出后端时）。</param>
+    internal void SetInferenceBackend(string deviceName, InferenceBackend? backend = null)
+    {
+        if (string.IsNullOrWhiteSpace(deviceName))
+        {
+            return;
+        }
+
+        var degraded = backend is not null && backend != InferenceBackend.Cuda;
+        _inferenceDevice = deviceName;
+
+        var dispatcher = System.Windows.Application.Current?.Dispatcher;
+        if (dispatcher is not null && !dispatcher.CheckAccess())
+        {
+            // VSTHRD110: discard 观察 InvokeAsync 结果（异步转发，无需等待）
+            _ = dispatcher.InvokeAsync(() => ApplyInferenceBackendDisplay(deviceName, degraded));
+            return;
+        }
+
+        ApplyInferenceBackendDisplay(deviceName, degraded);
+    }
+
+    private void ApplyInferenceBackendDisplay(string deviceName, bool degraded)
+    {
+        InferenceBackendDisplay = degraded
+            ? $"推理后端: {deviceName}（已降级）"
+            : $"推理后端: {deviceName}";
+        IsInferenceDegraded = degraded;
+    }
+
+    /// <summary>
     /// 每秒健康巡检：丢帧率（处理/丢帧增量）、绑定延迟展示、编码器链路新鲜度。
     /// 全部在 UI 线程执行（DispatcherTimer.Tick），只做轻量聚合与属性通知。
     /// </summary>

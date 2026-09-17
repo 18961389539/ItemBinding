@@ -55,7 +55,9 @@ namespace MainAPP.ViewModels
         private long _lastBindDelayMs;
         private DateTime _lastBindDelayWarnAt = DateTime.MinValue;
         private DateTime _lastDropRateWarnAt = DateTime.MinValue;
-        private DispatcherTimer? _healthTimer;
+        // 2026-09-16: 标记 volatile —— EnsureHealthTimer 可能被后台线程调用（线程切换兜底分支），
+        // 需保证对 Dispose/构造路径立即可见
+        private volatile DispatcherTimer? _healthTimer;
 
         /// <summary>绑定延迟告警阈值（ms）：编码器记录时间与图像到达时刻的差超过该值，
         /// 说明编码器上报断流/恢复或积压——位置与编码器的对应关系已系统性滞后该差值 × 线速。</summary>
@@ -78,19 +80,13 @@ namespace MainAPP.ViewModels
         // 已处理帧计数（用于 FPS 计算），每处理完一帧递增，与检测结果无关
         private long _processedFrameCount;
 
-        // M700: 配方页打开时主循环跳过取帧。简单布尔，无竞态。
-        private static volatile bool s_isPaused;
+        // 2026-09-16: 原先此处是 `private static volatile bool s_isPaused` + PauseLoop/ResumeLoop/IsLoopPaused。
+        // 三方使用者（相机调试 Web / 配方页 / AI 对话）各自手写"读状态 → 若未暂停则暂停 → finally 恢复"
+        // 的防踩踏逻辑，既有读-改-写竞态，又无法回答"是谁把循环停住了"。
+        // 现统一为具有**持有者语义**的 Services.MainLoopGate（按持有者记账、只能释放自己那份、
+        // 并记录各持有者已持有时间）。主循环读取处见 HomeViewModel.MainLoop.cs。
         // REVIEW(2026-08-05): 首帧已记录相机帧格式（诊断用）
         private static bool _frameFormatLogged;
-
-        public static void PauseLoop() => s_isPaused = true;
-        public static void ResumeLoop() => s_isPaused = false;
-
-        /// <summary>
-        /// 主循环当前是否处于暂停状态。供外部组件（配方页、相机 Web 调试宿主）判断
-        /// 暂停是由自己发起还是已由他方持有，避免退出时误恢复对方持有的状态。
-        /// </summary>
-        public static bool IsLoopPaused => s_isPaused;
 
         // L362c: 记录上一次 TryEnsureProcessingReady 的错误消息，避免配方未就绪时重复刷屏日志
         private string? _lastProcessingReadyError;
@@ -174,16 +170,22 @@ namespace MainAPP.ViewModels
         private int _segHealRunning;                    // 1=自愈任务运行中（防重入）
         private long _lastSegHealAttemptTicks;
 
-        // VGT 通信服务（构造函数注入；若为 null 则回退到 DI 容器解析）
+        // VGT 通信服务（构造函数注入）
         private readonly IToVGTService _toVgtService;
         private readonly ModelLoaderService _modelLoader;
         private readonly DetectionRecordService _detectionRecord;
 
-        public HomeViewModel(IToVGTService? toVgtService = null, ModelLoaderService? modelLoader = null, DetectionRecordService? detectionRecord = null)
+        /// <summary>
+        /// 2026-09-16: 依赖改为**必填构造参数**（原先为可空参数 + <c>?? App.Services.GetRequiredService&lt;&gt;()</c> 兜底）。
+        /// 那个兜底是 Service Locator 反模式：既让依赖关系在签名上不可见，又使本类无法脱离
+        /// 容器初始化（单测里连构造都做不到）。现在依赖由 DI 注入（<c>App.ConfigureServices</c> 中
+        /// <c>AddSingleton&lt;HomeViewModel&gt;</c>），缺失依赖会在容器解析期立刻报错，而不是运行到某帧才 NRE。
+        /// </summary>
+        public HomeViewModel(IToVGTService toVgtService, ModelLoaderService modelLoader, DetectionRecordService detectionRecord)
         {
-            _toVgtService = toVgtService ?? App.Services.GetRequiredService<IToVGTService>();
-            _modelLoader = modelLoader ?? App.Services.GetRequiredService<ModelLoaderService>();
-            _detectionRecord = detectionRecord ?? App.Services.GetRequiredService<DetectionRecordService>();
+            _toVgtService = toVgtService;
+            _modelLoader = modelLoader;
+            _detectionRecord = detectionRecord;
 
             try
             {
@@ -209,6 +211,9 @@ namespace MainAPP.ViewModels
                 // 注意：此调用不会等待初始化完成。
                 // 示例：若模型路径不可用或依赖项缺失，_predictor 将被设置为 null，并在日志中记录错误。
                 // M272a: 跟踪 fire-and-forget 任务，便于 Dispose 中带超时等待
+                // 2026-09-16: 采集健康监控定时器在构造函数（UI 线程）建立，
+                // 修复"仅在配方切换时创建 → 启动后状态栏永不刷新"的问题（见 EnsureHealthTimer）
+                EnsureHealthTimer();
                 _initializeTask = InitializeAsync();
             }
             catch (Exception ex)
@@ -256,10 +261,50 @@ namespace MainAPP.ViewModels
             AngleTracker.Instance.Clear();
             _reloadPredictorTask = ReloadPredictorAsync(recipe);
 
-            // 采集健康监控：每秒刷新丢帧率/绑定延迟/编码器链路到状态栏（2026-09-12）
-            _healthTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(HealthSampleWindowSec) };
-            _healthTimer.Tick += OnHealthTick;
-            _healthTimer.Start();
+            // 采集健康监控：每秒刷新丢帧率/绑定延迟/编码器链路到状态栏（2026-09-12）。
+            // 2026-09-16: 改为幂等入口——本方法可能被调用多次（每次配方切换），
+            // 原实现在这里 new 定时器并 Start，旧的既不 Stop 也不退订，会累积出多个每秒触发的定时器。
+            EnsureHealthTimer();
+        }
+
+        /// <summary>
+        /// 采集健康监控定时器的唯一创建入口（幂等：已创建则直接返回）。
+        /// <para>2026-09-16 修复两个问题：</para>
+        /// <list type="number">
+        ///   <item><b>启动即失效</b>：原先只在 <see cref="OnCurrentRecipeChanged"/> 中创建定时器，
+        ///   而构造函数只订阅事件、不触发它。若启动时配方管理器尚未设置当前配方（或设置当前配方
+        ///   不经过该事件），<c>_healthTimer</c> 永远为 null、<c>OnHealthTick</c> 从不执行——
+        ///   状态栏的丢帧率 / 绑定延迟 / 编码器链路会一直停在初始值，直到首次手动切换配方。
+        ///   现由构造函数与配方切换共同调用，保证启动后即开始采集。</item>
+        ///   <item><b>重复创建</b>：原实现每次配方切换都 <c>new</c> 一个新 <see cref="DispatcherTimer"/>
+        ///   并 <c>Start()</c>，旧定时器既未停止也未退订 <see cref="OnHealthTick"/>，
+        ///   每切一次配方就多一个每秒触发的定时器（回调重复执行 + 对象与事件累积）。</item>
+        /// </list>
+        /// </summary>
+        private void EnsureHealthTimer()
+        {
+            if (_disposed || _healthTimer is not null)
+            {
+                return;
+            }
+
+            // DispatcherTimer 绑定的是**创建线程**的 Dispatcher：若在后台线程创建，
+            // Tick 永远不会被调度（该线程新建的 Dispatcher 没有消息循环），属于静默失效。
+            // 构造函数与配方切换事件都在 UI 线程，正常直接走创建分支；
+            // 此处保留一次线程切换兜底，防止将来从后台线程调用时静默失效。
+            // 注：本文件已 using MainAPP.Application，裸 Application 会解析为命名空间，故用全名。
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher is not null && !dispatcher.CheckAccess())
+            {
+                // `_ =` 丢弃返回值：与本文件其余 Dispatcher 调用保持一致（VSTHRD110 要求显式观察 awaitable）
+                _ = dispatcher.BeginInvoke(new Action(EnsureHealthTimer));
+                return;
+            }
+
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(HealthSampleWindowSec) };
+            timer.Tick += OnHealthTick;
+            _healthTimer = timer;
+            timer.Start();
         }
 
         /// <summary>
@@ -295,7 +340,9 @@ namespace MainAPP.ViewModels
                 var (newPredictorPool, deviceName) = await _modelLoader.CreatePredictorPoolAsync(recipe).ConfigureAwait(false);
                 if (!string.IsNullOrEmpty(deviceName))
                 {
-                    _inferenceDevice = deviceName;
+                    // 2026-09-16: 统一入口——同时更新 Timing 日志用的 _inferenceDevice 与 HUD 上的
+                    // "当前推理后端"（含降级标记）；本方法在后台线程执行，入口内部会转发到 UI 线程
+                    SetInferenceBackend(deviceName, ModelLoaderService.ParseBackend(deviceName));
                 }
                 var newAnglePredictorPool = await _modelLoader.CreateAnglePredictorPoolAsync(recipe).ConfigureAwait(false);
 
@@ -331,11 +378,15 @@ namespace MainAPP.ViewModels
         // ===================== 分割推理后端运行期自愈 =====================
 
         /// <summary>
-        /// 是否为「后端会话已失效」类错误。只有这类错误值得触发降级重建；
-        /// 其余（如取消、图像解码等）不属于推理后端问题，交给外层原有逻辑处理。
+        /// 是否为「推理后端会话已失效 / 原生后端执行失败」类错误。判定逻辑见
+        /// <see cref="InferenceBackendFailure.IsBackendFailure"/>（纯函数，已抽出便于单测）。
+        /// <para>2026-09-16: 原先内联在这里且只识别 <c>OnnxRuntimeException</c>——
+        /// CUDA/cuDNN/OpenVINO 的原生失败常以其它包装类型或纯消息形式抛出（如
+        /// <c>CUDNN_FE failure 7</c>、<c>AssertionFailed: device 0</c>），会被漏判，
+        /// 造成"会话建得起、一跑就炸"时每帧静默失败且永不自愈（重建机制本身是对的，只是入口没收全）。</para>
         /// </summary>
         private static bool IsRuntimeBackendFailure(Exception ex) =>
-            ex is Microsoft.ML.OnnxRuntime.OnnxRuntimeException;
+            InferenceBackendFailure.IsBackendFailure(ex);
 
         /// <summary>
         /// 分割推理失败后调用（同步入口，返回前不阻塞调用帧）：
@@ -444,7 +495,8 @@ namespace MainAPP.ViewModels
                     Interlocked.Exchange(ref _segConsecutiveFails, 0);
                     if (!string.IsNullOrEmpty(result.DeviceName))
                     {
-                        _inferenceDevice = result.DeviceName;
+                        // 2026-09-16: 统一入口（顺带把 HUD 切到"已降级"配色）
+                        SetInferenceBackend(result.DeviceName, result.Backend);
                     }
                     _hasLoggedPredictorNotReady = false;
                     oldPool?.Dispose();
@@ -534,7 +586,15 @@ namespace MainAPP.ViewModels
             {
                 RecipesManage.Instance.CurrentRecipeChanged -= OnCurrentRecipeChanged;
                 _cts.Cancel();
-                _healthTimer?.Stop();
+                // 2026-09-16: 停止并退订健康监控定时器。幂等入口保证全生命周期只有一个实例，
+                // 此处是唯一的回收点（原先每次配方切换都会新建且不回收旧的）。
+                var healthTimer = _healthTimer;
+                if (healthTimer is not null)
+                {
+                    healthTimer.Stop();
+                    healthTimer.Tick -= OnHealthTick;
+                    _healthTimer = null;
+                }
                 if (_imageForShow is IDisposable disposable)
                 {
                     disposable.Dispose();

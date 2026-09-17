@@ -19,7 +19,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +31,21 @@
       <HintPath>DLLs\MvCodeReaderSDK.Net.dll</HintPath>
     </Reference>
   </ItemGroup>
+
+  <!--
+    2026-09-16: 厂商 SDK 缺失时给出**可操作**的错误。
+
+    背景：本仓库按设计不提交海康读码器 SDK 的 DLL（*.dll 被 .gitignore 排除，且属第三方授权件）。
+    但 HikScanner 编译期就依赖 MvCodeReaderSDK.Net——缺了它会先报一条
+    MSB3245（未能解析引用）再报几十条 CS0246（找不到类型），新人只能靠猜。
+    这里把"缺件"提前成一条带恢复步骤的错误。
+    版本一致性用 HikCameraLib/HikScanner/DLLs.sha256 清单固定，校验脚本见 scripts/verify-vendor-dlls.ps1。
+  -->
+  <Target Name="EnsureVendorSdkPresent" BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('$(MSBuildProjectDirectory)\DLLs\MvCodeReaderSDK.Net.dll')">
+    <Error Code="HIKSDK001"
+           Text="厂商 SDK 缺失：HikCameraLib\HikScanner\DLLs\MvCodeReaderSDK.Net.dll 不存在。&#xD;&#xA;本仓库不提交海康读码器 SDK 的 DLL，需先从已装 SDK 的机器复制 HikCameraLib\HikScanner\DLLs 下的 25 个 DLL（清单见 DLLs.sha256），然后运行 scripts\verify-vendor-dlls.ps1 校验版本。" />
+  </Target>
 
   <!-- 将所有海康 SDK 原生 DLL 复制到输出根目录（平铺，不带 DLLs/ 子目录） -->
   <ItemGroup>

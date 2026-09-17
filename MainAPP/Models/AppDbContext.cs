@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -11,8 +11,13 @@ namespace MainAPP.Models
 {
     /// <summary>
     /// EF Core 数据库上下文，管理条码检测记录的持久化。
-    /// 使用 SQLite 数据库，数据库文件位于应用目录下的 DataBase/barcode_data.db。
-    /// 为常用查询字段（DetectTime、Encode、Angle、BarcodeScore、Score）建立了索引以优化查询性能。
+    /// 使用 SQLite，数据库文件位于统一数据根（<see cref="DataPaths.Root"/>）的 Saves\DataBase\barcode_data.db。
+    ///
+    /// <para><b>结构演进机制（2026-09-16 重构）</b>：本类在 <see cref="OnModelCreating"/> 中声明的
+    /// **列与索引即为唯一来源**；<see cref="ApplySchemaSyncAsync"/> 负责把已存在的库对齐到这个模型
+    /// （补缺失的可空列、补缺失的索引），因此"给老库加列/加索引"不再需要手写 ALTER 或新增 EnsureXxx 方法。
+    /// 重构前是两套手写方法（<c>EnsureBrightnessColumnsAsync</c> / <c>EnsureTraceColumnsAsync</c> /
+    /// <c>EnsureIndexesAsync</c>），新增字段必须记得去改它们并加调用，漏掉就是运行期 "no such column"。</para>
     /// </summary>
     public class AppDbContext : DbContext
     {
@@ -44,7 +49,8 @@ namespace MainAPP.Models
         }
 
         /// <summary>
-        /// 配置模型：设置主键、默认值和索引
+        /// 配置模型：设置主键、默认值和索引。★ 本方法是**列与索引的唯一来源**，
+        /// <see cref="ApplySchemaSyncAsync"/> 会据此把已存在的库补齐（详见该方法的注释）。
         /// </summary>
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -59,10 +65,17 @@ namespace MainAPP.Models
                 .Property(m => m.DetectTime)
                 .HasDefaultValueSql("datetime('now', 'localtime')");
 
-            // 为常用查询字段建立索引，优化按时间、编码器、角度、置信度的查询性能
+            // ── 索引按「真实查询形态」选，不是按字段好看 ─────────────────────────
+            // 三组查询形态（依据 Services/AI/AiChatService.cs 与 Services/BarcodeDataService.cs）：
+            //   ① 时间范围 + ORDER BY DetectTime DESC（列表/图表/日报/清理）
+            //   ② 时间范围 + 维度等值过滤（AI 问答：按配方 / 工位 / 结果统计）
+            //   ③ 按条码查过站记录
+
+            // ① 时间范围 + 倒序分页：几乎所有列表查询都吃它
             modelBuilder.Entity<DbModel>()
                 .HasIndex(m => m.DetectTime);
 
+            // 编码器序号范围（GetByEncodeRangeAsync）
             modelBuilder.Entity<DbModel>()
                 .HasIndex(m => m.Encode);
 
@@ -74,98 +87,223 @@ namespace MainAPP.Models
 
             modelBuilder.Entity<DbModel>()
                 .HasIndex(m => m.Score);
+
+            // ② 复合索引 (维度, DetectTime)。
+            // 查询形态统一是 WHERE DetectTime >= @since AND <维度> = @v ORDER BY DetectTime DESC，
+            // 复合索引可同时覆盖过滤与排序，避免 SQLite 先按维度取全量再排序。
+            // 列顺序必须"等值列在前、范围列在后"，否则索引退化为只用第一列。
+            modelBuilder.Entity<DbModel>()
+                .HasIndex(m => new { m.RecipeName, m.DetectTime });
+
+            modelBuilder.Entity<DbModel>()
+                .HasIndex(m => new { m.Station, m.DetectTime });
+
+            modelBuilder.Entity<DbModel>()
+                .HasIndex(m => new { m.Result, m.DetectTime });
+
+            // ③ 条码。两种查询收益不同，别以为它能救下所有条码检索：
+            //   - 等值查询（x.Barcode == code，AI 追溯问答）→ 用索引直接定位，收益最大；
+            //   - 模糊查询（d.Barcode.Contains(x) → LIKE '%x%'，数据库页检索）→ 前导通配符**无法**用索引定位，
+            //     但本表宽（约 25 列，含 HeadFeatures 等长文本），有索引后 SQLite 可走"索引覆盖扫描"，
+            //     只读条码列而不逐行读整行，仍显著优于全表扫描。
+            //     若模糊检索日后成为瓶颈，正解是引入 FTS5 虚表，或把检索改成前缀匹配（LIKE 'x%' 可用索引）。
+            modelBuilder.Entity<DbModel>()
+                .HasIndex(m => m.Barcode);
         }
 
         /// <summary>
-        /// 为已存在的数据库补充关键索引。
-        /// 使用 CREATE INDEX IF NOT EXISTS 确保幂等性，适用于数据库迁移或版本升级场景。
-        /// L40: 改为异步执行避免阻塞调用线程
+        /// 幂等地把「EF 模型」与「实际库结构」对齐（2026-09-16）。
+        ///
+        /// <para><b>解决什么问题</b>：原先新增一个列要三步人肉操作——改 <see cref="DbModel"/>、
+        /// 在 <c>EnsureBrightnessColumnsAsync</c>/<c>EnsureTraceColumnsAsync</c> 里手写一段
+        /// <c>if (!cols.Contains("X")) ALTER TABLE ...</c>、再去 <c>App.InitializeDatabaseAsync</c>
+        /// 里加一次调用。漏任何一步，症状都是**运行期 INSERT 报 "no such column"**。
+        /// 现在模型是唯一来源：模型里有的列与索引，本方法负责让库里也有。</para>
+        ///
+        /// <para><b>为什么不用 EF Migrations</b>：本项目要离线部署，且现场已有大批由
+        /// <c>EnsureCreated</c> 建出来的库（没有 <c>__EFMigrationsHistory</c> 表）。
+        /// 引入 Migrations 首先要给每个已部署站点的库打 baseline（把首个迁移标记为"已应用"），
+        /// 那一步比现在的补列更依赖人肉，还要引入 Design 期依赖。</para>
+        ///
+        /// <para><b>能力边界（务必知晓）</b>：只处理<b>增量</b>——补缺失的列、补缺失的索引。
+        /// <b>删列 / 改名 / 改类型 / 改约束一律不处理</b>，这类变更需要显式迁移步骤，
+        /// 项目内既有先例是 <c>App.MigrateLegacyAngleDomainAsync</c>（[0,360) → (-180,180] 的历史数据改写）。
+        /// 另外，非空且无默认值的列无法自动补（SQLite 的 ALTER ADD COLUMN 对已有行的表要求新列可空或有默认值），
+        /// 这类列会记入 <see cref="SchemaSyncResult.SkippedColumns"/> 并打 Error 日志，**绝不静默跳过**。</para>
         /// </summary>
-        public async Task EnsureIndexesAsync(CancellationToken cancellationToken = default)
+        /// <returns>本次实际发生的变更，供调用方写日志、供测试断言。</returns>
+        public async Task<SchemaSyncResult> ApplySchemaSyncAsync(CancellationToken cancellationToken = default)
         {
-            await Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_BarcodeData_DetectTime ON BarcodeData (DetectTime)", cancellationToken).ConfigureAwait(false);
-            await Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_BarcodeData_Encode ON BarcodeData (Encode)", cancellationToken).ConfigureAwait(false);
-            await Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_BarcodeData_Angle ON BarcodeData (Angle)", cancellationToken).ConfigureAwait(false);
-            await Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_BarcodeData_BarcodeScore ON BarcodeData (BarcodeScore)", cancellationToken).ConfigureAwait(false);
-            await Database.ExecuteSqlRawAsync("CREATE INDEX IF NOT EXISTS IX_BarcodeData_Score ON BarcodeData (Score)", cancellationToken).ConfigureAwait(false);
-        }
+            var entityType = Model.FindEntityType(typeof(DbModel))
+                ?? throw new InvalidOperationException("DbModel 未注册到 EF 模型，无法同步库结构。");
+            var table = entityType.GetTableName() ?? nameof(BarcodeData);
 
-        /// <summary>
-        /// 读取 BarcodeData 列，并保证"表一定存在"（自愈兜底，2026-09-13）。
-        /// <para><b>为什么需要它</b>：<see cref="GetBarcodeDataColumnsAsync"/> 在表不存在时
-        /// 返回<b>空集而非报错</b>（PRAGMA 对不存在的表不抛异常），于是所有
-        /// <c>!cols.Contains(x)</c> 判断都为真，紧接着的 <c>ALTER TABLE BarcodeData</c>
-        /// 会因 "no such table: BarcodeData" 失败。这会让"库文件被删除/首次运行"
-        /// 的场景直接崩在启动路径上——测试环境删除膨胀库后即复现。</para>
-        /// <para><b>兜底方式</b>：空列集 ⇒ 表不存在 ⇒ 调 <c>EnsureCreatedAsync</c> 按模型建全表。
-        /// 该调用幂等（库中已有任何表时直接返回 false，不做任何改动），故对既有库零影响。</para>
-        /// </summary>
-        private async Task<HashSet<string>> EnsureTableAndGetColumnsAsync(CancellationToken cancellationToken)
-        {
-            var cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
-            if (cols.Count == 0)
+            // ── 1) 保证表存在 ─────────────────────────────────────────────
+            var existingColumns = await GetColumnNamesAsync(table, cancellationToken).ConfigureAwait(false);
+            if (existingColumns.Count == 0)
             {
+                // 新库：EnsureCreated 按模型建全表（幂等：库中已有任何表时直接返回 false，不做改动）
                 await Database.EnsureCreatedAsync(cancellationToken).ConfigureAwait(false);
-                cols = await GetBarcodeDataColumnsAsync(cancellationToken).ConfigureAwait(false);
+                existingColumns = await GetColumnNamesAsync(table, cancellationToken).ConfigureAwait(false);
             }
 
-            return cols;
+            if (existingColumns.Count == 0)
+            {
+                // 库文件里有别的表时 EnsureCreated 不会补建本表。此处宁可抛出可读异常，
+                // 也不让后续 ALTER 抛 "no such table" 那种无从定位的错误。
+                throw new InvalidOperationException(
+                    $"表 {table} 不存在且无法自动创建（库中可能已有其它表导致 EnsureCreated 跳过）。请人工检查数据库文件。");
+            }
+
+            // ── 2) 补缺失的列（模型 → 库）────────────────────────────────
+            var addedColumns = new List<string>();
+            var skippedColumns = new List<string>();
+
+            foreach (var property in entityType.GetProperties())
+            {
+                var column = property.GetColumnName();
+                if (existingColumns.Contains(column))
+                {
+                    continue;
+                }
+
+                // SQLite 的 ALTER TABLE ADD COLUMN 对已有行的表要求新列"可空或有默认值"
+                var hasDefault = property.GetDefaultValue() is not null
+                    || !string.IsNullOrEmpty(property.GetDefaultValueSql());
+                if (!property.IsNullable && !hasDefault)
+                {
+                    skippedColumns.Add(column);
+                    continue;
+                }
+
+                var sqliteType = MapToSqliteType(property.ClrType);
+                if (sqliteType is null)
+                {
+                    skippedColumns.Add(column);
+                    continue;
+                }
+
+                await ExecuteDdlAsync(
+                    $"ALTER TABLE {RequireSafeIdentifier(table)} ADD COLUMN {RequireSafeIdentifier(column)} {sqliteType} NULL",
+                    cancellationToken).ConfigureAwait(false);
+                addedColumns.Add(column);
+            }
+
+            // ── 3) 补缺失的索引（模型 → 库）──────────────────────────────
+            var existingIndexes = await GetIndexNamesAsync(table, cancellationToken).ConfigureAwait(false);
+            var addedIndexes = new List<string>();
+
+            foreach (var index in entityType.GetIndexes())
+            {
+                var columns = index.Properties.Select(p => p.GetColumnName()).ToList();
+                // 与 EF 默认命名约定一致（IX_{表}_{列}），保证新库(EnsureCreated)与老库(本方法补齐)索引同名
+                var name = $"IX_{table}_{string.Join("_", columns)}";
+                if (existingIndexes.Contains(name))
+                {
+                    continue;
+                }
+
+                await ExecuteDdlAsync(
+                    $"CREATE INDEX IF NOT EXISTS {RequireSafeIdentifier(name)} ON {RequireSafeIdentifier(table)} " +
+                    $"({string.Join(", ", columns.Select(RequireSafeIdentifier))})",
+                    cancellationToken).ConfigureAwait(false);
+                addedIndexes.Add(name);
+            }
+
+            return new SchemaSyncResult(addedColumns, addedIndexes, skippedColumns);
         }
 
         /// <summary>
-        /// 2026-09-08: 为已存在的数据库幂等补充灰度判向统计列（BrightMean/DarkMean/BrightnessDiff）。
-        /// EnsureCreatedAsync 仅在库不存在时建表，升级已有库不会补新列——若缺列，新写入的 INSERT
-        /// 会因 "no such column" 失败。SQLite 用 PRAGMA table_info 探测列，缺哪列补哪列
-        /// （double? → REAL 可空列，无需默认值；ALTER TABLE ADD COLUMN 对既有行自动为 NULL）。
+        /// CLR 类型 → SQLite 列类型。仅覆盖本项目实际使用的类型；
+        /// 返回 null 表示无法映射（调用方会记入 SkippedColumns 并打 Error，不静默跳过）。
         /// </summary>
-        public async Task EnsureBrightnessColumnsAsync(CancellationToken cancellationToken = default)
+        private static string? MapToSqliteType(Type clrType)
         {
-            var cols = await EnsureTableAndGetColumnsAsync(cancellationToken).ConfigureAwait(false);
+            var type = Nullable.GetUnderlyingType(clrType) ?? clrType;
 
-            // 缺哪列补哪列（double? → REAL 可空列，无需默认值；ALTER ADD COLUMN 对既有行自动为 NULL）
-            if (!cols.Contains("BrightMean"))
+            if (type == typeof(byte[]))
             {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightMean REAL NULL", cancellationToken).ConfigureAwait(false);
+                return "BLOB";
             }
-            if (!cols.Contains("DarkMean"))
+            if (type == typeof(string) || type == typeof(DateTime) || type == typeof(DateTimeOffset)
+                || type == typeof(decimal) || type == typeof(Guid))
             {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN DarkMean REAL NULL", cancellationToken).ConfigureAwait(false);
+                return "TEXT";
             }
-            if (!cols.Contains("BrightnessDiff"))
+            if (type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte)
+                || type == typeof(uint) || type == typeof(ulong) || type == typeof(ushort) || type == typeof(bool))
             {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN BrightnessDiff REAL NULL", cancellationToken).ConfigureAwait(false);
+                return "INTEGER";
+            }
+            if (type == typeof(double) || type == typeof(float))
+            {
+                return "REAL";
             }
 
-            // 2026-09-13: 标定标志列（IsCalibrated：WorldX/Y 与 Angle 是否标定坐标系下的真值；
-            // 未标定时 WorldX/Y 为像素、Angle 为图像角的兜底值，下游可据此区分真值与假数值）
-            if (!cols.Contains("IsCalibrated"))
-            {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN IsCalibrated INTEGER NULL", cancellationToken).ConfigureAwait(false);
-            }
+            return null;
         }
 
         /// <summary>
-        /// 读取 BarcodeData 表当前列名集合（SQLite 用 PRAGMA table_info 探测）。
-        /// 抽出来供多个「幂等补列」方法复用。
+        /// 执行含<b>动态标识符</b>（表名/列名/索引名）的 DDL。
+        ///
+        /// <para><b>为什么要单独一个入口</b>：SQL 参数只能承载"值"，表名/列名/索引名这类**标识符无法参数化**，
+        /// 只能拼进语句文本——这正是分析器 EF1002（"插值字符串直接进 SQL"）的告警点。
+        /// 本方法的标识符全部来自 EF 模型（代码定义、非用户输入），并强制经
+        /// <see cref="RequireSafeIdentifier"/> 白名单校验，因此集中在此执行一次，
+        /// 既不必在每个调用点重复抑制告警，也不会让拼接散落在多处。</para>
         /// </summary>
-        private async Task<HashSet<string>> GetBarcodeDataColumnsAsync(CancellationToken cancellationToken)
+        private Task ExecuteDdlAsync(string sql, CancellationToken cancellationToken) =>
+            Database.ExecuteSqlRawAsync(sql, cancellationToken);
+
+        /// <summary>标识符白名单校验：仅允许字母/数字/下划线且不以数字开头，否则直接抛错。</summary>
+        private static string RequireSafeIdentifier(string identifier)
         {
-            // 单行返回 "列名,类型,非空,默认值,主键"（PRAGMA 逗号分隔）
-            var cols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var ok = !string.IsNullOrEmpty(identifier)
+                && (char.IsLetter(identifier[0]) || identifier[0] == '_')
+                && identifier.All(c => char.IsLetterOrDigit(c) || c == '_');
+            if (!ok)
+            {
+                throw new InvalidOperationException(
+                    $"拒绝执行含非法 SQL 标识符的 DDL：\"{identifier}\"（标识符应来自 EF 模型）。");
+            }
+
+            return identifier;
+        }
+
+        /// <summary>读取某表当前列名集合（SQLite 用 PRAGMA table_info 探测；表不存在时返回空集而非报错）。</summary>
+        private Task<HashSet<string>> GetColumnNamesAsync(string table, CancellationToken cancellationToken) =>
+            // 单行返回 "cid,name,type,notnull,dflt_value,pk"，name 是第 2 列
+            ReadPragmaNameSetAsync($"PRAGMA table_info({table})", cancellationToken);
+
+        /// <summary>读取某表当前索引名集合（PRAGMA index_list；表不存在时返回空集）。</summary>
+        private Task<HashSet<string>> GetIndexNamesAsync(string table, CancellationToken cancellationToken) =>
+            // 单行返回 "seq,name,unique,origin,partial"，name 是第 2 列
+            ReadPragmaNameSetAsync($"PRAGMA index_list({table})", cancellationToken);
+
+        /// <summary>
+        /// 执行 PRAGMA 并把第 2 列（名称列）收成集合。连接按需打开/关闭，生命周期收敛在本方法内。
+        /// </summary>
+        private async Task<HashSet<string>> ReadPragmaNameSetAsync(string pragma, CancellationToken cancellationToken)
+        {
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var conn = Database.GetDbConnection();
             var wasClosed = conn.State != System.Data.ConnectionState.Open;
             if (wasClosed)
             {
                 await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
             }
+
             try
             {
                 await using var cmd = conn.CreateCommand();
-                cmd.CommandText = "PRAGMA table_info(BarcodeData)";
+                cmd.CommandText = pragma;
                 await using var reader = await cmd.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
                 while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    cols.Add(reader.GetString(1)); // cid,name,type,notnull,dflt_value,pk → name 是第 2 列
+                    if (reader.FieldCount > 1)
+                    {
+                        names.Add(reader.GetString(1));
+                    }
                 }
             }
             finally
@@ -176,42 +314,7 @@ namespace MainAPP.Models
                 }
             }
 
-            return cols;
-        }
-
-        /// <summary>
-        /// 2026-09-12: 为已存在的数据库幂等补充追溯列（RecipeName / Result / Station）。
-        /// 与 EnsureBrightnessColumnsAsync 同一套模式：EnsureCreated 不补列，既有库必须显式 ALTER。
-        /// 三列均为可空 TEXT——历史行自动为 NULL，表示「当时没记录」，语义上区别于空字符串。
-        /// 这是 AI 对话「自然语言查追溯数据」能力的数据基础：没有这三列，就回答不了
-        /// 「某配方的合格率」「某工位的过站记录」这类问题。
-        /// </summary>
-        public async Task EnsureTraceColumnsAsync(CancellationToken cancellationToken = default)
-        {
-            var cols = await EnsureTableAndGetColumnsAsync(cancellationToken).ConfigureAwait(false);
-
-            if (!cols.Contains("RecipeName"))
-            {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN RecipeName TEXT NULL", cancellationToken).ConfigureAwait(false);
-            }
-            if (!cols.Contains("Result"))
-            {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN Result TEXT NULL", cancellationToken).ConfigureAwait(false);
-            }
-            if (!cols.Contains("Station"))
-            {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN Station TEXT NULL", cancellationToken).ConfigureAwait(false);
-            }
-            if (!cols.Contains("HeadFeatures"))
-            {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN HeadFeatures TEXT NULL", cancellationToken).ConfigureAwait(false);
-            }
-            // 2026-09-13: 头尾真值符号（特征池自检）。可空 INTEGER——SQLite 布尔以 0/1 存储，
-            // NULL 表示本帧无真值（无码/码过近/码垂直于长轴/特征池未运行），语义上区别于 false。
-            if (!cols.Contains("HeadTruthPositive"))
-            {
-                await Database.ExecuteSqlRawAsync("ALTER TABLE BarcodeData ADD COLUMN HeadTruthPositive INTEGER NULL", cancellationToken).ConfigureAwait(false);
-            }
+            return names;
         }
     }
 }

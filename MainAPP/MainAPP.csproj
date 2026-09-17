@@ -18,45 +18,45 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-		<PackageReference Include="DataGridExtensions" Version="2.9.1" />
-		<PackageReference Include="HandyControl" Version="3.4.0" />
-		<PackageReference Include="MahApps.Metro.IconPacks" Version="6.2.1" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.24" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.24" />
-		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.24">
+		<PackageReference Include="CommunityToolkit.Mvvm" />
+		<PackageReference Include="DataGridExtensions" />
+		<PackageReference Include="HandyControl" />
+		<PackageReference Include="MahApps.Metro.IconPacks" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.1" />
-		<PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" Version="1.28.0" />
-		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" Version="1.1.142" />
+		<PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+		<PackageReference Include="Microsoft.ML.OnnxRuntime.Gpu.Windows" />
+		<PackageReference Include="Microsoft.Xaml.Behaviors.Wpf" />
 		<!-- Roslyn 分析器：强制 async void 使用规范、检测 sync-over-async 等 -->
-		<PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="17.13.61">
+		<PackageReference Include="Microsoft.VisualStudio.Threading.Analyzers">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="OpenCvSharp4" Version="4.11.0.20250507" />
-		<PackageReference Include="OpenCvSharp4.runtime.win" Version="4.11.0.20250507" />
-		<PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.11.0.20250507" />
-		<PackageReference Include="Serilog" Version="4.3.0" />
-		<PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
-		<PackageReference Include="Serilog.Sinks.SQLite" Version="6.0.0" />
+		<PackageReference Include="OpenCvSharp4" />
+		<PackageReference Include="OpenCvSharp4.runtime.win" />
+		<PackageReference Include="OpenCvSharp4.WpfExtensions" />
+		<PackageReference Include="Serilog" />
+		<PackageReference Include="Serilog.Sinks.File" />
+		<PackageReference Include="Serilog.Sinks.SQLite" />
 		<!-- 2026-09-13: 覆盖传递依赖 System.Collections.Immutable 6.0.0（其旧版 targets 在新 SDK 上
 		     对 net8.0-windows 误报 "doesn't support"，阻断构建）。8.0.0 与 .NET 8 运行时内置版本同源，
 		     API 向后兼容，只升 targets 兼容性，不影响任何行为。 -->
-		<PackageReference Include="System.Collections.Immutable" Version="8.0.0" />
+		<PackageReference Include="System.Collections.Immutable" />
 		<!-- 同 2026-09-13：System.Composition.Runtime 6.0.0 旧版 targets 误报（该程序集 .NET 6+ 运行时内置），
 		     9.0.0 消除误报。System.Composition.* 为 SQLite/分析器链的传递依赖，API 兼容。 -->
-		<PackageReference Include="System.Composition.Runtime" Version="9.0.0" />
+		<PackageReference Include="System.Composition.Runtime" />
 		<!-- 同族覆盖：System.Composition.Hosting / AttributedModel / TypedParts / Convention
 		     6.0.0 旧 targets 对 net8.0-windows 报错（9.0.0 仅警告），一次覆盖收敛。 -->
-		<PackageReference Include="System.Composition.Hosting" Version="9.0.0" />
-		<PackageReference Include="System.Composition.AttributedModel" Version="9.0.0" />
-		<PackageReference Include="System.Composition.TypedParts" Version="9.0.0" />
-		<PackageReference Include="System.Composition.Convention" Version="9.0.0" />
+		<PackageReference Include="System.Composition.Hosting" />
+		<PackageReference Include="System.Composition.AttributedModel" />
+		<PackageReference Include="System.Composition.TypedParts" />
+		<PackageReference Include="System.Composition.Convention" />
 		<!-- System.Composition 聚合元包 6.0.0 同因报错，一并覆盖到 9.0.0。 -->
-		<PackageReference Include="System.Composition" Version="9.0.0" />
+		<PackageReference Include="System.Composition" />
 	</ItemGroup>
 
 	<!-- 2026-09-12: AI 对话模块（离线本地推理，全部开源组件，不自建轮子）。
@@ -70,18 +70,18 @@
 		<!-- 工具调用中间件（ChatClientBuilder.UseFunctionInvocation / FunctionInvokingChatClient）
 		     在 Microsoft.Extensions.AI 主包里，LLamaSharp 只传递引入 Abstractions。
 		     10.9.0 的 lib 含 net8.0，可安全用于本工程。 -->
-		<PackageReference Include="Microsoft.Extensions.AI" Version="10.10.0" />
+		<PackageReference Include="Microsoft.Extensions.AI" />
 		<!-- OpenAI 协议适配器：把 llama-server 侧车（OpenAI 兼容 HTTP）包装成 IChatClient，
 		     MAF / 流式 / 工具调用代码零改动即可从进程内推理切到侧车。 -->
-		<PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.10.0" />
+		<PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
 		<!-- 浏览器级对话 UI 的承载控件（A 部分）：WPF 内嵌 WebView2 跑 Deep Chat 页面。
 		     ★ 部署注意：目标机需有 WebView2 Runtime（Win11 自带；老旧 Win10 需装
 		        Evergreen Runtime 或随包带 Fixed Version，约 200MB）。 -->
-		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />
+		<PackageReference Include="Microsoft.Web.WebView2" />
 		<!-- Agent 与工具调用编排（Semantic Kernel 的继任者，2026-04 GA）。
 		     1.21.0 的 lib 含 net8.0/net9.0/net10.0/net472，可安全用于本工程（已实测还原）。
 		     提供 AIAgent / AgentSession（多轮会话状态）/ 工具循环。 -->
-		<PackageReference Include="Microsoft.Agents.AI" Version="1.21.0" />
+		<PackageReference Include="Microsoft.Agents.AI" />
 	</ItemGroup>
 
 	<ItemGroup>

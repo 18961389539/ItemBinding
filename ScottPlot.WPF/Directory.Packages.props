@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    ScottPlot.WPF/ 是上游源码快照（vendored）。其包版本按 TargetFramework 分支
+    （OpenTK 3.3.1 / 4.9.4、OpenTK.GLWpfControl 3.3.0 / 4.3.3 等），
+    纳入仓库根的中央包版本管理（CPM）会更容易改错，故就近声明本文件关闭 CPM，
+    保持该子树原有的内联 Version 写法不被触碰。详见根目录 Directory.Packages.props 的"例外"说明。
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+</Project>

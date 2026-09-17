@@ -57,9 +57,17 @@ public sealed class RecipeTcpServerService : IDisposable
         }
     }
 
-    /// <summary>停止监听并关闭所有客户端连接。</summary>
+    /// <summary>停止监听并关闭所有客户端连接（幂等）。</summary>
     public void Stop()
     {
+        // 2026-09-16: 幂等守卫。本服务现由 DI 容器持有，容器释放时会再次调用 Stop()，
+        // 而 App.OnExit 已显式停止过一次（必须先于扫码枪关闭）。与 CameraWebHost/AiWebHost
+        // 的写法保持一致，避免退出日志出现两次「已停止」。
+        if (_listener is null && _cts is null)
+        {
+            return;
+        }
+
         try { _cts?.Cancel(); } catch { }
         try { _listener?.Stop(); } catch { }
         foreach (var client in _clients.Keys)
@@ -118,7 +126,7 @@ public sealed class RecipeTcpServerService : IDisposable
 
                 var trimmed = line.Trim();
                 if (trimmed.Length == 0) continue;
-                var response = ProcessCommand(trimmed);
+                var response = await ProcessCommandAsync(trimmed).ConfigureAwait(false);
                 await writer.WriteLineAsync(response.AsMemory(), ct).ConfigureAwait(false);
             }
         }
@@ -173,7 +181,7 @@ public sealed class RecipeTcpServerService : IDisposable
         return sb.Length > 0 ? sb.ToString() : null;
     }
 
-    private static string ProcessCommand(string line)
+    private static async Task<string> ProcessCommandAsync(string line)
     {
         try
         {
@@ -187,22 +195,35 @@ public sealed class RecipeTcpServerService : IDisposable
                 if (recipe is null)
                 {
                     // RTC(2026-08-06): 配方不存在也弹 Toast 提示操作员（橙色 Warning）
-#pragma warning disable VSTHRD001 // WPF 标准 UI 线程调度,与项目内 ImageViewer/LogService 一致
-                    System.Windows.Application.Current?.Dispatcher.Invoke(() =>
-                        NotificationService.Warning($"配方不存在: {name}"));
-#pragma warning restore VSTHRD001
+                    // 2026-09-16: 不再用阻塞式 Dispatcher.Invoke —— NotificationService 内部
+                    // 就会封送到 UI 线程（见其 ExecuteOnUi 的 BeginInvoke 分支），协议线程直接调即可，
+                    // 也因此不必让 TCP 应答等这个纯提示动作。
+                    NotificationService.Warning($"配方不存在: {name}");
                     return $"NOT_FOUND:{name}";
                 }
 
-                // 切到 UI 线程执行，与界面切换配方行为一致（订阅者可能访问 UI）
-#pragma warning disable VSTHRD001 // WPF 标准 UI 线程调度,与项目内 ImageViewer/LogService 一致
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                // 切到 UI 线程执行，与界面切换配方行为一致（订阅者可能访问 UI）。
+                // 2026-09-16: 由阻塞式 Dispatcher.Invoke 改为 await InvokeAsync：
+                //   ① 语义不变——应答仍然在"配方真的切完"之后才发出（客户端据此才能认为切换生效）；
+                //   ② 不再占死一个协议线程做同步等待，也消除了"协议线程等 UI、UI 又等协议线程"的死锁可能。
+                // 纯提示性的 Toast 拆到切换之外，避免把它算进应答延迟。
+                var dispatcher = System.Windows.Application.Current?.Dispatcher;
+                if (dispatcher is not null)
                 {
-                    RecipesManage.Instance.SetAndSaveCurrentRecipe(recipe);
-                    // RTC(2026-08-06): 切换成功弹出 Toast 提示操作员
-                    NotificationService.Success($"已切换配方: {name}");
-                });
+                    // 注：DispatcherOperation 不是 Task（无 ConfigureAwait）；协议线程无同步上下文，
+                    // await 后继续在本线程池线程上执行，不会回到 UI 线程。
+#pragma warning disable VSTHRD001 // WPF 标准 UI 线程调度，与项目内 ImageViewer/LogService 一致
+                    await dispatcher.InvokeAsync(() => RecipesManage.Instance.SetAndSaveCurrentRecipe(recipe));
 #pragma warning restore VSTHRD001
+                }
+                else
+                {
+                    // 无 UI（例如单元测试或关窗过程中）：直接改状态，保证指令语义仍然生效
+                    RecipesManage.Instance.SetAndSaveCurrentRecipe(recipe);
+                }
+
+                // RTC(2026-08-06): 切换成功弹出 Toast 提示操作员（自带线程封送，不必等它完成）
+                NotificationService.Success($"已切换配方: {name}");
                 LogService.Instance.Info($"TCP 指令切换配方: {name}");
                 return "OK";
             }

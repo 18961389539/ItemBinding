@@ -93,6 +93,58 @@ public class SettingsPersistTests
         }
     }
 
+    /// <summary>
+    /// 2026-09-17: 角度域配置必须能从 settings.json 读回。
+    /// 若加载路径丢失该字段，现场切到 (-90,90] 后一重启就会退回 (-180,180]，
+    /// 且**没有任何报错**——只能靠机器人抓反了才会被发现。
+    /// </summary>
+    [Fact]
+    public void Reload_LoadsDefaultAngleDomainFromJson()
+    {
+        var originalFile = ReadSettingsFileOrNull();
+        try
+        {
+            File.WriteAllText(DataPaths.SettingsFile,
+                "{ \"DefaultAngleDomain\": \"Folded90\" }");
+
+            Settings.Instance.Reload();
+
+            Assert.Equal("Folded90", Settings.Instance.DefaultAngleDomain);
+            // 换算器必须把该配置解析为折叠域（发送路径用的就是这个解析结果）
+            Assert.Equal(AngleDomain.Folded90,
+                AngleDomainConverter.Parse(Settings.Instance.DefaultAngleDomain));
+        }
+        finally
+        {
+            RestoreSettingsFile(originalFile);
+            Settings.Instance.Reload();
+        }
+    }
+
+    /// <summary>Save() 必须把角度域一并写入 settings.json（否则下次加载回到默认域）。</summary>
+    [Fact]
+    public void Save_WritesDefaultAngleDomain()
+    {
+        var settings = Settings.Instance;
+        var originalDomain = settings.DefaultAngleDomain;
+        var originalFile = ReadSettingsFileOrNull();
+        try
+        {
+            settings.DefaultAngleDomain = AngleDomainConverter.Folded90Key;
+            settings.Save();
+
+            var json = ReadSettingsFileOrNull();
+            Assert.NotNull(json);
+            Assert.Contains("\"DefaultAngleDomain\": \"" + AngleDomainConverter.Folded90Key + "\"", json!);
+        }
+        finally
+        {
+            settings.DefaultAngleDomain = originalDomain;
+            RestoreSettingsFile(originalFile);
+            settings.Reload();
+        }
+    }
+
     [Fact]
     public void StartPeriodicPersist_IsIdempotent_AndStoppable()
     {

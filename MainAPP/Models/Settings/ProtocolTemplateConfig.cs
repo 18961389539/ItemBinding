@@ -37,6 +37,13 @@ public sealed class ProtocolTemplateConfig
     /// <summary>角度未知（-9999）时整条拒发（与现有 VGT/LL 行为一致，默认 true）。</summary>
     public bool RejectWhenAngleUnknown { get; set; } = true;
 
+    /// <summary>
+    /// 本协议的角度域覆盖（2026-09-17 新增）：<c>""</c> = 跟随全局
+    /// <see cref="ProtocolSettings.DefaultAngleDomain"/>；<c>Signed180</c> = (-180,180]；
+    /// <c>Folded90</c> = (-90,90]（折叠 180°，仅适用于 180° 对称的产品/夹爪）。
+    /// </summary>
+    public string AngleDomain { get; set; } = string.Empty;
+
     /// <summary>行结束符："" 无 / CRLF / LF。</summary>
     public string LineEnding { get; set; } = string.Empty;
 }

@@ -137,6 +137,9 @@ namespace MainAPP.Models
         // --- 自定义通讯协议（2026-09-13 新增，扁平转发参与 JSON 序列化）---
         public List<ProtocolTemplateConfig> ProtocolTemplates { get => Protocol.Protocols; set => Protocol.Protocols = value; }
 
+        /// <summary>2026-09-17: 默认发送角度域（扁平转发，使 settings.json 保持扁平结构）。</summary>
+        public string DefaultAngleDomain { get => Protocol.DefaultAngleDomain; set => Protocol.DefaultAngleDomain = value; }
+
         // --- 知识库语料噪声排除（2026-09-13 配置化，替代硬编码黑名单）---
         public List<string> AiKnowledgeExcludedFiles { get => Ai.KnowledgeExcludedFiles; set => Ai.KnowledgeExcludedFiles = value; }
 

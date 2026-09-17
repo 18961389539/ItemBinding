@@ -38,7 +38,12 @@ public static class ProtocolTemplateRenderer
     /// <summary>
     /// 渲染单条消息。返回 null = 整条拒发（角度未知或无码 RejectMessage）。
     /// </summary>
-    public static string? Render(DbModel m, ProtocolTemplateConfig cfg)
+    /// <param name="m">待发送的记录。★ 本方法**不修改**它——它同时是 EF 跟踪的实体，
+    /// 改写会污染落库数据与画面显示。</param>
+    /// <param name="cfg">协议模板配置。</param>
+    /// <param name="angle">本轮生效的发送角（已按目标角度域换算）；null = 用 <c>m.Angle</c> 原值。
+    /// 2026-09-17 新增：折叠域下发送值与落库值不同，必须由调用方传入实际要发的值。</param>
+    public static string? Render(DbModel m, ProtocolTemplateConfig cfg, double? angle = null)
     {
         if (cfg.RejectWhenAngleUnknown && m.Angle == AngleTracker.UnknownAngle)
         {
@@ -61,7 +66,7 @@ public static class ProtocolTemplateRenderer
                     continue;
                 }
 
-                sb.Append(ReplacePlaceholders(seg.Text, m, cfg));
+                sb.Append(ReplacePlaceholders(seg.Text, m, cfg, angle));
             }
         }
 
@@ -73,7 +78,7 @@ public static class ProtocolTemplateRenderer
     public static string FrameLineEnding(ProtocolTemplateConfig cfg)
         => string.Equals(cfg.LineEnding, "LF", StringComparison.OrdinalIgnoreCase) ? "\n" : "\r\n";
 
-    private static string ReplacePlaceholders(string text, DbModel m, ProtocolTemplateConfig cfg)
+    private static string ReplacePlaceholders(string text, DbModel m, ProtocolTemplateConfig cfg, double? angle)
         => PlaceholderRe.Replace(text, mt =>
         {
             var name = mt.Groups[1].Value;
@@ -85,7 +90,9 @@ public static class ProtocolTemplateRenderer
                 case "Y":
                     return FormatDouble(m.WorldY, decimals);
                 case "RZ":
-                    return FormatDouble(m.Angle, decimals);
+                    // 2026-09-17: 发送角可能已被换算到其它角度域（如折叠到 (-90,90]），
+                    // 未传时退回落库值（与历史行为一致）
+                    return FormatDouble(angle ?? m.Angle, decimals);
                 case "BC":
                     if (HasBarcode(m))
                     {

@@ -733,6 +733,17 @@
                                 <TextBlock Style="{StaticResource TechMetricLabel}" VerticalAlignment="Center" Text="接收方协议：" />
                                 <TextBlock VerticalAlignment="Center" Text="{Binding ProtocolVM.CurrentReceiver}" />
                             </StackPanel>
+                            <!--  2026-09-17: 发送角度域。机械手腕关节只能转 ±90 时选「-90 ~ 90（折叠）」，
+                                  折叠 180° 只对 180° 对称的产品/夹爪成立；落库值始终是 -180~180，仅发送值折算。  -->
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <TextBlock Style="{StaticResource TechMetricLabel}" VerticalAlignment="Center" Text="默认角度域：" />
+                                <ComboBox MinWidth="230"
+                                          SelectedValue="{Binding ProtocolVM.DefaultAngleDomain, Mode=TwoWay}"
+                                          SelectedValuePath="Value"
+                                          DisplayMemberPath="Display"
+                                          ItemsSource="{Binding Source={x:Static vm:ProtocolSettingsViewModel.GlobalAngleDomainOptions}}"
+                                          ToolTip="作用于内置 VGT/LL 报文，以及未单独设置角度域的协议项。折叠域仅适用于 180° 对称的产品或夹爪。" />
+                            </StackPanel>
                             <TextBox Margin="0,0,0,6" Text="{Binding ProtocolVM.SearchText, UpdateSourceTrigger=PropertyChanged}"
                                      ToolTip="按名称过滤协议" />
                             <DataGrid
@@ -812,6 +823,16 @@
                                             </StackPanel>
                                             <CheckBox Margin="5,6,0,0" Content="角度未知拒发（-9999）"
                                                       IsChecked="{Binding ProtocolVM.Selected.RejectWhenAngleUnknown}" />
+                                            <!--  2026-09-17: 本协议的角度域（覆盖全局默认）。预览与实发同源。  -->
+                                            <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                                                <TextBlock Style="{StaticResource TechMetricLabel}" Margin="5,0" VerticalAlignment="Center" Text="角度域:" />
+                                                <ComboBox Width="190"
+                                                          SelectedValue="{Binding ProtocolVM.Selected.AngleDomain, Mode=TwoWay}"
+                                                          SelectedValuePath="Value"
+                                                          DisplayMemberPath="Display"
+                                                          ItemsSource="{Binding Source={x:Static vm:ProtocolSettingsViewModel.AngleDomainOptions}}"
+                                                          ToolTip="留「跟随默认」即用全局设置。折叠域只对 180° 对称的产品/夹爪成立——有头尾的产品请勿使用，否则会把「装反」发成正常角度。" />
+                                            </StackPanel>
                                         </StackPanel>
                                     </Border>
                                     <Border Grid.Column="1" Background="{StaticResource TechCardBgBrush}" CornerRadius="4" Padding="8" Margin="4,0,0,0">

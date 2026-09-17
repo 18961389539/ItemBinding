@@ -432,6 +432,9 @@ namespace MainAPP.Services
             ArgumentNullException.ThrowIfNull(models);
             ArgumentNullException.ThrowIfNull(scannerResult);
 
+            // 生效角度域：内置 VGT/LL 走全局默认（自定义协议在自己的分支里按协议项覆盖解析）
+            var effectiveDomain = AngleDomainConverter.Parse(Settings.Instance.Protocol?.DefaultAngleDomain);
+
             List<MessageToVGT> messages = [];
             foreach (var model in models)
             {
@@ -449,8 +452,11 @@ namespace MainAPP.Services
                     X = model.WorldX,
                     Y = model.WorldY,
                     // 2026-09-05: DbModel.Angle 落库已统一为 (-180,180]（AngleTracker 归一化），
-                    // 此处 ToRobotAngle 为幂等换算，保留作防御（历史/导入数据越界时仍能安全落域）。
-                    RZ = ToVGT.ToRobotAngle(model.Angle),
+                    // 此处换算对 Signed180 域是幂等的（保留作防御：历史/导入数据越界时仍能安全落域）。
+                    // 2026-09-17: 改为按"当前生效的角度域"换算——机械手腕关节只能转 ±90 时，
+                    // 现场会切到 Folded90（折叠 180°，仅适用于 180° 对称的产品/夹爪）。
+                    // ★ 落库值仍是 (-180,180]：折算只作用于发送，否则"产品装反"与"正常"在数据里将无法区分。
+                    RZ = AngleDomainConverter.ToDomain(model.Angle, effectiveDomain),
                     Barcode = model.Barcode,
                 };
                 messages.Add(msg);
@@ -490,7 +496,10 @@ namespace MainAPP.Services
 
                 var detail = string.Join(" | ", messages.Select(m =>
                     $"条码={m.Barcode}, X={m.X:F2}, Y={m.Y:F2}, 角度={m.RZ:F2}"));
-                AuditSend(receiver, scannerResult.FrameNumber, scannerResult.EncoderValue, messages.Count, detail);
+                // 2026-09-17: 审计里写明生效的角度域——折叠域下发送值与落库值不同，
+                // 这条是事后核对"为什么发的是 -30 而不是 150"的第一线索
+                AuditSend(receiver, scannerResult.FrameNumber, scannerResult.EncoderValue, messages.Count,
+                    $"角度域={AngleDomainConverter.Describe(effectiveDomain)} | {detail}");
             }
         }
 
@@ -534,11 +543,18 @@ namespace MainAPP.Services
                 return;
             }
 
+            // 2026-09-17: 协议项可单独覆盖角度域（空 = 跟随全局默认）。
+            // 换算在**渲染之外**算好再传入：渲染器保持纯函数，且不碰 EF 跟踪的实体（改写会污染落库值）。
+            var domain = AngleDomainConverter.Parse(
+                string.IsNullOrWhiteSpace(proto.AngleDomain)
+                    ? Settings.Instance.Protocol?.DefaultAngleDomain
+                    : proto.AngleDomain);
+
             var lineEnding = ProtocolTemplateRenderer.FrameLineEnding(proto);
             var parts = new List<string>();
             foreach (var m in models)
             {
-                var s = ProtocolTemplateRenderer.Render(m, proto);
+                var s = ProtocolTemplateRenderer.Render(m, proto, AngleDomainConverter.ToDomain(m.Angle, domain));
                 if (s is not null)
                 {
                     parts.Add(s);

@@ -14,4 +14,13 @@ public sealed class ProtocolSettings
 {
     /// <summary>全部自定义协议模板（含停用项）。</summary>
     public List<ProtocolTemplateConfig> Protocols { get; set; } = [];
+
+    /// <summary>
+    /// 默认发送角度域（2026-09-17 新增）：<c>Signed180</c> = (-180,180]，<c>Folded90</c> = (-90,90]。
+    /// <para>作用于**内置 VGT/LL 报文**以及未单独覆盖的自定义协议项；
+    /// 自定义协议可用 <see cref="ProtocolTemplateConfig.AngleDomain"/> 单独覆盖。</para>
+    /// <para>默认 <c>Signed180</c> = 与历史行为完全一致（零行为变化）。
+    /// 仅在机械手腕关节只能转 ±90、且产品/夹爪 180° 对称时才改为 <c>Folded90</c>。</para>
+    /// </summary>
+    public string DefaultAngleDomain { get; set; } = "Signed180";
 }

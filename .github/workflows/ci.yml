@@ -39,8 +39,13 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - name: 恢复（厂商无关子集）
-        run: dotnet restore ItemBinding.SdkFree.slnx
+      - name: 恢复（厂商无关工程）
+        run: |
+          dotnet restore JinlongYolo.Tests/JinlongYolo.Tests.csproj
+          dotnet restore LicenseSystem/tests/LicenseCore.Tests/LicenseCore.Tests.csproj
+          dotnet restore Blob/Blob.csproj
+          dotnet restore ImageViewerControl/ImageViewerControl.csproj
+          dotnet restore ScottPlot.WPF/ScottPlot.WPF.csproj
 
       - name: 检查厂商 SDK 是否就位
         id: vendor
@@ -56,11 +61,19 @@ jobs:
           }
 
       # ── 必过部分：不依赖厂商 SDK 的工程 ─────────────────────────────
-      - name: 构建（厂商无关）
-        run: dotnet build ItemBinding.SdkFree.slnx --no-restore -v:m
+      # 2026-09-17: SdkFree.slnx 已移除，改为显式列出厂商无关工程（与主 slnx 需手工保持同步）
+      - name: 构建（厂商无关工程）
+        run: |
+          dotnet build JinlongYolo.Tests/JinlongYolo.Tests.csproj --no-restore -v:m
+          dotnet build LicenseSystem/tests/LicenseCore.Tests/LicenseCore.Tests.csproj --no-restore -v:m
+          dotnet build Blob/Blob.csproj --no-restore -v:m
+          dotnet build ImageViewerControl/ImageViewerControl.csproj --no-restore -v:m
+          dotnet build ScottPlot.WPF/ScottPlot.WPF.csproj --no-restore -v:m
 
-      - name: 测试（厂商无关）
-        run: dotnet test ItemBinding.SdkFree.slnx --no-build -v:m
+      - name: 测试（厂商无关工程）
+        run: |
+          dotnet test JinlongYolo.Tests/JinlongYolo.Tests.csproj --no-build -v:m
+          dotnet test LicenseSystem/tests/LicenseCore.Tests/LicenseCore.Tests.csproj --no-build -v:m
 
       # ── 条件部分：厂商 SDK 就位时才跑完整构建 ───────────────────────
       # 若希望 CI 常驻覆盖 MainAPP：把海康 SDK 的 25 个 DLL 作为可访问的构建资产（如私有 Release/制品）

@@ -32,6 +32,24 @@ public partial class ProtocolSettingsViewModel : ObservableObject
         ["Blank", "Placeholder", "RejectMessage"];
 
     /// <summary>行结束符枚举。</summary>
+    /// <summary>角度域下拉项（2026-09-17）。</summary>
+    public sealed record AngleDomainOption(string Value, string Display);
+
+    /// <summary>协议项可选的发送角度域；首项 <c>""</c> = 跟随全局默认。</summary>
+    public static IReadOnlyList<AngleDomainOption> AngleDomainOptions { get; } =
+    [
+        new(string.Empty, "跟随默认"),
+        new(AngleDomainConverter.Signed180Key, "-180 ~ 180"),
+        new(AngleDomainConverter.Folded90Key, "-90 ~ 90（折叠）"),
+    ];
+
+    /// <summary>全局默认可选的角度域（无"跟随"项——它就是被跟随的那个）。</summary>
+    public static IReadOnlyList<AngleDomainOption> GlobalAngleDomainOptions { get; } =
+    [
+        new(AngleDomainConverter.Signed180Key, "-180 ~ 180（整圈，默认）"),
+        new(AngleDomainConverter.Folded90Key, "-90 ~ 90（折叠 180°，仅 180° 对称件）"),
+    ];
+
     public static IReadOnlyList<string> LineEndings { get; } =
         ["", "CRLF", "LF"];
 
@@ -73,6 +91,9 @@ public partial class ProtocolSettingsViewModel : ObservableObject
             new SortDescription(nameof(ProtocolTemplateConfig.Enabled), ListSortDirection.Descending));
 
         Selected = Protocols.FirstOrDefault();
+
+        // 2026-09-17: 全局默认发送角度域（作用于内置 VGT/LL 与未覆盖的协议项）
+        DefaultAngleDomain = AngleDomainConverter.Parse(_settings.Protocol?.DefaultAngleDomain).ToString();
     }
 
     private bool FilterProtocol(object o)
@@ -87,6 +108,14 @@ public partial class ProtocolSettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private string _searchText = string.Empty;
+
+    /// <summary>
+    /// 全局默认发送角度域（2026-09-17）。作用于内置 VGT/LL 报文；
+    /// 自定义协议若未单独设置 <see cref="ProtocolTemplateConfig.AngleDomain"/>，也用它。
+    /// 保存时写入 <see cref="ProtocolSettings.DefaultAngleDomain"/>。
+    /// </summary>
+    [ObservableProperty]
+    private string _defaultAngleDomain = AngleDomainConverter.Signed180Key;
 
     partial void OnSearchTextChanged(string value) => ProtocolsView.Refresh();
 
@@ -265,7 +294,13 @@ public partial class ProtocolSettingsViewModel : ObservableObject
             SegmentPreviews.Add(new SegmentPreview(seg, i + 1, matched, SegmentStatusText(seg, m)));
         }
 
-        var rendered = ProtocolTemplateRenderer.Render(m, Selected);
+        // 2026-09-17: 预览必须与真正发送同源——按当前生效的角度域换算后再渲染，
+        // 否则切到折叠域后预览显示 150° 而实际发出 -30°，现场会以为配置没生效。
+        var domain = AngleDomainConverter.Parse(
+            string.IsNullOrWhiteSpace(Selected.AngleDomain)
+                ? Settings.Instance.Protocol?.DefaultAngleDomain
+                : Selected.AngleDomain);
+        var rendered = ProtocolTemplateRenderer.Render(m, Selected, AngleDomainConverter.ToDomain(m.Angle, domain));
         PreviewRejected = rendered is null;
         if (rendered is null)
         {
@@ -388,13 +423,16 @@ public partial class ProtocolSettingsViewModel : ObservableObject
         // 反序列化路径下 Protocol 可能为 null（settings.json 出现 "Protocol": null 时属性初始化器不保证），防御性重建
         _settings.Protocol ??= new ProtocolSettings();
         _settings.Protocol.Protocols = ordered;
+        // 2026-09-17: 全局默认角度域一并落盘（未识别值统一回退 Signed180，避免写出脏值）
+        _settings.Protocol.DefaultAngleDomain = AngleDomainConverter.Parse(DefaultAngleDomain).ToString();
         _settings.Save();
         CurrentReceiver = Settings.Instance.MessageReceiver;
         OnPropertyChanged(nameof(IsCurrentInUse));
         OnPropertyChanged(nameof(InUseBadgeText));
         // 2026-09-13: 操作审计（协议清单前后差异）
         var afterNames = string.Join("/", ordered.Select(p => p.Name));
-        AuditLogService.Instance.Record("保存", "自定义通讯协议", beforeNames, afterNames);
+        AuditLogService.Instance.Record("保存", "自定义通讯协议", beforeNames,
+            $"{afterNames} | 角度域={AngleDomainConverter.Describe(AngleDomainConverter.Parse(DefaultAngleDomain))}");
         NotificationService.Success("通讯协议已保存并生效。");
     }
 }

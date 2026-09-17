@@ -20,6 +20,9 @@
   <Folder Name="/tests/">
     <Project Path="MainAPP.Tests/MainAPP.Tests.csproj" />
     <Project Path="JinlongYolo.Tests/JinlongYolo.Tests.csproj" />
+    <!-- 2026-09-17: 补入 LicenseCore.Tests —— 原先不属于任何解决方案，
+         dotnet test 会静默跳过它，授权逻辑（36 用例）从未被自动跑到。 -->
+    <Project Path="LicenseSystem/tests/LicenseCore.Tests/LicenseCore.Tests.csproj" />
   </Folder>
   <Folder Name="/benchmarks/">
     <Project Path="MainAPP.Benchmarks/MainAPP.Benchmarks.csproj" />

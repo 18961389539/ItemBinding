@@ -32,6 +32,7 @@ namespace ImageViewer.Rendering
                 [typeof(PointAnnotationRoi)] = new PointAnnotationRenderer(),
                 [typeof(TextAnnotationRoi)] = new TextAnnotationRenderer(),
                 [typeof(ArrowAnnotationRoi)] = new ArrowAnnotationRenderer(),
+                [typeof(GrabPointRoi)] = new GrabPointRenderer(),
                 [typeof(LineMeasureRoi)] = new LineMeasureRenderer(),
                 [typeof(LineCaliperMeasureRoi)] = new LineCaliperMeasureRenderer(),
                 [typeof(CaliperMeasureRoi)] = new CaliperMeasureRenderer(),

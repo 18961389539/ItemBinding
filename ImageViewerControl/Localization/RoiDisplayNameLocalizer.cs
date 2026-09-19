@@ -20,6 +20,7 @@ namespace ImageViewer.Localization
                 _ when type == typeof(PolylineRoi) => UiText.Get("RoiDisplayPolyline"),
                 _ when type == typeof(ArrowAnnotationRoi) => UiText.Get("RoiDisplayArrowAnnotation"),
                 _ when type == typeof(PointAnnotationRoi) => UiText.Get("RoiDisplayPointAnnotation"),
+                _ when type == typeof(GrabPointRoi) => "抓取点",
                 _ when type == typeof(TextAnnotationRoi) => UiText.Get("RoiDisplayTextAnnotation"),
                 _ when type == typeof(LineCaliperMeasureRoi) => UiText.Get("RoiDisplayLineCaliperMeasure"),
                 _ when type == typeof(CircularCaliperMeasureRoi) => UiText.Get("RoiDisplayCircularCaliperMeasure"),

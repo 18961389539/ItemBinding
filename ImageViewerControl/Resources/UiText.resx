@@ -83,6 +83,7 @@
   <data name="MenuActualSize" xml:space="preserve"><value>实际大小 (100%)</value></data>
   <data name="MenuZoomToSelectedRoi" xml:space="preserve"><value>缩放到所选 ROI</value></data>
   <data name="MenuResetView" xml:space="preserve"><value>重置视图</value></data>
+  <data name="MenuToolbarToggle" xml:space="preserve"><value>工具面板</value></data>
   <data name="RoiListTitle" xml:space="preserve"><value>ROI 列表</value></data>
   <data name="RoiListToggleVisible" xml:space="preserve"><value>显示</value></data>
   <data name="RoiListToggleVisibleTooltip" xml:space="preserve"><value>切换 ROI 显示状态</value></data>

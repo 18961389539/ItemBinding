@@ -20,9 +20,10 @@
 
   <ItemGroup>
     <!-- REVIEW-FIX: 原 HintPath 指向 MVIDCodeReader.Net.dll（旧版，无 MvCodeReaderSDKNet 命名空间），
-         代码实际使用 MvCodeReaderSDK.Net.dll 中的 MvCodeReaderSDKNet 命名空间，修正引用避免编译失败。 -->
+         代码实际使用 MvCodeReaderSDK.Net.dll 中的 MvCodeReaderSDKNet 命名空间，修正引用避免编译失败。
+         2026-09-18: DLLS 目录内 dll 已缺失，HintPath 改指 HikScanner 的 DLLs（同一 SDK 程序集）。 -->
     <Reference Include="MvCodeReaderSDK.Net">
-      <HintPath>DLLS\MvCodeReaderSDK.Net.dll</HintPath>
+      <HintPath>..\HikCameraLib\HikScanner\DLLs\MvCodeReaderSDK.Net.dll</HintPath>
     </Reference>
   </ItemGroup>
 

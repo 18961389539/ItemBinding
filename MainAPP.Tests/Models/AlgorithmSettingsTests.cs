@@ -18,10 +18,10 @@ public class AlgorithmSettingsTests
         Assert.Equal("Y", settings.DedupTrackAxis);
         Assert.Equal(3.0, settings.DedupPositionThreshold);
         Assert.Equal(2.0, settings.DedupAngleThreshold);
-        Assert.Equal(10, settings.EdgeMarginLeftPixels);
-        Assert.Equal(10, settings.EdgeMarginTopPixels);
-        Assert.Equal(10, settings.EdgeMarginRightPixels);
-        Assert.Equal(10, settings.EdgeMarginBottomPixels);
+        Assert.Equal(50, settings.EdgeMarginLeftPixels);
+        Assert.Equal(50, settings.EdgeMarginTopPixels);
+        Assert.Equal(50, settings.EdgeMarginRightPixels);
+        Assert.Equal(50, settings.EdgeMarginBottomPixels);
     }
 
     [Fact]

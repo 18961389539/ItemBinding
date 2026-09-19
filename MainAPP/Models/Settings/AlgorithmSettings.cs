@@ -46,24 +46,24 @@ namespace MainAPP.Models
         /// <summary>
         /// 检测框距图像左边缘的最小间距（像素）。
         /// <para>检测框左边距 ≥ 该值才判定为有效（否则过滤，不落库/不发 VGT/不抓取），
-        /// 防止抓到画面边缘的半个产品。默认 10，可设为 0 允许贴边。</para>
+        /// 防止抓到画面边缘的半个产品。默认 50，可设为 0 允许贴边。</para>
         /// </summary>
-        public double EdgeMarginLeftPixels { get; set; } = 10;
+        public double EdgeMarginLeftPixels { get; set; } = 50;
 
         /// <summary>
         /// 检测框距图像上边缘的最小间距（像素）。语义同 <see cref="EdgeMarginLeftPixels"/>。
         /// </summary>
-        public double EdgeMarginTopPixels { get; set; } = 10;
+        public double EdgeMarginTopPixels { get; set; } = 50;
 
         /// <summary>
         /// 检测框距图像右边缘的最小间距（像素）。语义同 <see cref="EdgeMarginLeftPixels"/>。
         /// </summary>
-        public double EdgeMarginRightPixels { get; set; } = 10;
+        public double EdgeMarginRightPixels { get; set; } = 50;
 
         /// <summary>
         /// 检测框距图像下边缘的最小间距（像素）。语义同 <see cref="EdgeMarginLeftPixels"/>。
         /// </summary>
-        public double EdgeMarginBottomPixels { get; set; } = 10;
+        public double EdgeMarginBottomPixels { get; set; } = 50;
 
         /// <summary>
         /// 产品（分割掩码）面积下限（原图像素）。掩码面积低于此值的目标判定为无效并过滤

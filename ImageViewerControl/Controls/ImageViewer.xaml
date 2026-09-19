@@ -518,11 +518,26 @@
             </StackPanel>
         </Border>
 
+        <!-- 2026-09-18: 工具面板切换按钮——面板默认隐藏（ShowToolbarPanel=false），点击 ⚙ 开合 -->
+        <ToggleButton x:Name="toolbarToggleChip"
+                      HorizontalAlignment="Left"
+                      VerticalAlignment="Top"
+                      Margin="16"
+                      Panel.ZIndex="101"
+                      Width="30"
+                      Height="30"
+                      Content="⚙"
+                      FontSize="14"
+                      IsChecked="{Binding ShowToolbarPanel, RelativeSource={RelativeSource AncestorType=UserControl}, Mode=TwoWay}"
+                      ToolTip="{localization:UiText MenuToolbarToggle}"
+                      Style="{StaticResource ViewerToolbarToggleButtonStyle}" />
+
         <Border x:Name="toolbarPanel"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
-                Margin="16"
+                Margin="56,16,16,16"
                 Panel.ZIndex="100"
+                Visibility="{Binding ShowToolbarPanel, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource BooleanToVisibilityConverter}}"
                 Style="{StaticResource ViewerFloatingPanelStyle}">
             <StackPanel Width="Auto">
                 <TextBlock Text="{localization:UiText MenuFileAndProjects}" Style="{StaticResource ViewerSectionTitleStyle}" />

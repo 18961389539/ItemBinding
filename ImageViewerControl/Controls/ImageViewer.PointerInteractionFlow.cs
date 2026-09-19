@@ -107,8 +107,15 @@ namespace ImageViewer.Controls
 
         public void UpdateCursorFeedback(Point imagePosition)
         {
+            // 2026-09-19: 示教选点模式——固定十字准星提示可取点，不响应 ROI 手柄等变换
             if (_state.IsCanvasDragging || _state.HasActiveRoiManipulation)
             {
+                return;
+            }
+
+            if (_host.IsGrabTeachPointMode)
+            {
+                _host.SetCursor(Cursors.Cross);
                 return;
             }
 

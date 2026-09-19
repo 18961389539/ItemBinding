@@ -22,6 +22,22 @@ namespace ImageViewer.Controls
             rootGrid.Drop += OnDrop;
             KeyDown += OnKeyDown;
             rootGrid.SizeChanged += OnRootGridSizeChanged;
+            // 2026-09-18: 右键菜单默认不显示（EnableContextMenu=false），需要时由宿主开启
+            ApplyContextMenu();
+        }
+
+        private static void OnEnableContextMenuChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            if (d is ImageViewer viewer)
+            {
+                viewer.ApplyContextMenu();
+            }
+        }
+
+        /// <summary>2026-09-18: 按开关挂/摘右键菜单——默认不启用（生产运行防误触）。</summary>
+        private void ApplyContextMenu()
+        {
+            rootGrid.ContextMenu = EnableContextMenu ? mainContextMenu : null;
         }
 
         private void UnregisterEventHandlers()

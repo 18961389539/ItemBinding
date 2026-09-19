@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CoordinateSystemMapping;
 using Extensions;
@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Serilog;
@@ -42,6 +43,11 @@ namespace MainAPP.ViewModels
         private RecipeTestResultItem? _selectedResult;
 
         /// <summary>
+        /// 新增一条推理结果后触发（UI 线程）。配方窗口订阅后自动切到「推理结果」页并闪烁计数徽章。
+        /// </summary>
+        public event Action? InferenceResultAdded;
+
+        /// <summary>
         /// 清空测试推理历史（集合操作必须回到 UI 线程，列表绑定依赖 Dispatcher 序列化）
         /// </summary>
         [RelayCommand]
@@ -55,6 +61,122 @@ namespace MainAPP.ViewModels
             }
             TestResults.Clear();
             SelectedResult = null;
+        }
+
+        /// <summary>
+        /// 删除单条推理结果（推理结果页“删除该条”）
+        /// </summary>
+        [RelayCommand]
+        private void DeleteTestResult(RecipeTestResultItem? item)
+        {
+            if (item is null)
+            {
+                return;
+            }
+            TestResults.Remove(item);
+            if (SelectedResult == item)
+            {
+                SelectedResult = TestResults.FirstOrDefault();
+            }
+        }
+
+        /// <summary>
+        /// 导出全部推理结果到 CSV（英文表头，便于报表/离线分析工具直接消费）
+        /// </summary>
+        [RelayCommand]
+        private void ExportTestResults()
+        {
+            if (TestResults.Count == 0)
+            {
+                ShowWarning("暂无可导出的推理结果。");
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.SaveFileDialog
+            {
+                Title = "导出推理结果 CSV",
+                Filter = "CSV 文件|*.csv",
+                DefaultExt = ".csv",
+                FileName = $"InferenceResults_{DateTime.Now:yyyyMMdd_HHmmss}.csv"
+            };
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("Time,WorldX_mm,WorldY_mm,PixelX,PixelY,Angle_deg,TargetCount,Cost_ms,Remark");
+            foreach (var r in TestResults)
+            {
+                sb.AppendLine(string.Join(",",
+                    CsvEsc(r.Time.ToString("yyyy-MM-dd HH:mm:ss.fff")),
+                    CsvEsc(r.WorldX?.ToString("F2", inv) ?? string.Empty),
+                    CsvEsc(r.WorldY?.ToString("F2", inv) ?? string.Empty),
+                    CsvEsc(r.PixelX.ToString("F1", inv)),
+                    CsvEsc(r.PixelY.ToString("F1", inv)),
+                    CsvEsc(r.Angle?.ToString("F1", inv) ?? string.Empty),
+                    CsvEsc(r.TargetCount.ToString(inv)),
+                    CsvEsc(r.CostMs.ToString("F0", inv)),
+                    CsvEsc(r.Remark)));
+            }
+
+            try
+            {
+                System.IO.File.WriteAllText(dialog.FileName, sb.ToString(), System.Text.Encoding.UTF8);
+                ShowInfo($"已导出 {TestResults.Count} 条推理结果：\n{dialog.FileName}");
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Error($"导出推理结果失败: {ex}");
+                ShowError($"导出失败：{ex.Message}");
+            }
+        }
+
+        /// <summary>CSV 字段转义：含逗号/引号/换行时加引号包裹</summary>
+        private static string CsvEsc(string value)
+        {
+            if (value.IndexOfAny([',', '"', '\r', '\n']) < 0)
+            {
+                return value;
+            }
+            return "\"" + value.Replace("\"", "\"\"") + "\"";
+        }
+
+        /// <summary>
+        /// 点是否在凸多边形内（叉积同号法）。与生产 DetectionRecordService.IsPointInRotatedRect 同口径，
+        /// 用于二维码判向时判断条码中心是否落在产品旋转矩形内。
+        /// </summary>
+        private static bool IsPointInPolygon(double px, double py, Point2f[] polygon)
+        {
+            if (polygon is null || polygon.Length < 3)
+            {
+                return false;
+            }
+
+            bool? sign = null;
+            for (int i = 0; i < polygon.Length; i++)
+            {
+                var a = polygon[i];
+                var b = polygon[(i + 1) % polygon.Length];
+                var cross = (b.X - a.X) * (py - a.Y) - (b.Y - a.Y) * (px - a.X);
+                if (Math.Abs(cross) < 1e-6f)
+                {
+                    continue; // 点在边上：视为内部
+                }
+
+                var isPositive = cross > 0;
+                if (sign is null)
+                {
+                    sign = isPositive;
+                }
+                else if (isPositive != sign)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -73,6 +195,7 @@ namespace MainAPP.ViewModels
             }
             TestResults.Insert(0, item);
             SelectedResult = item;
+            InferenceResultAdded?.Invoke();
         }
         #endregion
 
@@ -98,6 +221,15 @@ namespace MainAPP.ViewModels
                 ShowWarning("正在执行推理，请等待...");
                 return;
             }
+
+            // 实时显示与测试推理互斥：推理会占用软触发取帧通道，先自动停止实时显示避免抢图
+            if (IsLiveDisplayEnabled)
+            {
+                StopLiveDisplay();
+                SetProperty(ref _isLiveDisplayEnabled, false);
+                LogService.Instance.Info("测试推理：已自动停止实时显示。");
+            }
+
             LogService.Instance.Info("测试推理：开始执行");
             // M220: 跟踪推理任务，便于 Dispose 时等待
             _inferenceTask = InferenceCoreAsync();
@@ -337,7 +469,16 @@ namespace MainAPP.ViewModels
                     Cv2.Line(rawPlottedMat, productPoint, featurePoint, new Scalar(0, 255, 255), 2, LineTypes.AntiAlias);
                 }
                 using var plottedMat = rawPlottedMat.Resize(new Size(), edgeTool.ResizeScale, edgeTool.ResizeScaleY);
+
+                // 保存示教基图（原图尺寸、含分割可视化，不含抓取点标记）；
+                // 抓取点算出后在其克隆上叠加标记，示教点击也基于它即时重绘。替换时释放旧基图。
+                if (_teachBaseMat is not null)
+                {
+                    _teachBaseMat.Dispose();
+                }
+                _teachBaseMat = plottedMat.Clone();
                 UpdateImageForShow(plottedMat.ToBitmapSource());
+                PersistSessionImage(plottedMat);
 
                 string angleOutDesc = angleResult is not null ? $"{angleResult.Angle:F1}°" : "无";
 
@@ -354,6 +495,9 @@ namespace MainAPP.ViewModels
                 // 2026-09-08: 掩码矩形宽度（推理图像素=长轴长），掩码回退角度走三点标定换算世界角时
                 // 需沿长轴取端点（ComputeMaskAngleCalibrated），与生产 BuildAndSaveAsync 口径一致。
                 float maskRectWidth = 0;
+                // 2026-09-20: 掩码矩形高度（推理图像素=短轴长），二维码判向需旋转矩形角点判断
+                // 码中心是否在产品内（与生产 rotatedCorners 同口径）。
+                float maskRectHeight = 0;
                 if (product is not null)
                 {
                     var (_, rect) = product.GetMaskStats();
@@ -367,6 +511,7 @@ namespace MainAPP.ViewModels
                         maskRectCenterY = rect.Center.Y;
                         maskRectAngleDeg = rect.Angle;
                         maskRectWidth = rect.Width;
+                        maskRectHeight = rect.Height;
                         maskArea = rect.MaskArea;
                     }
                 }
@@ -416,6 +561,72 @@ namespace MainAPP.ViewModels
                     : maskFallbackAngleDeg;
                 var fallbackAngle = maskWorldAngle + (double)OffsetAngle;
 
+                // ---- 二维码判向（2026-09-20：与生产 BuildAndSaveAsync 同口径）----
+                // 生产消歧链优先级：二维码位置 → 模型翻转 → 特征池 → 无向回退角。
+                // 此前测试推理恒定 codePresent=false，二维码从不参与判向，导致同一产品
+                // "示教按无码判头尾"而生产按"有码判头尾"，抓取点偏移方向相反甚至退化为中心。
+                // 现复用最近一次扫码枪取帧的条码中心（原图像素）做同样的码区绑定 + 判向。
+                bool hasBarcode = false;
+                double imageBarcodeX = 0, imageBarcodeY = 0;
+                double? barcodeAngle = null;
+                if (product is not null && maskArea > 0 && _lastBarcodeCenters is { Length: > 0 })
+                {
+                    // 产品旋转矩形角点 → 原图坐标（与生产 rotatedCorners 同口径：推理图角点 × 缩放比）
+                    var rr = new RotatedRect(
+                        new Point2f(maskRectCenterX, maskRectCenterY),
+                        new Size2f(maskRectWidth, maskRectHeight),
+                        maskRectAngleDeg);
+                    var corners = rr.Points();
+                    if (edgeTool.IsResize)
+                    {
+                        for (int c = 0; c < corners.Length; c++)
+                        {
+                            corners[c] = new Point2f(corners[c].X * edgeTool.ResizeScale, corners[c].Y * edgeTool.ResizeScaleY);
+                        }
+                    }
+
+                    // 取中心落在产品旋转矩形内的第一条码（原图像素，与生产 IsPointInRotatedRect 同口径）
+                    foreach (var c in _lastBarcodeCenters)
+                    {
+                        if (IsPointInPolygon(c.X, c.Y, corners))
+                        {
+                            hasBarcode = true;
+                            imageBarcodeX = c.X;
+                            imageBarcodeY = c.Y;
+                            break;
+                        }
+                    }
+
+                    if (hasBarcode)
+                    {
+                        double longAxisPx = edgeTool.IsResize ? maskRectWidth * (double)edgeTool.ResizeScale : maskRectWidth;
+                        var centerPx = productPixel;
+                        double headOffsetPx = Math.Sqrt(
+                            (imageBarcodeX - centerPx.X) * (imageBarcodeX - centerPx.X)
+                            + (imageBarcodeY - centerPx.Y) * (imageBarcodeY - centerPx.Y));
+                        // 头端向量（产品中心 → 二维码中心）：与生产同口径——已标定→世界 mm；
+                        // 未标定→推理图坐标（与 fallbackAngle 未标定=图像轴角同坐标系）。
+                        double dxHead, dyHead;
+                        if (calibForAngle is not null)
+                        {
+                            var (pwX, pwY) = calibForAngle.ImageToPhysical(centerPx.X, centerPx.Y);
+                            var (bwX, bwY) = calibForAngle.ImageToPhysical(imageBarcodeX, imageBarcodeY);
+                            dxHead = bwX - pwX;
+                            dyHead = bwY - pwY;
+                        }
+                        else
+                        {
+                            dxHead = (imageBarcodeX - centerPx.X) / (edgeTool.IsResize ? edgeTool.ResizeScale : 1d);
+                            dyHead = (imageBarcodeY - centerPx.Y) / (edgeTool.IsResize ? edgeTool.ResizeScaleY : 1d);
+                        }
+
+                        barcodeAngle = DetectionRecordService.TryApplyBarcodeHeadDirection(
+                            fallbackAngle, hasBarcode: true, dxHead, dyHead, headOffsetPx, longAxisPx,
+                            invertForMirror: calibForAngle is { IsInitialized: true } && calibForAngle.IsMirrored,
+                            out _);
+                    }
+                }
+
                 // ---- 模型翻转信号（2026-09-13：只判头尾，不提供角度数值）----
                 // 特征端向量（特征中心 − 产品中心）投影到主轴 u；与 fallbackAngle 同坐标系。
                 double? modelFlipAngle = null;
@@ -448,7 +659,12 @@ namespace MainAPP.ViewModels
                     }
                 }
 
-                if (modelFlipAngle is not null)
+                // 消歧链收口（与生产同序）：二维码 → 模型翻转 → 特征池 → 无向回退角
+                if (barcodeAngle is not null)
+                {
+                    sendAngle = ToVGT.ToRobotAngle(barcodeAngle.Value);
+                }
+                else if (modelFlipAngle is not null)
                 {
                     sendAngle = ToVGT.ToRobotAngle(modelFlipAngle.Value);
                 }
@@ -463,12 +679,14 @@ namespace MainAPP.ViewModels
                     {
                         // 复用生产同一实现：inferenceMat 与 product 掩码/Bounds 同处推理图坐标系，
                         // 与特征池内部灰度统计的坐标系约定一致；死区/拉伸参数由全局设置提供。
-                        // 配方页不传条码（测试推理无真值），codePresent=false → 不做码区剔除。
+                        // 2026-09-20: 传入真实条码（原图像素）做码区剔除，与生产 Evaluate 同口径；
+                        // longAxisPx 按原图像素传入（几何特征归一化与码邻域半径依赖原图量纲）。
                         var alg = Models.Settings.Instance.Algorithm;
+                        double longAxisPx = edgeTool.IsResize ? maskRectWidth * (double)edgeTool.ResizeScale : maskRectWidth;
                         testPoolDecision = HeadTailFeaturePool.Evaluate(
                             fallbackAngle, inferenceMat, product,
                             maskRectCenterX, maskRectCenterY, maskRectAngleDeg, maskArea,
-                            maskRectWidth, codePresent: false, codeCenterX: 0, codeCenterY: 0,
+                            longAxisPx, hasBarcode, imageBarcodeX, imageBarcodeY,
                             alg.HeadTailFeatureDeadband,
                             brightnessEnabled,
                             alg.BrightnessContrastStretchEnabled,
@@ -490,15 +708,18 @@ namespace MainAPP.ViewModels
 
                 // ── 抓取点（2026-09-15）：与生产 BuildAndSaveAsync 同口径 ──
                 // 配方页必须与实际发送一致（"所见即所发"不变式），故产品坐标从矩形中心改算为抓取点。
-                // 朝向判定与生产同源：模型翻转 → 特征池 → 无向回退角；全部回退时（朝向不可信）
+                // 朝向判定与生产同源：二维码 → 模型翻转 → 特征池 → 无向回退角；全部回退时（朝向不可信）
                 // 两个偏移一起退化为中心 —— 短轴方向同样依赖头尾，只退化长轴会让抓取点偏到产品另一侧。
                 // 几何统一走 GrabPointCalculator.ResolveOriginalImagePoint，与生产/画面标记共用实现。
                 if (maskArea > 0)
                 {
-                    var rawSendAngle = modelFlipAngle
+                    var rawSendAngle = barcodeAngle
+                        ?? modelFlipAngle
                         ?? (testPoolDecision is { Decisive: true } pdx ? pdx.Angle : (double?)null)
                         ?? fallbackAngle;
-                    var headTrustedForGrab = modelFlipAngle.HasValue || testPoolDecision is { Decisive: true };
+                    var headTrustedForGrab = barcodeAngle.HasValue
+                        || modelFlipAngle.HasValue
+                        || testPoolDecision is { Decisive: true };
                     var headFlippedForGrab = DetectionRecordService.IsHeadOppositeDegrees(rawSendAngle, fallbackAngle);
                     var effectiveGrabLong = headTrustedForGrab ? GrabOffsetLongMm : 0d;
                     var effectiveGrabShort = headTrustedForGrab ? GrabOffsetShortMm : 0d;
@@ -531,6 +752,20 @@ namespace MainAPP.ViewModels
                         edgeTool.IsResize, edgeTool.ResizeScale, edgeTool.ResizeScaleY,
                         headFlippedForGrab, headTrustedForGrab, calibForAngle);
                     OnPropertyChanged(nameof(CanTeachGrabPoint));
+
+                    // 推理图叠加抓取点标记（洋红=生效；灰=朝向退化为中心），
+                    // 与主界面 HomeViewModel.Draw 的生产画面同色同语义，配方页"所见即所发"闭环。
+                    // 2026-09-19: 示教模式下跳过位图标记——由可拖拽十字 ROI（GrabPointRoi）自绘，
+                    // 避免位图标记与 ROI 重影（drag 时位图无法跟随）。
+                    if (!IsGrabTeachMode)
+                    {
+                        using var grabMarkedMat = _teachBaseMat?.Clone();
+                        if (grabMarkedMat is not null)
+                        {
+                            DrawGrabMarker(grabMarkedMat, grabPxX, grabPxY, suppressed: !headTrustedForGrab);
+                            UpdateImageForShow(grabMarkedMat.ToBitmapSource());
+                        }
+                    }
                 }
 
                 // 判向完成（两侧均有像素）时附上亮度统计，页面上直接核对头端明暗与死区是否合适。
@@ -552,13 +787,18 @@ namespace MainAPP.ViewModels
                     : string.Empty;
                 // 2026-09-13: 模型翻转路径（角度=掩码主轴角 ± 180°）单独标注，与回退链路区分
                 string modelFlipDesc = modelFlipAngle is not null ? "掩码主轴角+模型翻转" : string.Empty;
+                // 2026-09-20: 角度来源描述——二维码位置判向（生产消歧链第一优先）单独标注，
+                // 便于现场核对"测试推理与生产为何同/不同向"。
+                string barcodeDesc = barcodeAngle is not null ? "二维码位置" : string.Empty;
                 string angleText = sendAngle is not null
                     ? $"\n角度: {sendAngle:F1}°"
-                      + (modelFlipAngle is not null
-                          ? $"（{modelFlipDesc}）"
-                          : angleFromMaskFallback
-                              ? $"（{fallbackAngleDesc}）"
-                              : string.Empty)
+                      + (barcodeAngle is not null
+                          ? $"（{barcodeDesc}）"
+                          : modelFlipAngle is not null
+                              ? $"（{modelFlipDesc}）"
+                              : angleFromMaskFallback
+                                  ? $"（{fallbackAngleDesc}）"
+                                  : string.Empty)
                     : wantAngle
                         ? "\n角度: 无（角度模型未输出有效结果，详见日志质量门原因）"
                         : string.Empty;
@@ -595,7 +835,16 @@ namespace MainAPP.ViewModels
                     sendAngle,
                     segmentation?.Count ?? 0,
                     stopwatch.Elapsed.TotalMilliseconds,
-                    remark));
+                    remark)
+                {
+                    Snapshot = ImageForShow
+                });
+
+                // 2026-09-19: 示教模式下推理完成（几何快照已更新）→ 十字 ROI 位置同步到新抓取点
+                if (IsGrabTeachMode)
+                {
+                    SyncGrabRoiPosition();
+                }
             }
             catch (Exception ex)
             {

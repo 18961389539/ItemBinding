@@ -265,6 +265,20 @@ namespace MainAPP.ViewModels
         }
 
         /// <summary>
+        /// 外部（配方详情窗口“另存为新配方”）注册新配方实例到列表并选中。
+        /// 集合变更统一走 SafeModify，防 WPF CollectionView 跨线程异常。
+        /// </summary>
+        public void AddRecipeFromExternal(RecipeViewModel vm)
+        {
+            SafeModify(() =>
+            {
+                Recipes.Add(vm);
+                FilteredRecipes.Add(vm);
+            });
+            SelectedRecipe = vm;
+        }
+
+        /// <summary>
         /// 保存当前配方
         /// </summary>
         [RelayCommand]

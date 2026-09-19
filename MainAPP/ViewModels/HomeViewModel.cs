@@ -113,6 +113,17 @@ namespace MainAPP.ViewModels
         /// </summary>
         private const int MaxImagesinQueue = 8;
 
+        // ── 编码器绑定延迟 2 帧（2026-09-17）────────────────────────────
+        // 收图后不立即绑定编码器，而是等后续第 2 帧收图时才解析——给编码器 UDP 包
+        // 留出到达时间，覆盖「UDP 晚于图像到达」导致的绑定错位一拍（约 200mm）。
+        // 详见 Services/EncoderBindingBuffer 与 ReadImage 的 _pendingBind。
+        private const int EncoderBindDelayFrames = 2;
+        private DateTime _lastEncoderStaleWarnAt = DateTime.MinValue;
+        private long _grabSequence;
+        private readonly Queue<FrameResult> _pendingBind = new();
+        // 2026-09-18: 无编码器模式的启用提示只打一次
+        private bool _encoderlessModeWarned;
+
         /// <summary>
         /// 当前使用的配方，始终从配方管理器获取最新值。
         /// </summary>
@@ -600,7 +611,10 @@ namespace MainAPP.ViewModels
                     disposable.Dispose();
                 }
                 _imageForShow = null;
-                _reusableShowBitmap = null;
+                for (int i = 0; i < _reusableShowBitmaps.Length; i++)
+                {
+                    _reusableShowBitmaps[i] = null;
+                }
                 // 先等待后台任务结束再释放 _cts，避免任务中 WaitAsync(_cts.Token) 抛 ObjectDisposedException
                 try
                 {

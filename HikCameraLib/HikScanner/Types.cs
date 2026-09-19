@@ -207,6 +207,17 @@ namespace HikScanner
         public int OverQuality { get; set; }
         public int IDRScore { get; set; }
 
+        /// <summary>
+        /// 2026-09-18: 设备端触发时刻（条码结果 nTriggerTimeTvLow/UtvLow 解码，设备时钟，未对时）。
+        /// 解码失败或固件未填时为 null。
+        /// </summary>
+        public DateTime? DeviceTriggerTime { get; set; }
+
+        /// <summary>
+        /// 2026-09-18: 估算触发时刻 = 主机当前时间 − TotalProcCost（PC 时钟，非设备精确时间）。
+        /// </summary>
+        public DateTime TriggerTime { get; set; }
+
         public override string ToString() => $"{CodeTypeName}: {Code} (ID={CodeId})";
 
         public static string GetCodeTypeName(int codeType)
@@ -302,6 +313,17 @@ namespace HikScanner
         public bool HasWaybill => Waybills != null && Waybills.Count > 0;
         /// <summary>SDK bIsGetCode 标志：相机固件判定"此帧有码"，true 时 Barcodes/Waybills 通常非空</summary>
         public bool IsGetCode { get; set; }
+
+        /// <summary>
+        /// 2026-09-18: 帧级设备时间戳原始 tick（nTimeStampHigh/Low 拼接，设备时钟，未对时；0=未获取）。
+        /// </summary>
+        public ulong DeviceTimeStampTick { get; set; }
+
+        /// <summary>
+        /// 2026-09-18: 软件对时偏移（ms）= 主机时钟 − 设备时钟（最近一次硬触发观测）。
+        /// null=尚无硬触发/对时不可用。换算：PC墙钟ms = DeviceTimeStampTick/1000 + ClockOffsetMs。
+        /// </summary>
+        public double? ClockOffsetMs { get; set; }
 
         public override string ToString()
         {

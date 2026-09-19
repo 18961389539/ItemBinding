@@ -20,6 +20,8 @@ namespace ImageViewer.Controls
 
             public bool IsToolInteractionActive => _owner.IsToolInteractionActive;
 
+            public bool IsGrabTeachPointMode => _owner.IsGrabTeachPointMode;
+
             public bool IsRootMouseCaptured => _owner.rootGrid.IsMouseCaptured;
 
             public System.Windows.Media.Imaging.BitmapSource? AnalysisBitmapSource => _owner.GetAnalysisBitmapSource();

@@ -86,11 +86,23 @@ namespace MainAPP.Application
                 dirY *= resizeScaleY;
             }
 
+            // 尺度必须沿单位向量求值：PixelsPerMmAlong 语义是"单位方向 1 像素 = ? mm"。
+            // dir 已乘缩放比（长度 = |ResizeScale|），不归一化会让尺度缩掉 L 倍、反算偏移放大 L 倍
+            // （与正向 ResolveOriginalImageOffset 的归一化口径保持一致）。
+            var len = Math.Sqrt((dirX * dirX) + (dirY * dirY));
+            if (len <= 1e-12)
+            {
+                // 方向退化：纯计算版本同样返回 (0,0)，尺度不会被用到
+                return (0, 0);
+            }
+            var uX = dirX / len;
+            var uY = dirY / len;
+
             return ComputeOffsetsFromImagePoint(
                 grabPointImageX, grabPointImageY, centerImageX, centerImageY, dirX, dirY,
                 headFlipped,
-                PixelsPerMmAlong(transformer, centerImageX, centerImageY, dirX, dirY),
-                PixelsPerMmAlong(transformer, centerImageX, centerImageY, -dirY, dirX));
+                PixelsPerMmAlong(transformer, centerImageX, centerImageY, uX, uY),
+                PixelsPerMmAlong(transformer, centerImageX, centerImageY, -uY, uX));
         }
 
         /// <summary>

@@ -25,7 +25,7 @@ namespace MainAPP.Application;
 /// 匹配逻辑：
 /// 1. 遍历每个 YOLO 检测框（边缘分割结果）
 /// 2. 过滤检测框距图像边缘不足对应边最小间距的产品（四边独立 EdgeMargin{Left,Top,Right,Bottom}Pixels，
-///    设置页可配置，默认各 10px，当前见 Models.Settings）——过滤后不落库/不去重/不发 VGT（不给机器人发消息）
+///    设置页可配置，默认各 50px，当前见 Models.Settings）——过滤后不落库/不去重/不发 VGT（不给机器人发消息）
 /// 3. 对每个检测框，查找其内部包含的条码中心点
 /// 4. 将条码与检测框绑定，计算世界坐标和角度
 /// 5. 批量保存到数据库
@@ -70,7 +70,7 @@ public sealed class DetectionRecordService
     // 该值的本质是"本机硬件身份"，属基础设施能力，已整体下沉到 Services.StationCodeProvider；
     // 本类改为经注入的 IDetectionRuntimeConfig.StationCode 取值（见 ResolveFrameOptions）。
 
-    // 2026-09-05: 边缘最小间距已拆为四边独立（Settings.Algorithm.EdgeMargin{Left,Top,Right,Bottom}Pixels，设置页可编辑，默认各 10px）
+    // 2026-09-05: 边缘最小间距已拆为四边独立（Settings.Algorithm.EdgeMargin{Left,Top,Right,Bottom}Pixels，设置页可编辑，默认各 50px）
 
     // REVIEW-FIX: long 乘积钳制到 int 范围，供 isResize 缩放后的 Bounds 使用，
     // 避免 int×int 溢出产生负/错误坐标（调用方 DetectionRecordService 内部使用）。
@@ -279,6 +279,27 @@ public sealed class DetectionRecordService
         var detectTime = DateTime.Now;
         // M40: 使用 FrameResult 中传递的真实时间戳
         var encodeTime = scanerResult.EncoderReceivedTime;
+
+        // 三时间链日志（timechain-YYYYMMDD.txt，见 TimeChainLog）：每帧一条。
+        // 行内容刻意精简——T_detect/img-enc/T_enc 等可落库或推导的字段不入行；
+        // dev-ts 不入行（原始值保留在 FrameResult.DeviceTimeStampTick / ClockOffsetMs）。
+        // 字段：[时间] T_img| read-algo| trig-est| dev-clock| [编码器超龄]
+        var tImgText = scanerResult.GrabTime == default ? "未设置" : $"{scanerResult.GrabTime:HH:mm:ss.fff}";
+        var staleNote = scanerResult.EncoderStale ? " [编码器超龄]" : string.Empty;
+        var readSegment = scanerResult.BarcodeResults is { Length: > 0 }
+            ? $" read-algo={string.Join("/", scanerResult.BarcodeResults.Select(b => b.AlgorithmCost))}ms"
+            : string.Empty;
+        // trig-est = 估算触发时刻（取第一条码，同帧多码同触发；PC 时钟，非精确）
+        var firstBarcode = scanerResult.BarcodeResults is { Length: > 0 } ? scanerResult.BarcodeResults[0] : null;
+        var triggerSegment = firstBarcode is null ? string.Empty : $" trig-est={firstBarcode.TriggerTime:HH:mm:ss.fff}";
+        // 2026-09-18: dev-clock = 设备墙钟（DeviceTime 参数，秒级——设备唯一可读的绝对时间，已与 PC 对齐）
+        var deviceClockSegment = string.IsNullOrWhiteSpace(scanerResult.DeviceClockText)
+            ? string.Empty
+            : $" dev-clock={scanerResult.DeviceClockText}";
+        TimeChainLog.Info(
+            ($"[时间] T_img={tImgText} |" +
+             $"{readSegment}{triggerSegment}{deviceClockSegment}{staleNote}").TrimEnd());
+
         var records = new List<DbModel>();
         // 与 edgeResults 严格同序：被 continue 跳过的位置用 null 占位，便于 UI 按索引取值
         var indexedRecords = new List<DbModel?>();
@@ -323,7 +344,7 @@ public sealed class DetectionRecordService
                     ClampToInt((long)edgeResult.Bounds.Height * resizeHeight))
                 : new Rectangle(edgeResult.Bounds.X, edgeResult.Bounds.Y, edgeResult.Bounds.Width, edgeResult.Bounds.Height);
 
-            // 2026-09-05: 四边独立最小间距可配置（Settings.Algorithm.EdgeMargin*Pixels，默认各 10px），
+            // 2026-09-05: 四边独立最小间距可配置（Settings.Algorithm.EdgeMargin*Pixels，默认各 50px），
             // 检测框距对应图像边缘不足该值（含部分/完全出界）判定无效，防止抓到半个产品。
             // 2026-09-16: 取自帧快照（原在每个检测框内重读全局设置）
             double marginLeft = options.MarginLeft;

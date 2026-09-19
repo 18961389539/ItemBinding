@@ -1,4 +1,5 @@
 using System;
+using System.Windows.Media;
 
 namespace MainAPP.Models
 {
@@ -47,5 +48,11 @@ namespace MainAPP.Models
 
         /// <summary>耗时列文本</summary>
         public string CostText => $"{CostMs:F0} ms";
+
+        /// <summary>
+        /// 该次推理的可视化图（叠加分割/角度/抓取点标记的显示图，冻结后不可变，可安全跨线程引用）。
+        /// 供「推理结果」页点击卡片放大查看；实例由 VM 在写入时冻结并随集合保留，列表清空后随 GC 释放。
+        /// </summary>
+        public ImageSource? Snapshot { get; init; }
     }
 }

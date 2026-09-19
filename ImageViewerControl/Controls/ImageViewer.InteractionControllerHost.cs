@@ -21,6 +21,8 @@ namespace ImageViewer.Controls
 
             public bool IsToolInteractionActive => _owner.IsToolInteractionActive;
 
+            public bool IsGrabTeachPointMode => _owner.IsGrabTeachPointMode;
+
             public bool HasImage => _owner.ImageSource != null;
 
             public void Focus() => _owner.Focus();

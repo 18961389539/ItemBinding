@@ -36,6 +36,7 @@ namespace ImageViewer.Services
                 [typeof(PolygonRoi)] = new PolygonRoiBehavior(),
                 [typeof(PolylineRoi)] = new PolylineRoiBehavior(),
                 [typeof(PointAnnotationRoi)] = new PointAnnotationBehavior(),
+                [typeof(GrabPointRoi)] = new GrabPointBehavior(),
                 [typeof(TextAnnotationRoi)] = new TextAnnotationBehavior(),
                 [typeof(ArrowAnnotationRoi)] = new LineMeasureBehavior(),
                 [typeof(LineMeasureRoi)] = new LineMeasureBehavior(),
@@ -673,6 +674,42 @@ namespace ImageViewer.Services
             {
                 var point = (PointAnnotationRoi)roi;
                 point.Position = new Point(point.Position.X + dx, point.Position.Y + dy);
+            }
+
+            public void Resize(RoiBase roi, ResizeHandle handle, double dx, double dy, Point currentPos, double minimumRoiDimension)
+            {
+            }
+        }
+
+        private sealed class GrabPointBehavior : IRoiBehavior
+        {
+            public bool CanHandle(RoiBase roi) => roi is GrabPointRoi;
+
+            public bool HitTest(RoiBase roi, Point point, double scale, double hitTestTolerance)
+            {
+                var grab = (GrabPointRoi)roi;
+                return GeometryUtils.Distance(grab.Position, point) <= GrabPointRoi.ScreenExtent / scale;
+            }
+
+            public ResizeHandle GetHandleAt(RoiBase roi, Point point, double scale, double handleSize, double handleHitPadding, double infoTextOffset, double polygonVertexHitPadding)
+            {
+                return ResizeHandle.None;
+            }
+
+            public int GetVertexIndexAt(RoiBase roi, Point point, double scale, double handleSize, double polygonVertexHitPadding)
+            {
+                return -1;
+            }
+
+            public int GetSegmentIndexAt(RoiBase roi, Point point, double scale, double hitTestTolerance)
+            {
+                return -1;
+            }
+
+            public void Move(RoiBase roi, double dx, double dy)
+            {
+                var grab = (GrabPointRoi)roi;
+                grab.Position = new Point(grab.Position.X + dx, grab.Position.Y + dy);
             }
 
             public void Resize(RoiBase roi, ResizeHandle handle, double dx, double dy, Point currentPos, double minimumRoiDimension)

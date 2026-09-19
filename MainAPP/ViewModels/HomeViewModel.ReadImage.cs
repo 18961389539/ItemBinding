@@ -152,28 +152,14 @@ namespace MainAPP.ViewModels
                 }
             }
             DateTime grabTime = DateTime.Now;
-            var (encoder, time) = _toVgtService.MostRecentDateEncode(grabTime);
-            // P0-0: MostRecentDateEncode 在无编码器数据或所有记录都晚于 grabTime 时返回 DateTime.MinValue，
-            // 会导致 DbModel.EncodeTime 存为 0001-01-01，下游 ChartsViewModel 时间范围查询异常。
-            // 回退到 grabTime（图像采集时刻）保证时间戳始终有效。
-            scanerResult.EncoderReceivedTime = time == DateTime.MinValue ? grabTime : time;
-            scanerResult.EncoderValue = encoder;
+            // 2026-09-17: 编码器绑定**延迟 2 帧**——本帧的编码器在后续第 2 帧收图时才解析，
+            // 给编码器 UDP 包留出到达时间，覆盖「UDP 晚于图像到达」导致的绑定错位一拍（约 200mm）。
+            // 解析动作见下方 flush 循环（ResolveEncoderBinding）。
+            scanerResult.GrabTime = grabTime;
+            scanerResult.GrabSequence = ++_grabSequence;
+            // 2026-09-18: 设备墙钟（DeviceTime 参数，秒级，5s 缓存）随帧携带——timechain 日志 dev-clock 段的数据源
+            scanerResult.DeviceClockText = currentScanner.GetCachedDeviceTime();
 
-            // 绑定延迟诊断：编码器记录的到达时刻 → 图像到达时刻的时间差。
-            // 稳态 ≈ 编码器上报周期 + 图像传输延迟（几十 ms 级）；
-            // 持续增大 = 上报断流恢复或处理积压——此时 Encode 与 XY 的对应关系
-            // 已系统性滞后该差值 × 线速（详见 AlgorithmSettings.TrackerExpireSeconds 注释）。
-            if (time != DateTime.MinValue)
-            {
-                var bindDelayMs = (grabTime - time).TotalMilliseconds;
-                Volatile.Write(ref _lastBindDelayMs, (long)bindDelayMs);
-                if (bindDelayMs > BindDelayWarnMs && (DateTime.Now - _lastBindDelayWarnAt).TotalSeconds >= HealthWarnThrottleSec)
-                {
-                    _lastBindDelayWarnAt = DateTime.Now;
-                    LogService.Instance.Warning(
-                        $"[绑定延迟] {bindDelayMs:F0}ms 超过阈值 {BindDelayWarnMs}ms —— 位置与编码器对应关系已滞后约 {bindDelayMs * 0.2:F0}mm(按200mm/s)，请检查编码器上报链路");
-                }
-            }
             if (!_lastFrameNumber.HasValue)
             {
                 // 首次收到帧，只初始化，不判为丢包
@@ -218,12 +204,82 @@ namespace MainAPP.ViewModels
                 }
                 _lastFrameNumber = scanerResult.FrameNumber;
             }
+            // 2026-09-17: 帧先进「待绑定」队列，凑满 2 帧延迟后按序解析编码器并入处理通道。
+            // NeedDrop 判定随之移到入队时刻（对通道深度的判断更准确）。
+            // 2026-09-18: 无编码器模式没有迟到的编码器包可等，跳过两帧等待直接绑定入通道（零额外延迟）。
+            if (Settings.Instance.EncoderlessMode)
+            {
+                ResolveEncoderBinding(scanerResult);
+                await EnqueueFrameForProcessingAsync(scanerResult, token).ConfigureAwait(false);
+                return;
+            }
+            _pendingBind.Enqueue(scanerResult);
+            while (_pendingBind.Count > EncoderBindDelayFrames)
+            {
+                var ready = _pendingBind.Dequeue();
+                ResolveEncoderBinding(ready);
+                await EnqueueFrameForProcessingAsync(ready, token).ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// 解析帧的编码器绑定（延迟 2 帧后调用，见 <see cref="_pendingBind"/>）：
+        /// 取「Time ≤ 本帧拍照时刻」的最近一条编码器记录（不消费，见
+        /// <see cref="ToVGTService.MostRecentDateEncode"/>），并做新鲜度判定——
+        /// 超龄帧标记 <see cref="FrameResult.EncoderStale"/>，由 ProcessImageAsync 整条跳过
+        /// （宁可不发，也不发「X/Y 与编码器错位一个触发间隔」的数据）。
+        /// </summary>
+        private void ResolveEncoderBinding(FrameResult frame)
+        {
+            // 2026-09-18: 无编码器模式——产线无编码器/静态线形态。跳过绑定与新鲜度判定：
+            // Encode 恒为 0、T_enc=T_img（timechain 行带"(无编码器模式)"标记），帧照常处理。
+            // ⚠️ 机械手侧不得使用编码器外推，否则 Encode=0 无锚点会按错误位置动作。
+            if (Settings.Instance.EncoderlessMode)
+            {
+                if (!_encoderlessModeWarned)
+                {
+                    _encoderlessModeWarned = true;
+                    LogService.Instance.Warning(
+                        "无编码器模式已启用：跳过编码器绑定与新鲜度校验，Encode 恒为 0、X/Y 按拍照时刻直发——请确认机械手侧已关闭编码器外推！");
+                }
+                frame.EncoderReceivedTime = frame.GrabTime;
+                frame.EncoderValue = 0;
+                frame.EncoderStale = false;
+                return;
+            }
+
+            var (encoder, time, stale) = _toVgtService.MostRecentDateEncode(frame.GrabTime);
+            // P0-0: 无编码器数据/所有记录都晚于拍照时刻时回退 grabTime，保证 EncodeTime 有效（既有行为）
+            frame.EncoderReceivedTime = time == DateTime.MinValue ? frame.GrabTime : time;
+            frame.EncoderValue = encoder;
+            frame.EncoderStale = stale;
+
+            // 绑定延迟诊断（原在收图即算，随延迟绑定移到此处）：
+            // 编码器记录的到达时刻 → 图像到达时刻的时间差。稳态 ≈ 编码器上报周期 + 图像传输延迟（几十 ms 级）；
+            // 持续增大 = 上报断流恢复或处理积压——此时 Encode 与 XY 的对应关系
+            // 已系统性滞后该差值 × 线速（详见 AlgorithmSettings.TrackerExpireSeconds 注释）。
+            if (time != DateTime.MinValue)
+            {
+                var bindDelayMs = (frame.GrabTime - time).TotalMilliseconds;
+                Volatile.Write(ref _lastBindDelayMs, (long)bindDelayMs);
+                if (bindDelayMs > BindDelayWarnMs && (DateTime.Now - _lastBindDelayWarnAt).TotalSeconds >= HealthWarnThrottleSec)
+                {
+                    _lastBindDelayWarnAt = DateTime.Now;
+                    LogService.Instance.Warning(
+                        $"[绑定延迟] {bindDelayMs:F0}ms 超过阈值 {BindDelayWarnMs}ms —— 位置与编码器对应关系已滞后约 {bindDelayMs * 0.2:F0}mm(按200mm/s)，请检查编码器上报链路");
+                }
+            }
+        }
+
+        /// <summary>把帧写入处理通道（含 NeedDrop 判定，原在收图路径，移到入队时刻更准确）。</summary>
+        private async Task EnqueueFrameForProcessingAsync(FrameResult frame, CancellationToken token)
+        {
             // 当队列拥挤时，标记为需要丢弃以降低系统压力
             // L365a: 改用 Channel.Reader.Count 反映当前队列深度（替代原 Volatile.Read(_queuedImageCount)）
             var currentCount = _imageChannel.Reader.Count;
             if (currentCount >= MaxImagesinQueue)
             {
-                scanerResult.NeedDrop = true;
+                frame.NeedDrop = true;
                 MemoryDiagnostics.LogQueueDepth("ImageInfo(队列满-丢弃)", currentCount, MaxImagesinQueue);
                 // L: 队列满时计入丢帧统计并通过节流策略提示用户（性能警告）
                 IncrementDropFrameCount();
@@ -235,7 +291,7 @@ namespace MainAPP.ViewModels
             // P0-2: 使用本地 token 避免在 Dispose 后访问 _cts.Token 抛 ObjectDisposedException
             try
             {
-                await _imageChannel.Writer.WriteAsync(scanerResult, token).ConfigureAwait(false);
+                await _imageChannel.Writer.WriteAsync(frame, token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) { return; }
             catch (ChannelClosedException) { return; }

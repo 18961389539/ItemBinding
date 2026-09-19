@@ -12,7 +12,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:vm="clr-namespace:MainAPP.ViewModels"
     xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
-    Title="配方详情"
+    Title="{Binding Name, StringFormat=配方详情 - {0}, FallbackValue=配方详情, TargetNullValue=配方详情}"
     Width="1200"
     Height="800"
     MinWidth="900"
@@ -52,42 +52,472 @@
         <KeyBinding Gesture="Ctrl+D" Command="{Binding ConnectCameraCommand}" />
     </Window.InputBindings>
 
-    <!--  ===== 根 Grid：深色渐变背景 + 网格装饰 =====  -->
+    <!--  ===== 根 Grid：页头 + 左图 / 分隔条 / 右配置面板（可拖拽分栏） =====  -->
     <Grid Background="{StaticResource TechPageBackgroundBrush}" Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="288" />
+            <ColumnDefinition Width="*" MinWidth="300" />
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="380" MaxWidth="560" MinWidth="320" />
         </Grid.ColumnDefinitions>
 
-        <!--  装饰性网格背景（铺满两列）  -->
+        <!--  装饰性网格背景（铺满三行三列）  -->
         <Rectangle
-            Grid.ColumnSpan="2"
+            Grid.RowSpan="3"
+            Grid.ColumnSpan="3"
             Opacity="0.3"
             Fill="{StaticResource TechGridBrush}" />
 
-        <!--  ImageViewer 容器：深色卡片边框包裹（图像本身保持原样）  -->
+        <!--  ===== 页头信息栏：配方名 + 状态徽章 + 保存/关闭（自底部按钮行迁移） =====  -->
         <Border
-            Grid.Column="0"
+            Grid.Row="0"
+            Grid.ColumnSpan="3"
+            Margin="0,0,0,12"
+            Padding="12,8"
             Background="{StaticResource TechCardBgBrush}"
             BorderBrush="{StaticResource TechCardBorderBrush}"
             BorderThickness="1"
-            CornerRadius="6"
-            Padding="2">
-            <viewer:ImageViewer x:Name="imageViewer" ImageSource="{Binding ImageForShow}" />
+            CornerRadius="6">
+            <DockPanel LastChildFill="True">
+                <!--  右侧操作区（先声明以占据右缘，窄窗时左侧内容被截断而非换行）  -->
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!--  批量参数同步  -->
+                    <Button
+                        Width="32"
+                        Height="28"
+                        Margin="6,0,0,0"
+                        Padding="0"
+                        Click="SyncParamsButton_Click"
+                        Style="{StaticResource {x:Type Button}}"
+                        ToolTip="批量同步参数到其他配方">
+                        <icons:PackIconPhosphorIcons
+                            Width="15"
+                            Height="15"
+                            VerticalAlignment="Center"
+                            Kind="ArrowsClockwise" />
+                    </Button>
+                    <!--  快捷键帮助  -->
+                    <Button
+                        x:Name="shortcutsButton"
+                        Width="32"
+                        Height="28"
+                        Margin="6,0,0,0"
+                        Padding="0"
+                        Click="ShortcutsButton_Click"
+                        Style="{StaticResource {x:Type Button}}"
+                        ToolTip="快捷键帮助">
+                        <icons:PackIconPhosphorIcons
+                            Width="15"
+                            Height="15"
+                            VerticalAlignment="Center"
+                            Kind="Keyboard" />
+                    </Button>
+                    <!--  另存为新配方  -->
+                    <Button
+                        Width="32"
+                        Height="28"
+                        Margin="6,0,0,0"
+                        Padding="0"
+                        Command="{Binding SaveAsNewRecipeCommand}"
+                        Style="{StaticResource {x:Type Button}}"
+                        ToolTip="基于当前配方另存为新配方">
+                        <icons:PackIconPhosphorIcons
+                            Width="15"
+                            Height="15"
+                            VerticalAlignment="Center"
+                            Kind="Copy" />
+                    </Button>
+                    <!--  恢复已保存版本  -->
+                    <Button
+                        Width="32"
+                        Height="28"
+                        Margin="6,0,0,0"
+                        Padding="0"
+                        Command="{Binding RevertToSavedCommand}"
+                        Style="{StaticResource {x:Type Button}}"
+                        ToolTip="放弃未保存修改，恢复上次保存的版本">
+                        <icons:PackIconPhosphorIcons
+                            Width="15"
+                            Height="15"
+                            VerticalAlignment="Center"
+                            Kind="ArrowCounterClockwise" />
+                    </Button>
+                    <Button
+                        MinWidth="72"
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingButtonCompact}"
+                        Command="{Binding SaveToFileCommand}"
+                        Style="{StaticResource ButtonPrimary}"
+                        ToolTip="保存配方 (Ctrl+S)">
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Kind="FloppyDisk" />
+                            <TextBlock Text="保存" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        MinWidth="72"
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingButtonCompact}"
+                        Click="CloseButton_Click"
+                        ToolTip="关闭窗口 (Esc)">
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Kind="X" />
+                            <TextBlock Text="关闭" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <!--  左侧：配方名 + 状态徽章  -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <icons:PackIconPhosphorIcons
+                        Width="18"
+                        Height="18"
+                        Margin="0,0,8,0"
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource NeonCyanBrush}"
+                        Kind="Flask" />
+                    <TextBlock
+                        MaxWidth="220"
+                        FontSize="{StaticResource FontSizeTitle}"
+                        Style="{StaticResource TechCardTitleText}"
+                        Text="{Binding Name}"
+                        TextTrimming="CharacterEllipsis"
+                        VerticalAlignment="Center" />
+                    <!--  状态徽章：图像  -->
+                    <Border
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingBadgeCompact}"
+                        CornerRadius="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasImage}" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource StatusSuccessBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="12"
+                                Height="12"
+                                Margin="0,0,4,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource TechTextTertiaryBrush}"
+                                Kind="Image" />
+                            <TextBlock
+                                FontSize="{StaticResource FontSizeCaption}"
+                                FontWeight="Bold"
+                                VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TechTextTertiaryBrush}" />
+                                        <Setter Property="Text" Value="图像 · 无" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasImage}" Value="True">
+                                                <Setter Property="Foreground" Value="White" />
+                                                <Setter Property="Text" Value="图像 · 就绪" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <!--  状态徽章：标定  -->
+                    <Border
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingBadgeCompact}"
+                        CornerRadius="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{StaticResource TechInnerBgBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsCalibrated}" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource StatusSuccessBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="12"
+                                Height="12"
+                                Margin="0,0,4,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource TechTextTertiaryBrush}"
+                                Kind="Crosshair" />
+                            <TextBlock
+                                FontSize="{StaticResource FontSizeCaption}"
+                                FontWeight="Bold"
+                                VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource TechTextTertiaryBrush}" />
+                                        <Setter Property="Text" Value="标定 · 未" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCalibrated}" Value="True">
+                                                <Setter Property="Foreground" Value="White" />
+                                                <Setter Property="Text" Value="标定 · 已" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <!--  状态徽章：扫码枪（未连接用警示色，与其他徽章区分）  -->
+                    <Border
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingBadgeCompact}"
+                        CornerRadius="3">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{StaticResource StatusWarningBackgroundBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasScanner}" Value="True">
+                                        <Setter Property="Background" Value="{StaticResource StatusSuccessBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="12"
+                                Height="12"
+                                Margin="0,0,4,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource StatusWarningBrush}"
+                                Kind="Barcode" />
+                            <TextBlock
+                                FontSize="{StaticResource FontSizeCaption}"
+                                FontWeight="Bold"
+                                VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource StatusWarningBrush}" />
+                                        <Setter Property="Text" Value="扫码枪 · 未连接" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasScanner}" Value="True">
+                                                <Setter Property="Foreground" Value="White" />
+                                                <Setter Property="Text" Value="扫码枪 · 已连接" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <!--  状态徽章：未保存（脏标记，默认隐藏，有改动未保存时高亮）  -->
+                    <Border
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingBadgeCompact}"
+                        CornerRadius="3"
+                        Background="{StaticResource StatusWarningBackgroundBrush}">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDirty}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="12"
+                                Height="12"
+                                Margin="0,0,4,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource StatusWarningBrush}"
+                                Kind="PencilLine" />
+                            <TextBlock
+                                FontSize="{StaticResource FontSizeCaption}"
+                                FontWeight="Bold"
+                                Foreground="{StaticResource StatusWarningBrush}"
+                                Text="未保存" />
+                        </StackPanel>
+                    </Border>
+                    <!--  状态徽章：配方健康度（绿=健康；橙=有待处理项，点击弹出问题清单）  -->
+                    <Border
+                        x:Name="healthBadge"
+                        Margin="8,0,0,0"
+                        Padding="{StaticResource PaddingBadgeCompact}"
+                        CornerRadius="3"
+                        MouseLeftButtonDown="HealthBadge_MouseDown"
+                        Cursor="Hand">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="{StaticResource StatusWarningBackgroundBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasRecipeIssues}" Value="False">
+                                        <Setter Property="Background" Value="{StaticResource StatusSuccessBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="12"
+                                Height="12"
+                                Margin="0,0,4,0"
+                                VerticalAlignment="Center">
+                                <icons:PackIconPhosphorIcons.Style>
+                                    <Style TargetType="icons:PackIconPhosphorIcons">
+                                        <Setter Property="Kind" Value="Warning" />
+                                        <Setter Property="Foreground" Value="{StaticResource StatusWarningBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasRecipeIssues}" Value="False">
+                                                <Setter Property="Kind" Value="CheckCircle" />
+                                                <Setter Property="Foreground" Value="White" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </icons:PackIconPhosphorIcons.Style>
+                            </icons:PackIconPhosphorIcons>
+                            <TextBlock
+                                FontSize="{StaticResource FontSizeCaption}"
+                                FontWeight="Bold"
+                                VerticalAlignment="Center"
+                                Text="{Binding RecipeHealthText}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Foreground" Value="{StaticResource StatusWarningBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasRecipeIssues}" Value="False">
+                                                <Setter Property="Foreground" Value="White" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                    <!--  上次保存时间  -->
+                    <TextBlock
+                        Margin="10,0,0,0"
+                        VerticalAlignment="Center"
+                        FontSize="10.5"
+                        FontFamily="{StaticResource FontFamilyMono}"
+                        Foreground="{StaticResource TechTextTertiaryBrush}"
+                        Text="{Binding SavedTimeText, StringFormat={}上次保存 {0}, FallbackValue=上次保存 —}" />
+                </StackPanel>
+            </DockPanel>
         </Border>
 
-        <!--  右侧 Grid：含 TabControl 与底部按钮  -->
-        <Grid Grid.Column="1">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*" />
-                <RowDefinition Height="50" />
-            </Grid.RowDefinitions>
-            <TabControl Background="{StaticResource TechCardBgBrush}">
+        <!--  ===== 示教模式横幅提示条（默认隐藏，不占空间；开启画面示教时横跨全宽显示） =====  -->
+        <Border
+            Grid.Row="1"
+            Grid.ColumnSpan="3"
+            Margin="0,0,0,12"
+            Padding="10,6"
+            Background="{StaticResource TechInnerBgBrush}"
+            BorderBrush="{StaticResource NeonCyanBrush}"
+            BorderThickness="1"
+            CornerRadius="4">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsGrabTeachMode}" Value="True">
+                            <Setter Property="Visibility" Value="Visible" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel Orientation="Horizontal">
+                <icons:PackIconPhosphorIcons
+                    Width="14"
+                    Height="14"
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource NeonCyanBrush}"
+                    Kind="CursorClick" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="{StaticResource FontSizeSmall}"
+                    Foreground="{StaticResource TechTextPrimaryBrush}"
+                    Text="示教模式已开启：在图像上点击抓取点位置（可连续点击修正），完成后点「退出示教」。图像上的抓取点标记：洋红=生效，灰=朝向退化抓中心。" />
+            </StackPanel>
+        </Border>
+
+        <!--  ImageViewer 容器：深色卡片边框包裹（图像本身保持原样）；示教模式下青色边框高亮  -->
+        <Border
+            Grid.Row="2"
+            Grid.Column="0"
+            Background="{StaticResource TechCardBgBrush}"
+            CornerRadius="6"
+            Padding="2">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="BorderBrush" Value="{StaticResource TechCardBorderBrush}" />
+                    <Setter Property="BorderThickness" Value="1" />
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsGrabTeachMode}" Value="True">
+                            <Setter Property="BorderBrush" Value="{StaticResource NeonCyanBrush}" />
+                            <Setter Property="BorderThickness" Value="2" />
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <viewer:ImageViewer
+                x:Name="imageViewer"
+                IsGrabTeachPointMode="{Binding IsGrabTeachMode, Mode=OneWay}"
+                ImageSource="{Binding ImageForShow}" />
+        </Border>
+
+        <!--  分隔条：可拖拽调整左右分栏（右列钳制 320~560，参照 RecipesManageView）  -->
+        <GridSplitter
+            Grid.Row="2"
+            Grid.Column="1"
+            Width="5"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Stretch"
+            Background="{StaticResource TechCardBorderBrush}"
+            ShowsPreview="True" />
+
+        <!--  右侧配置面板：TabControl 直接填充（底部按钮行已迁页头）  -->
+        <TabControl
+            Grid.Row="2"
+            Grid.Column="2"
+            x:Name="MainTabControl"
+            Background="{StaticResource TechCardBgBrush}">
                 <!--#region 图像采集配置-->
                 <!--  图像采集配置  -->
-                <TabItem Header="图像采集">
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource NeonCyanBrush}"
+                                Kind="Camera" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource TechTextSecondaryBrush}"
+                                Text="图像采集" />
+                        </StackPanel>
+                    </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="8">
+                        <StackPanel Margin="12">
                             <!--  图像来源  -->
                             <GroupBox Margin="0,0,0,8" Header="图像来源">
                                 <StackPanel Margin="4">
@@ -232,8 +662,8 @@
                                                     <Style.Triggers>
                                                         <Trigger Property="IsChecked" Value="True">
                                                             <Setter Property="Content" Value="停止显示" />
-                                                            <Setter Property="Background" Value="#E53935" />
-                                                            <Setter Property="BorderBrush" Value="#C62828" />
+                                                            <Setter Property="Background" Value="{StaticResource StatusErrorSoftBrush}" />
+                                                            <Setter Property="BorderBrush" Value="{StaticResource StatusErrorBrush}" />
                                                         </Trigger>
                                                     </Style.Triggers>
                                                 </Style>
@@ -249,9 +679,25 @@
 
                 <!--  坐标系创建配置  -->
                 <!--#region 坐标系创建配置-->
-                <TabItem Header="坐标系创建">
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource NeonGreenBrush}"
+                                Kind="Crosshair" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource TechTextSecondaryBrush}"
+                                Text="坐标系创建" />
+                        </StackPanel>
+                    </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="8">
+                        <StackPanel Margin="12">
                             <!--  P2-19: 标定向导 - 步骤状态指示  -->
                             <Border
                                 Margin="0,0,0,8"
@@ -580,6 +1026,35 @@
                                     Content="显示调试窗口"
                                     IsChecked="{Binding IsShowDebug}" />
                             </UniformGrid>
+
+                            <!--  标定量化验证：三点数值汇总 + 图像叠加（完成标定后核对尺度的快速入口）  -->
+                            <GroupBox Margin="0,8,0,0" Header="标定验证">
+                                <StackPanel Margin="4">
+                                    <TextBlock
+                                        Margin="0,0,0,8"
+                                        FontFamily="{StaticResource FontFamilyMono}"
+                                        FontSize="11"
+                                        Foreground="{StaticResource NeonOrangeBrush}"
+                                        LineHeight="17"
+                                        Text="{Binding CalibrationSummaryText}"
+                                        TextWrapping="Wrap" />
+                                    <Button
+                                        Padding="8,5"
+                                        Command="{Binding OverlayCalibrationPointsCommand}"
+                                        Style="{StaticResource NeonButtonStyle}"
+                                        ToolTip="在当前图像上叠加原点/X轴点/Y轴点标记（洋红/青/橙）">
+                                        <StackPanel Orientation="Horizontal">
+                                            <icons:PackIconPhosphorIcons
+                                                Width="13"
+                                                Height="13"
+                                                Margin="0,0,5,0"
+                                                VerticalAlignment="Center"
+                                                Kind="Crosshair" />
+                                            <TextBlock Text="叠加标定点" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </GroupBox>
                         </StackPanel>
                     </ScrollViewer>
                 </TabItem>
@@ -587,14 +1062,30 @@
 
                 <!--  AI模型配置  -->
                 <!--#region AI模型配置-->
-                <TabItem Header="AI模型">
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource NeonOrangeBrush}"
+                                Kind="Brain" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource TechTextSecondaryBrush}"
+                                Text="AI模型" />
+                        </StackPanel>
+                    </TabItem.Header>
                     <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <StackPanel Margin="8">
+                        <StackPanel Margin="12">
                             <!--  边缘检测模型配置  -->
                             <GroupBox Margin="0,0,0,8" Header="边缘检测模型">
                                 <StackPanel Margin="4">
                                     <!--  模型路径  -->
-                                    <Grid Margin="0,0,0,8">
+                                    <Grid Margin="0,0,0,4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
@@ -602,7 +1093,7 @@
                                         <hc:TextBox
                                             Grid.Column="0"
                                             hc:InfoElement.Title="ONNX模型文件路径"
-                                            Text="{Binding YoloTool.EdgeDetection.ModelPath, UpdateSourceTrigger=PropertyChanged}" />
+                                            Text="{Binding EdgeModelPath, UpdateSourceTrigger=PropertyChanged}" />
                                         <Button
                                             Grid.Column="1"
                                             Margin="4,0,0,0"
@@ -613,6 +1104,14 @@
                                             Style="{StaticResource NeonButtonStyle}"
                                             ToolTip="选择ONNX模型文件" />
                                     </Grid>
+                                    <!--  路径即时校验：文件不存在时标红提示  -->
+                                    <TextBlock
+                                        Margin="2,0,0,8"
+                                        FontSize="10.5"
+                                        Foreground="{StaticResource StatusErrorBrush}"
+                                        Text="⚠ 文件不存在，测试推理/产线运行将失败，请检查路径。"
+                                        TextWrapping="Wrap"
+                                        Visibility="{Binding EdgeModelPathExists, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
                                     <!--  图像调整大小  -->
                                     <CheckBox
                                         Margin="0,0,0,8"
@@ -743,7 +1242,7 @@
                                     <Grid Visibility="{Binding YoloTool.IsAngleDetectionEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <StackPanel>
                                             <!--  模型路径  -->
-                                            <Grid Margin="0,0,0,8">
+                                            <Grid Margin="0,0,0,4">
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*" />
                                                     <ColumnDefinition Width="Auto" />
@@ -751,7 +1250,7 @@
                                                 <hc:TextBox
                                                     Grid.Column="0"
                                                     hc:InfoElement.Title="ONNX模型文件路径"
-                                                    Text="{Binding YoloTool.AngleDetection.ModelPath, UpdateSourceTrigger=PropertyChanged}" />
+                                                    Text="{Binding AngleModelPath, UpdateSourceTrigger=PropertyChanged}" />
                                                 <Button
                                                     Grid.Column="1"
                                                     Margin="4,0,0,0"
@@ -762,6 +1261,14 @@
                                                     Style="{StaticResource NeonButtonStyle}"
                                                     ToolTip="选择ONNX模型文件" />
                                             </Grid>
+                                            <!--  路径即时校验：文件不存在时标红提示  -->
+                                            <TextBlock
+                                                Margin="2,0,0,8"
+                                                FontSize="10.5"
+                                                Foreground="{StaticResource StatusErrorBrush}"
+                                                Text="⚠ 文件不存在，已启用角度检测时将按掩码回退执行。"
+                                                TextWrapping="Wrap"
+                                                Visibility="{Binding AngleModelPathExists, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
                                             <!--  图像调整大小  -->
                                             <CheckBox
                                                 Margin="0,0,0,8"
@@ -872,12 +1379,49 @@
                                 0 / 0 = 抓取点即掩码最小外接旋转矩形的几何中心（默认，与改造前一致）。  -->
                             <GroupBox Margin="0,0,0,8" Header="抓取点（产品局部坐标系，随角度旋转）">
                                 <StackPanel Margin="4">
-                                    <!--  画面示教开关：勾选后点击测试推理图像即可设点，免去手动换算长/短轴偏移  -->
+                                    <!--  2026-09-19: 一键示教 —— 自动执行测试推理并进入示教模式；示教中再点退出  -->
+                                    <Button
+                                        Margin="0,0,0,8"
+                                        Padding="{StaticResource PaddingButtonCompact}"
+                                        Command="{Binding TeachGrabPointCommand}"
+                                        Style="{StaticResource ButtonPrimary}"
+                                        ToolTip="自动执行一次测试推理并开启示教模式，随后在左侧图像上点击抓取点位置即可（可连续点击修正）。需头尾朝向可信；开启后图像边框高亮并显示提示条。">
+                                        <StackPanel Orientation="Horizontal">
+                                            <icons:PackIconPhosphorIcons
+                                                Width="14"
+                                                Height="14"
+                                                Margin="0,0,5,0"
+                                                VerticalAlignment="Center"
+                                                Kind="Crosshair" />
+                                            <TextBlock>
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="示教抓取点" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsGrabTeachMode}" Value="True">
+                                                                <Setter Property="Text" Value="退出示教" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </Button>
+                                    <!--  画面示教手动开关：需先完成一次测试推理才可勾选（CanTeachGrabPoint）  -->
                                     <CheckBox
                                         Margin="0,0,0,8"
                                         Content="启用画面示教（点击图像设置抓取点）"
                                         IsChecked="{Binding IsGrabTeachMode}"
-                                        ToolTip="勾选后，在下方测试推理图像上点击任意位置，该点会被设为抓取点（自动反算长轴/短轴偏移）。仅当已执行过一次测试推理且头尾朝向可信时有效。" />
+                                        IsEnabled="{Binding CanTeachGrabPoint}"
+                                        ToolTip="勾选后，在左侧图像上点击任意位置，该点会被设为抓取点（自动反算长轴/短轴偏移）。仅当已执行过一次测试推理且头尾朝向可信时有效。" />
+                                    <!--  前置条件提示：尚无几何快照时引导先测试推理  -->
+                                    <TextBlock
+                                        Margin="0,0,0,8"
+                                        FontSize="{StaticResource FontSizeCaption}"
+                                        Foreground="{StaticResource StatusWarningBrush}"
+                                        Text="⚠ 尚未就绪：请先执行一次「测试推理」（或点上方「示教抓取点」自动完成），才能在画面上示教。"
+                                        TextWrapping="Wrap"
+                                        Visibility="{Binding CanTeachGrabPoint, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
                                     <!--  长轴偏移：正 = 朝产品头部；朝向不可信时会自动退化为中心（宁可抓中心也不抓反）  -->
                                     <hc:NumericUpDown
                                         Margin="0,0,0,8"
@@ -926,22 +1470,69 @@
                 <!--#endregion-->
                 <!--  推理结果（测试推理历史，最新在前，每次推理一张卡片）  -->
                 <!--#region 推理结果-->
-                <TabItem Header="推理结果">
+                <TabItem>
+                    <TabItem.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <icons:PackIconPhosphorIcons
+                                Width="14"
+                                Height="14"
+                                Margin="0,0,5,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource NeonTealBrush}"
+                                Kind="ListMagnifyingGlass" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource TechTextSecondaryBrush}"
+                                Text="推理结果" />
+                            <!--  计数徽章：有记录时红点显示条数  -->
+                            <Border
+                                Margin="6,0,0,0"
+                                Padding="6,1"
+                                CornerRadius="8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{StaticResource StatusErrorBrush}" />
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding TestResults.Count}" Value="0">
+                                                <Setter Property="Visibility" Value="Collapsed" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock
+                                    FontSize="10"
+                                    FontWeight="Bold"
+                                    Foreground="White"
+                                    Text="{Binding TestResults.Count}" />
+                            </Border>
+                        </StackPanel>
+                    </TabItem.Header>
+                    <!--  左列=记录列表，右列=选中记录的可视化预览  -->
                     <Grid Margin="4">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" MinWidth="300" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="330" MinWidth="240" MaxWidth="430" />
+                        </Grid.ColumnDefinitions>
 
-                        <!--  工具行：记录计数 + 拍照 / 测试推理 / 清空  -->
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <!--  工具行：记录计数 + 拍照 / 测试推理 / 导出 / 清空  -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
                             <TextBlock
                                 VerticalAlignment="Center"
                                 FontSize="10.5"
@@ -986,6 +1577,23 @@
                                 Grid.Column="3"
                                 Margin="6,0,0,0"
                                 Padding="10,3"
+                                Command="{Binding ExportTestResultsCommand}"
+                                Style="{StaticResource NeonButtonStyle}"
+                                ToolTip="导出全部推理结果到 CSV 文件">
+                                <StackPanel Orientation="Horizontal">
+                                    <icons:PackIconPhosphorIcons
+                                        Width="13"
+                                        Height="13"
+                                        Margin="0,0,4,0"
+                                        VerticalAlignment="Center"
+                                        Kind="Download" />
+                                    <TextBlock Text="导出" />
+                                </StackPanel>
+                            </Button>
+                            <Button
+                                Grid.Column="4"
+                                Margin="6,0,0,0"
+                                Padding="10,3"
                                 Command="{Binding ClearTestResultsCommand}"
                                 Style="{StaticResource NeonButtonStyle}"
                                 ToolTip="清空全部推理记录">
@@ -1008,6 +1616,7 @@
                                 BorderThickness="0"
                                 Padding="0"
                                 ItemsSource="{Binding TestResults}"
+                                SelectedItem="{Binding SelectedResult, Mode=TwoWay}"
                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                                 ScrollViewer.VerticalScrollBarVisibility="Auto">
                                 <ListBox.ItemContainerStyle>
@@ -1022,12 +1631,26 @@
                                 </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
+                                        <!--  状态色左边条：绿=已标定成功；橙=有产品但未标定（WorldX=null）；红=无产品/推理失败（TargetCount=0）。
+                                            触发顺序敏感：同集合内后声明且激活的触发器覆盖前者，红条须放最后  -->
                                         <Border
                                             Padding="10,8"
-                                            Background="{StaticResource TechCardBgBrush}"
-                                            BorderBrush="{StaticResource TechCardBorderBrush}"
-                                            BorderThickness="1"
+                                            BorderThickness="3,1,1,1"
                                             CornerRadius="6">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{StaticResource TechCardBgBrush}" />
+                                                    <Setter Property="BorderBrush" Value="{StaticResource StatusSuccessBrush}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding WorldX}" Value="{x:Null}">
+                                                            <Setter Property="BorderBrush" Value="{StaticResource StatusWarningBrush}" />
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding TargetCount}" Value="0">
+                                                            <Setter Property="BorderBrush" Value="{StaticResource StatusErrorBrush}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <StackPanel>
                                                 <!--  头行：时间 + 备注徽标  -->
                                                 <Grid>
@@ -1048,12 +1671,26 @@
                                                         MaxWidth="130"
                                                         Background="{StaticResource TechInnerBgBrush}"
                                                         CornerRadius="8">
+                                                        <!--  备注徽标：颜色随卡片状态（绿→橙→红，触发顺序同卡片边条）  -->
                                                         <TextBlock
                                                             FontSize="10.5"
-                                                            Foreground="{StaticResource NeonGreenBrush}"
                                                             Text="{Binding Remark, TargetNullValue=—}"
                                                             TextTrimming="CharacterEllipsis"
-                                                            ToolTip="{Binding Remark}" />
+                                                            ToolTip="{Binding Remark}">
+                                                            <TextBlock.Style>
+                                                                <Style TargetType="TextBlock">
+                                                                    <Setter Property="Foreground" Value="{StaticResource NeonGreenBrush}" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding WorldX}" Value="{x:Null}">
+                                                                            <Setter Property="Foreground" Value="{StaticResource StatusWarningBrush}" />
+                                                                        </DataTrigger>
+                                                                        <DataTrigger Binding="{Binding TargetCount}" Value="0">
+                                                                            <Setter Property="Foreground" Value="{StaticResource StatusErrorBrush}" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </TextBlock.Style>
+                                                        </TextBlock>
                                                     </Border>
                                                 </Grid>
 
@@ -1065,6 +1702,7 @@
                                                     Text="产品坐标" />
                                                 <TextBlock
                                                     Margin="0,2,0,0"
+                                                    FontFamily="{StaticResource FontFamilyMono}"
                                                     FontSize="14"
                                                     FontWeight="Bold"
                                                     Foreground="{StaticResource NeonOrangeBrush}"
@@ -1077,6 +1715,7 @@
                                                         <TextBlock FontSize="10.5" Foreground="{StaticResource TechTextLabelBrush}" Text="角度" />
                                                         <TextBlock
                                                             Margin="0,1,0,0"
+                                                            FontFamily="{StaticResource FontFamilyMono}"
                                                             FontSize="13"
                                                             FontWeight="Bold"
                                                             Foreground="{StaticResource NeonTealBrush}"
@@ -1094,6 +1733,7 @@
                                                         <TextBlock FontSize="10.5" Foreground="{StaticResource TechTextLabelBrush}" Text="耗时" />
                                                         <TextBlock
                                                             Margin="0,1,0,0"
+                                                            FontFamily="{StaticResource FontFamilyMono}"
                                                             FontSize="13"
                                                             FontWeight="Bold"
                                                             Text="{Binding CostText}" />
@@ -1103,6 +1743,7 @@
                                                 <!--  像素质心（辅助信息）  -->
                                                 <TextBlock
                                                     Margin="0,6,0,0"
+                                                    FontFamily="{StaticResource FontFamilyMono}"
                                                     FontSize="10.5"
                                                     Foreground="{StaticResource TechTextTertiaryBrush}"
                                                     Text="{Binding PixelText}"
@@ -1148,50 +1789,222 @@
                             Text="记录随当前配方保留（重开窗口仍可见），删除该配方后自动释放。"
                             TextAlignment="Center"
                             TextWrapping="Wrap" />
+                        </Grid>
+
+                        <!--  ==== 右列：选中记录的详细预览 ====  -->
+                        <GridSplitter
+                            Grid.Column="1"
+                            Width="5"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Stretch"
+                            Background="{StaticResource TechCardBorderBrush}"
+                            ShowsPreview="True" />
+                        <Border
+                            Grid.Column="2"
+                            Margin="8,0,0,0"
+                            Padding="10"
+                            Background="{StaticResource TechCardBgBrush}"
+                            BorderBrush="{StaticResource TechCardBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="6">
+                            <StackPanel>
+                                <TextBlock
+                                    FontSize="12"
+                                    FontWeight="Bold"
+                                    Foreground="{StaticResource NeonTealBrush}"
+                                    Text="推理详情" />
+                                <!--  无选中时的引导文案  -->
+                                <TextBlock
+                                    Margin="0,8,0,0"
+                                    FontSize="11"
+                                    Foreground="{StaticResource TechTextTertiaryBrush}"
+                                    Text="点击左侧卡片，查看该次推理的叠加图与关键数值。"
+                                    TextWrapping="Wrap">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedResult}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+
+                                <!--  选中时有记录时的详情区  -->
+                                <StackPanel>
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding SelectedResult}" Value="{x:Null}">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+
+                                    <!--  该次推理的可视化图  -->
+                                    <Border
+                                        Margin="0,8,0,0"
+                                        Padding="2"
+                                        Background="{StaticResource TechInnerBgBrush}"
+                                        BorderBrush="{StaticResource TechCardBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="4">
+                                        <Image
+                                            MaxHeight="280"
+                                            Source="{Binding SelectedResult.Snapshot}"
+                                            Stretch="Uniform" />
+                                    </Border>
+
+                                    <TextBlock
+                                        Margin="0,8,0,2"
+                                        FontSize="10.5"
+                                        Foreground="{StaticResource TechTextLabelBrush}"
+                                        Text="时间" />
+                                    <TextBlock
+                                        FontFamily="{StaticResource FontFamilyMono}"
+                                        FontSize="12"
+                                        FontWeight="Bold"
+                                        Foreground="{StaticResource NeonCyanBrush}"
+                                        Text="{Binding SelectedResult.TimeText}" />
+                                    <TextBlock
+                                        Margin="0,6,0,2"
+                                        FontSize="10.5"
+                                        Foreground="{StaticResource TechTextLabelBrush}"
+                                        Text="产品坐标" />
+                                    <TextBlock
+                                        FontFamily="{StaticResource FontFamilyMono}"
+                                        FontSize="12"
+                                        FontWeight="Bold"
+                                        Foreground="{StaticResource NeonOrangeBrush}"
+                                        Text="{Binding SelectedResult.CoordText}" />
+                                    <UniformGrid Margin="0,8,0,0" Columns="2" Rows="1">
+                                        <StackPanel>
+                                            <TextBlock FontSize="10.5" Foreground="{StaticResource TechTextLabelBrush}" Text="角度" />
+                                            <TextBlock
+                                                Margin="0,1,0,0"
+                                                FontFamily="{StaticResource FontFamilyMono}"
+                                                FontSize="12"
+                                                FontWeight="Bold"
+                                                Foreground="{StaticResource NeonTealBrush}"
+                                                Text="{Binding SelectedResult.AngleText}" />
+                                        </StackPanel>
+                                        <StackPanel>
+                                            <TextBlock FontSize="10.5" Foreground="{StaticResource TechTextLabelBrush}" Text="耗时" />
+                                            <TextBlock
+                                                Margin="0,1,0,0"
+                                                FontFamily="{StaticResource FontFamilyMono}"
+                                                FontSize="12"
+                                                FontWeight="Bold"
+                                                Text="{Binding SelectedResult.CostText}" />
+                                        </StackPanel>
+                                    </UniformGrid>
+                                    <TextBlock
+                                        Margin="0,6,0,2"
+                                        FontSize="10.5"
+                                        Foreground="{StaticResource TechTextLabelBrush}"
+                                        Text="备注" />
+                                    <TextBlock
+                                        FontSize="11"
+                                        Foreground="{StaticResource TechTextSecondaryBrush}"
+                                        Text="{Binding SelectedResult.Remark}"
+                                        TextWrapping="Wrap" />
+                                    <Button
+                                        Margin="0,10,0,0"
+                                        Padding="8,4"
+                                        HorizontalAlignment="Left"
+                                        Command="{Binding DeleteTestResultCommand}"
+                                        CommandParameter="{Binding SelectedResult}"
+                                        Style="{StaticResource NeonButtonStyle}"
+                                        ToolTip="删除这条推理记录">
+                                        <StackPanel Orientation="Horizontal">
+                                            <icons:PackIconPhosphorIcons
+                                                Width="13"
+                                                Height="13"
+                                                Margin="0,0,4,0"
+                                                VerticalAlignment="Center"
+                                                Kind="Trash" />
+                                            <TextBlock Text="删除该条" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </TabItem>
                 <!--#endregion-->
-            </TabControl>
-            <!--  底部按钮  -->
-            <StackPanel
-                Grid.Row="1"
-                Margin="0,16,0,0"
-                HorizontalAlignment="Right"
-                Orientation="Horizontal">
-                <Button
-                    MinWidth="80"
-                    Margin="0,0,8,0"
-                    Padding="16,6"
-                    Command="{Binding SaveToFileCommand}"
-                    Style="{StaticResource ButtonPrimary}"
-                    ToolTip="保存配方 (Ctrl+S)">
-                    <StackPanel Orientation="Horizontal">
-                        <icons:PackIconPhosphorIcons
-                            Width="14"
-                            Height="14"
-                            Margin="0,0,5,0"
-                            VerticalAlignment="Center"
-                            Kind="FloppyDisk" />
-                        <TextBlock Text="保存" />
-                    </StackPanel>
-                </Button>
-                <Button
-                    MinWidth="80"
-                    Padding="16,6"
-                    Click="CloseButton_Click"
-                    ToolTip="关闭窗口 (Esc)">
-                    <StackPanel Orientation="Horizontal">
-                        <icons:PackIconPhosphorIcons
-                            Width="14"
-                            Height="14"
-                            Margin="0,0,5,0"
-                            VerticalAlignment="Center"
-                            Kind="X" />
-                        <TextBlock Text="关闭" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-        </Grid>
+        </TabControl>
 
+        <!--  快捷键帮助弹层（锚定页头右侧 ? 按钮，点击按钮开合）  -->
+        <Popup
+            x:Name="shortcutsPopup"
+            Placement="Bottom"
+            PlacementTarget="{Binding ElementName=shortcutsButton}"
+            AllowsTransparency="True"
+            StaysOpen="False">
+            <Border
+                Margin="0,6,0,0"
+                Padding="14,10"
+                Background="{StaticResource TechCardBgBrush}"
+                BorderBrush="{StaticResource TechCardBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <StackPanel>
+                    <TextBlock
+                        Margin="0,0,0,6"
+                        FontSize="12"
+                        FontWeight="Bold"
+                        Foreground="{StaticResource NeonCyanBrush}"
+                        Text="快捷键" />
+                    <TextBlock
+                        FontSize="11.5"
+                        FontFamily="{StaticResource FontFamilyMono}"
+                        Foreground="{StaticResource TechTextSecondaryBrush}"
+                        LineHeight="22"
+                        Text="Ctrl+S         保存配方&#10;F5               获取图像&#10;Ctrl+Enter   查找基准点&#10;Ctrl+D         连接相机&#10;Esc             关闭窗口" />
+                </StackPanel>
+            </Border>
+        </Popup>
+
+        <!--  配方健康度弹层（点击页头健康徽章开合，列出未满足的前置检查项）  -->
+        <Popup
+            x:Name="healthPopup"
+            Placement="Bottom"
+            AllowsTransparency="True"
+            StaysOpen="False">
+            <Border
+                Margin="0,6,0,0"
+                Padding="14,10"
+                MaxWidth="340"
+                Background="{StaticResource TechCardBgBrush}"
+                BorderBrush="{StaticResource TechCardBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <StackPanel>
+                    <TextBlock
+                        Margin="0,0,0,6"
+                        FontSize="12"
+                        FontWeight="Bold"
+                        Foreground="{StaticResource NeonCyanBrush}"
+                        Text="配方健康度检查" />
+                    <TextBlock
+                        FontSize="11.5"
+                        Foreground="{StaticResource TechTextSecondaryBrush}"
+                        LineHeight="20"
+                        Text="{Binding RecipeIssuesText}"
+                        TextWrapping="Wrap" />
+                    <TextBlock
+                        Margin="0,6,0,0"
+                        FontSize="11"
+                        FontStyle="Italic"
+                        Foreground="{StaticResource TechTextTertiaryBrush}"
+                        Text="以上任一项未满足，建议先修复再下发产线。"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+        </Popup>
     </Grid>
 </Window>

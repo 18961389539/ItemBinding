@@ -2,6 +2,7 @@ using HikScanner;
 using JinlongYolo.YoloSharp;
 using JinlongYolo.YoloSharp.Data;
 using JinlongYolo.YoloSharp.Metadata;
+using JinlongYolo.YoloSharp.Services;
 using MainAPP.Models;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -219,6 +220,17 @@ namespace MainAPP.Services
             for (var tier = (int)preferredBackend; tier <= (int)InferenceBackend.Cpu; tier++)
             {
                 var backend = (InferenceBackend)tier;
+
+                // 2026-09-18: OpenVINO 两级探测前置——ORT native 不含 OpenVINO EP 的构建
+                // （Microsoft.ML.OnnxRuntime.Gpu 等官方包）此前要走"建池 → 抛 NotSupportedException
+                // → 捕获 → 下一级"一轮，调试器首机会中断且日志噪音大。探测结果进程级缓存，
+                // 不可用直接跳过，两级合计仅一次探测（内部一次 native 尝试，异常已吞）。
+                if ((backend == InferenceBackend.OpenVinoGpu || backend == InferenceBackend.OpenVinoCpu)
+                    && !OpenVinoAvailability.IsProviderAvailable())
+                {
+                    LogService.Instance.Info($"后端 {BackendName(backend)} 跳过：当前 ORT 构建不含 OpenVINO EP");
+                    continue;
+                }
 
                 try
                 {

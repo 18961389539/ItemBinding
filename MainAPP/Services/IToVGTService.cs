@@ -47,7 +47,8 @@ namespace MainAPP.Services
         /// <summary>
         /// 查找并移除最接近但不晚于指定时间点的编码器记录。
         /// </summary>
-        (uint Encoder, DateTime Time) MostRecentDateEncode(DateTime searchTime);
+        /// <returns>Encoder/Time 为命中的记录（无命中时 0/MinValue）；Stale = 记录已超龄（XY 与编码器错位约一个触发间隔），发送路径据此可整条拒发。</returns>
+        (uint Encoder, DateTime Time, bool Stale) MostRecentDateEncode(DateTime searchTime);
 
         /// <summary>
         /// 将检测结果转换为消息并通过 UDP 发送给 VGT。

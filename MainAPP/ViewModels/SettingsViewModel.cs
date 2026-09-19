@@ -30,14 +30,15 @@ namespace MainAPP.ViewModels
         private const string DefaultConnectivityCheckIP = "127.0.0.1";
         private const string DefaultDetectionResultSendIP = "127.0.0.1";
         private const int DefaultEncoderReceiverPort = 11301;
+        private const bool DefaultEncoderlessMode = false;
         private const int DefaultDetectionResultSendPort = 2611;
         private const string DefaultMessageReceiver = "LL";
         private const bool DefaultDedupEnabled = true;
         private const string DefaultDedupTrackAxis = "Y";
         private const double DefaultDedupPositionThreshold = 3.0;
         private const double DefaultDedupAngleThreshold = 2.0;
-        // 2026-09-05: 四边独立边缘最小间距默认值（各 10px，防止抓到半个产品）
-        private const double DefaultEdgeMarginPixels = 10;
+        // 2026-09-05: 四边独立边缘最小间距默认值（各 50px，防止抓到半个产品）
+        private const double DefaultEdgeMarginPixels = 50;
 
         private readonly Settings _settings = Settings.Instance;
         private readonly AuthService _authService = AuthService.Instance;
@@ -57,6 +58,7 @@ namespace MainAPP.ViewModels
         private string _connectivityCheckIP = string.Empty;
         private string _detectionResultSendIP = string.Empty;
         private int _encoderReceiverPort;
+        private bool _encoderlessMode;
         private int _detectionResultSendPort;
         private string _messageReceiver = string.Empty;
         private bool _dedupEnabled;
@@ -112,6 +114,7 @@ namespace MainAPP.ViewModels
             _connectivityCheckIP = _settings.ConnectivityCheckIP;
             _detectionResultSendIP = _settings.DetectionResultSendIP;
             _encoderReceiverPort = _settings.EncoderReceiverPort;
+            _encoderlessMode = _settings.EncoderlessMode;
             _detectionResultSendPort = _settings.DetectionResultSendPort;
             _messageReceiver = _settings.MessageReceiver;
             _dedupEnabled = _settings.DedupEnabled;
@@ -251,6 +254,14 @@ namespace MainAPP.ViewModels
             set => SetPropertyAndMarkDirty(ref _encoderReceiverPort, value);
         }
 
+        /// <summary>无编码器模式：跳过编码器绑定与新鲜度校验，Encode 恒为 0。
+        /// ⚠️ 机械手侧不得使用编码器外推（启用前需与机械手/VGT 侧确认）。</summary>
+        public bool EncoderlessMode
+        {
+            get => _encoderlessMode;
+            set => SetPropertyAndMarkDirty(ref _encoderlessMode, value);
+        }
+
         public int DetectionResultSendPort
         {
             get => _detectionResultSendPort;
@@ -292,7 +303,7 @@ namespace MainAPP.ViewModels
 
         /// <summary>
         /// 检测框距图像左边缘的最小间距（像素）：不足该值判定无效并过滤（不发机器人）。
-        /// 2026-09-05: 由单一 EdgeMinMarginPixels 拆分为四边独立，默认各 10。
+        /// 2026-09-05: 由单一 EdgeMinMarginPixels 拆分为四边独立，默认各 50。
         /// </summary>
         public double EdgeMarginLeftPixels
         {
@@ -531,6 +542,7 @@ namespace MainAPP.ViewModels
                 _settings.ConnectivityCheckIP = _connectivityCheckIP;
                 _settings.DetectionResultSendIP = _detectionResultSendIP;
                 _settings.EncoderReceiverPort = _encoderReceiverPort;
+                _settings.EncoderlessMode = _encoderlessMode;
                 _settings.DetectionResultSendPort = _detectionResultSendPort;
                 _settings.MessageReceiver = _messageReceiver;
                 _settings.DedupEnabled = _dedupEnabled;
@@ -597,6 +609,7 @@ namespace MainAPP.ViewModels
             ConnectivityCheckIP = DefaultConnectivityCheckIP;
             DetectionResultSendIP = DefaultDetectionResultSendIP;
             EncoderReceiverPort = DefaultEncoderReceiverPort;
+            EncoderlessMode = DefaultEncoderlessMode;
             DetectionResultSendPort = DefaultDetectionResultSendPort;
             MessageReceiver = DefaultMessageReceiver;
             DedupEnabled = DefaultDedupEnabled;

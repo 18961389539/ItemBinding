@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Extensions;
 using HikScanner;
 using HikScannerType = HikScanner.HikScanner;
@@ -64,6 +64,23 @@ namespace MainAPP.ViewModels
                 // 内部仍保留 ReleaseImageData 的提前归还调用以减少内存占用；Dispose 幂等，重复调用安全。
                 using (scanerResult)
                 {
+                    // 2026-09-17: 编码器绑定超龄（新鲜度自检超阈值/无命中）的帧整条跳过——
+                    // 该帧的 X/Y 与编码器错位约一个触发间隔（200mm），发出去机器人会打错位置。
+                    // 与 NeedDrop 同款处理：发空报文告知机器人此触发无有效产品。
+                    // 节流告警（持续编码器异常时每 30s 一条，避免刷屏）。
+                    if (scanerResult.EncoderStale)
+                    {
+                        if ((DateTime.Now - _lastEncoderStaleWarnAt).TotalSeconds >= HealthWarnThrottleSec)
+                        {
+                            _lastEncoderStaleWarnAt = DateTime.Now;
+                            LogService.Instance.Warning(
+                                $"[编码器绑定] 帧 {scanerResult.FrameNumber} 编码器绑定超龄，整条跳过不发送（检查编码器上报链路）");
+                        }
+                        IncrementDropFrameCount();
+                        _toVgtService.SendTo([], scanerResult, Settings.Instance.MessageReceiver);
+                        return;
+                    }
+
                     // L362b: ImageData 可能为 null（Image 为 null 时），提前跳过避免 ImDecode/Image.Load 抛异常
                     if (scanerResult.ImageData is null)
                     {
@@ -98,8 +115,10 @@ namespace MainAPP.ViewModels
                     if (scanerResult.IsFrameLoss || scanerResult.NeedDrop)
                     {
                         _toVgtService.SendTo([], scanerResult, Settings.Instance.MessageReceiver);
-                        _reusableShowBitmap = Tools.UpdateShow(sourceImg, _reusableShowBitmap);
-                        ImageForShow = _reusableShowBitmap;
+                        // 双缓冲交替赋值，确保 ImageViewer 的 DP 回调每帧触发（同一引用会短路）
+                        _showBitmapIndex ^= 1;
+                        var updated = Tools.UpdateShow(sourceImg, _reusableShowBitmaps[_showBitmapIndex]);
+                        ImageForShow = GetNextShowBitmap(updated);
                         LogService.Instance.Warning($"跳过处理: Num={scanerResult.FrameNumber},Loss={scanerResult.IsFrameLoss}, Drop={scanerResult.NeedDrop}");
                         return;
                     }

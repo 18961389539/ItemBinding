@@ -23,6 +23,7 @@ namespace ImageViewer.Controls
         FrameworkElement RootElement { get; }
         IInputElement ImageElement { get; }
         bool IsToolInteractionActive { get; }
+        bool IsGrabTeachPointMode { get; }
         bool HasImage { get; }
 
         void Focus();
@@ -35,6 +36,7 @@ namespace ImageViewer.Controls
     {
         ImageViewerInteractionManipulationState ManipulationState { get; }
         bool IsToolInteractionActive { get; }
+        bool IsGrabTeachPointMode { get; }
         bool IsRootMouseCaptured { get; }
         BitmapSource? AnalysisBitmapSource { get; }
 
@@ -161,7 +163,10 @@ namespace ImageViewer.Controls
         {
             _host.Focus();
 
-            if (e.ChangedButton == MouseButton.Left && e.ClickCount == 2 && !_host.IsToolInteractionActive)
+            // 2026-09-19: 示教选点模式——双击放大禁用（避免误触）；
+            // ROI 拖拽（TryBeginEdit 命中抓取十字）保留；未命中时不平移（下方 return），
+            // 单击取点交由宿主处理。中键平移与滚轮缩放仍可用。
+            if (e.ChangedButton == MouseButton.Left && e.ClickCount == 2 && !_host.IsToolInteractionActive && !_host.IsGrabTeachPointMode)
             {
                 _editInteractionFlow.ResetManipulationState();
                 _pointerInteractionFlow.ResetPanState();
@@ -185,6 +190,12 @@ namespace ImageViewer.Controls
             if (_editInteractionFlow.TryBeginEdit(imagePosition, e.RightButton == MouseButtonState.Pressed))
             {
                 e.Handled = true;
+                return;
+            }
+
+            // 示教选点模式：未命中 ROI 时不平移画布（图像不跟随鼠标），单击取点交由宿主
+            if (_host.IsGrabTeachPointMode)
+            {
                 return;
             }
 

@@ -21,6 +21,30 @@ namespace MainAPP.Models
         /// <summary>编码器计数值，用于关联图像采集时刻的编码器位置</summary>
         public uint EncoderValue { get; set; }
 
+        /// <summary>
+        /// 本帧拍照时刻（2026-09-17 新增）。编码器绑定延迟 2 帧——本帧的编码器在
+        /// 后续第 2 帧收图时才解析（见 HomeViewModel.ReadImage 的待绑定队列），
+        /// 此字段就是解析时的搜索基准时刻。
+        /// </summary>
+        public DateTime GrabTime { get; set; }
+
+        /// <summary>收图序号（每次收图 +1，进程内单调）。编码器绑定延迟 2 帧的判据用。</summary>
+        public long GrabSequence { get; set; }
+
+        // 2026-09-18: 帧级设备时间戳 DeviceTimeStampTick 由基类 HikGrabResult 提供（From 中已复制），不在此重复声明。
+
+        /// <summary>
+        /// 2026-09-18: 设备墙钟文本（扫码枪 DeviceTime 参数，秒级，5s 缓存读取）。空串=设备未提供。
+        /// </summary>
+        public string DeviceClockText { get; set; } = string.Empty;
+
+        /// <summary>
+        /// 编码器绑定是否已超龄（新鲜度自检超阈值 / 无命中）（2026-09-17 新增）。
+        /// true 时 ProcessImageAsync 整条跳过——X/Y 与编码器错位约一个触发间隔，
+        /// 宁可不发也不发错位数据。
+        /// </summary>
+        public bool EncoderStale { get; set; }
+
         /// <summary>指示当前帧是否需要丢弃（视觉运算能力不足时）</summary>
         public bool NeedDrop { get; set; }
 
@@ -105,6 +129,9 @@ namespace MainAPP.Models
                 },
                 // M184: 对集合做浅拷贝，避免与源共享同一 List 实例
                 Barcodes = source.Barcodes?.ToList(),
+                // 2026-09-18: 帧级设备时间戳原始 tick（设备时钟，未对时）与软件对时偏移随帧传递，供时间链日志使用
+                DeviceTimeStampTick = source.DeviceTimeStampTick,
+                ClockOffsetMs = source.ClockOffsetMs,
                 OcrResults = source.OcrResults?.ToList(),
                 Waybills = source.Waybills?.ToList(),
                 IsGetCode = source.IsGetCode,

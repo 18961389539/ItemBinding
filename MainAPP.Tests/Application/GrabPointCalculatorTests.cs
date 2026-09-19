@@ -312,4 +312,37 @@ public class GrabPointCalculatorTests
         Assert.Equal(5.0, longMm, 3);
         Assert.Equal(0.0, shortMm, 3);
     }
+
+    /// <summary>
+    /// 往返一致性（带标定 + 缩放 + 翻转）：正向算出抓取点后反算，应回到原偏移。
+    /// 锁定画面示教坐标系 bug：反算曾把未归一化的方向（长度 = |ResizeScale|）传给
+    /// PixelsPerMmAlong，尺度缩掉 L 倍 → 偏移放大 L 倍 → 十字 ROI 落点偏离点击点。
+    /// 非等比缩放（4/2）同时锁住推理图→原图的方向折算口径。
+    /// </summary>
+    [Fact]
+    public void ComputeOffsetsFromImagePoint_CalibratedResize_RoundTripsWithResolve()
+    {
+        var transformer = CreateCalibratedTransformer();
+        const double centerOriginalX = 200.0, centerOriginalY = 300.0;
+        const double offsetLongMm = 12.0, offsetShortMm = -6.0;
+
+        var (px, py) = GrabPointCalculator.ResolveOriginalImagePoint(
+            transformer,
+            centerOriginalX, centerOriginalY,
+            rectAngleDeg: 41.0,
+            isResize: true, resizeScaleX: 4, resizeScaleY: 2,
+            headFlipped: true,
+            offsetLongMm, offsetShortMm);
+
+        var (longMm, shortMm) = GrabPointCalculator.ComputeOffsetsFromImagePoint(
+            transformer,
+            px, py,
+            centerOriginalX, centerOriginalY,
+            rectAngleDeg: 41.0,
+            isResize: true, resizeScaleX: 4, resizeScaleY: 2,
+            headFlipped: true);
+
+        Assert.Equal(offsetLongMm, longMm, 3);
+        Assert.Equal(offsetShortMm, shortMm, 3);
+    }
 }

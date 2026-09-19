@@ -95,6 +95,12 @@ namespace MainAPP.Services
         /// <summary>配方目录。</summary>
         public static string RecipesDir => Path.Combine(Saves, "Recipes");
 
+        /// <summary>
+        /// 配方页会话缓存目录（按配方名各存一份最近调试图像，供重开窗口恢复现场）。
+        /// 独立于配方目录，避免污染 *.recipe 加载逻辑。
+        /// </summary>
+        public static string RecipeSessionDir => Path.Combine(Saves, "RecipeSession");
+
         /// <summary>账号目录（<c>users.json</c>）。</summary>
         public static string SecurityDir => Path.Combine(Saves, "Security");
 

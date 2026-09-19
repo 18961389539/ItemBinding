@@ -65,8 +65,11 @@ namespace MainAPP.Services
         private CancellationTokenSource? _ctsOfRobot;
 
         // 编码器历史记录缓冲
-        private readonly List<(uint Encoder, DateTime Time)> _encoderValues = new();
-        private readonly object _encoderValuesLock = new();
+        // 2026-09-17: 编码器上报缓冲改为**非消费式**（EncoderBindingBuffer，容量 1000 靠上限淘汰）。
+        // 原实现绑定即消费（RemoveRange），编码器 UDP 包晚于图像到达时，帧会绑到上一拍的值
+        // 并从此系统性错位；现保留历史，绑定改「取 Time ≤ 拍照时刻的最近一条」，
+        // 迟到的包在后续帧解析时仍能被正确纳入。线程安全由缓冲内部保证。
+        private readonly EncoderBindingBuffer _bindingBuffer = new(MaxEncoderHistory);
         private const int MaxEncoderHistory = 1000;
 
         // 网络与重试常量
@@ -85,7 +88,7 @@ namespace MainAPP.Services
         {
             get
             {
-                lock (_encoderValuesLock)
+                lock (_lastEncoderLock)
                 {
                     return _lastReceiveTime;
                 }
@@ -100,13 +103,15 @@ namespace MainAPP.Services
         {
             get
             {
-                lock (_encoderValuesLock)
+                lock (_lastEncoderLock)
                 {
                     return _lastEncoderValue;
                 }
             }
         }
         private uint? _lastEncoderValue;
+        // 2026-09-17: _encoderValuesLock 随消费式列表一起移除；_last* 两个 UI 属性改用独立锁
+        private readonly object _lastEncoderLock = new();
 
         // Dispose 相关
         private int _disposed;
@@ -248,7 +253,7 @@ namespace MainAPP.Services
                                 var encoderOfReceived = BitConverter.ToUInt32(buffer, 0);
                                 var now = DateTime.Now;
                                 long intervalMs = SpeedFirstReceive;
-                                lock (_encoderValuesLock)
+                                lock (_lastEncoderLock)
                                 {
                                     if (_lastReceiveTime.HasValue)
                                     {
@@ -256,12 +261,9 @@ namespace MainAPP.Services
                                     }
                                     _lastEncoderValue = encoderOfReceived;
                                     _lastReceiveTime = now;
-                                    _encoderValues.Add((encoderOfReceived, now));
-
-                                    if (_encoderValues.Count > MaxEncoderHistory)
-                                    {
-                                        _encoderValues.RemoveRange(0, _encoderValues.Count - MaxEncoderHistory);
-                                    }
+                                    // 2026-09-17: 非消费式缓冲——历史保留（靠容量上限淘汰），
+                                    // 绑定按「Time ≤ 拍照时刻」取最近一条，迟到的包仍能被后续帧正确纳入
+                                    _bindingBuffer.Add(encoderOfReceived, now);
                                 }
                                 Speed = intervalMs;
                             }
@@ -285,55 +287,37 @@ namespace MainAPP.Services
         #region MostRecentDateEncode
 
         /// <summary>
-        /// 查找并移除最接近但不晚于指定时间点的编码器记录。
-        /// 使用二分查找，O(log n)。
+        /// 取「Time ≤ <paramref name="searchTime"/> 的最近一条」编码器记录（2026-09-17 起<b>不消费</b>）。
+        /// <para>使用二分查找，O(log n)。调用方（收图线程）在帧入处理通道前调用一次；
+        /// 历史保留在缓冲内（靠容量上限淘汰最旧），迟到的编码器包仍能被后续帧正确纳入。</para>
         /// </summary>
-        public (uint Encoder, DateTime Time) MostRecentDateEncode(DateTime searchTime)
+        /// <param name="searchTime">绑定的基准时刻（帧的拍照/到达时刻）。</param>
+        /// <returns>Encoder/Time 为命中的记录（无命中时 0/MinValue）；Stale = 记录已超龄
+        /// （XY 与该编码器值的对应关系错位约一个触发间隔），发送路径据此可整条拒发。</returns>
+        public (uint Encoder, DateTime Time, bool Stale) MostRecentDateEncode(DateTime searchTime)
         {
             ThrowIfDisposed();
-            lock (_encoderValuesLock)
+            var hit = _bindingBuffer.TryResolve(searchTime, Speed, out var encoder, out var time, out var stale);
+
+            if (!hit)
             {
-                if (_encoderValues.Count == 0)
-                    return (0, DateTime.MinValue);
-
-                int left = 0, right = _encoderValues.Count - 1;
-                int foundIdx = -1;
-                while (left <= right)
-                {
-                    int mid = left + (right - left) / 2;
-                    var t = _encoderValues[mid].Time;
-                    if (t <= searchTime)
-                    {
-                        foundIdx = mid;
-                        left = mid + 1;
-                    }
-                    else
-                    {
-                        right = mid - 1;
-                    }
-                }
-
-                if (foundIdx < 0)
-                    return (0, DateTime.MinValue);
-
-                var closest = _encoderValues[foundIdx];
-                _encoderValues.RemoveRange(0, foundIdx + 1);
-
-                // 绑定新鲜度自检（2026-09-12）：记录时间与请求时刻（图像到达）的差
-                // = 图像-编码器配对的偏移。稳态 ≈ 上报周期（几十 ms）；
-                // 超过动态阈值（2×当前上报间隔，且 ≥500ms）说明编码器包丢失/断流恢复——
-                // 本帧绑到的是上一次触发的编码器，位置错位约一个触发间隔（200mm）。
-                var stalenessMs = (searchTime - closest.Time).TotalMilliseconds;
-                var thresholdMs = Math.Max(500, Speed * 2.0);
-                if (stalenessMs > thresholdMs)
-                {
-                    LogService.Instance.Warning(
-                        $"[编码器绑定] 记录滞后 {stalenessMs:F0}ms（阈值 {thresholdMs:F0}ms）——" +
-                        "编码器包可能丢失/断流，本帧 XY 与编码器对应关系错位约一个触发间隔");
-                }
-
-                return (closest.Encoder, closest.Time);
+                return (0, DateTime.MinValue, true);
             }
+
+            // 绑定新鲜度自检（2026-09-12 引入，2026-09-17 移入缓冲判定）：记录时间与请求时刻（图像到达）的差
+            // = 图像-编码器配对的偏移。稳态 ≈ 上报周期（几十 ms）；
+            // 超过动态阈值（2×当前上报间隔，且 ≥500ms）说明编码器包丢失/断流恢复——
+            // 本帧绑到的是上一次触发的编码器，位置错位约一个触发间隔（200mm）。
+            var stalenessMs = (searchTime - time).TotalMilliseconds;
+            var thresholdMs = Math.Max(500, Speed * 2.0);
+            if (stalenessMs > thresholdMs)
+            {
+                LogService.Instance.Warning(
+                    $"[编码器绑定] 记录滞后 {stalenessMs:F0}ms（阈值 {thresholdMs:F0}ms）——" +
+                    "编码器包可能丢失/断流，本帧 XY 与编码器对应关系错位约一个触发间隔");
+            }
+
+            return (encoder, time, stale);
         }
 
         #endregion

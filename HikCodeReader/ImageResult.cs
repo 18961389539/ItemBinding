@@ -246,6 +246,12 @@ namespace HikCodeReader
         /// 获取条码识别的触发时间。该时间通过当前时间减去总处理耗时估算得出，非设备端精确时间。
         /// </summary>
         public DateTime TriggerTime { get; }
+
+        /// <summary>2026-09-18: 设备端触发时刻原始值——Unix 秒部分（nTriggerTimeTvLow，未加工）。</summary>
+        public uint TriggerTimeTvLowRaw { get; }
+
+        /// <summary>2026-09-18: 设备端触发时刻原始值——亚秒部分（nTriggerTimeUtvLow，单位待确认）。</summary>
+        public uint TriggerTimeUtvLowRaw { get; }
         
 
         /// <summary>
@@ -318,6 +324,9 @@ namespace HikCodeReader
             // 本地时间
             //DateTime localTime = dateTimeOffset.LocalDateTime;
             TriggerTime = DateTime.Now-TimeSpan.FromMilliseconds(TotalProcCost);
+            // 2026-09-18: 原始值透出（供探测设备是否提供真实触发时刻）
+            TriggerTimeTvLowRaw = bcrInfo.nTriggerTimeTvLow;
+            TriggerTimeUtvLowRaw = bcrInfo.nTriggerTimeUtvLow;
 
             Location = new Point[4];
          

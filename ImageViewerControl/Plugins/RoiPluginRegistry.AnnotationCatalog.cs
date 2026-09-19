@@ -44,6 +44,20 @@ namespace ImageViewer.Plugins
                         },
                         static roi => roi.Position)),
 
+                    // 2026-09-19: 抓取点十字准星——供配方页「示教」拖动设置抓取点。
+                    // drawingTools 为空数组：不进入工具菜单，由宿主（RecipeViewModel）经
+                    // ImageViewer.ViewerState.AddRoi 直接加/删。hitTestOrder 高于点标注，命中优先。
+                    CreateRegistration<GrabPointRoi>(
+                    typeKey: "grab-point",
+                    hitTestOrder: 45,
+                    drawingTools: [],
+                    persistence: CreatePositionPersistence(
+                        data => new GrabPointRoi
+                        {
+                            Position = data.Geometry.Position.ToPoint()
+                        },
+                        static roi => roi.Position)),
+
                     CreateRegistration<TextAnnotationRoi>(
                     typeKey: "text-annotation",
                     hitTestOrder: 30,

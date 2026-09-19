@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CoordinateSystemMapping;
 using Extensions;
@@ -195,9 +195,14 @@ namespace MainAPP.ViewModels
                     {
                         Tools.DrawBarcodeResults(colorMat, imageResult.BarcodeResults!);
                     }
+                    // 保留本帧条码中心（原图坐标）供测试推理判向复用，与生产判向链同口径
+                    _lastBarcodeCenters = imageResult.HasBarcodeResults
+                        ? imageResult.BarcodeResults!.Select(b => b.Center()).ToArray()
+                        : null;
                     swDraw.Stop();
 
                     UpdateImageForShow(colorMat.ToBitmapSource());
+                    PersistSessionImage(colorMat);
 
                     ShowInfo($"图像采集完成\n"
                         + $" SDK取图: {swGrab.Elapsed.TotalMilliseconds:F0} ms\n"
@@ -284,7 +289,10 @@ namespace MainAPP.ViewModels
                 _originalMat?.Dispose();
                 _originalMat = grayMat.Clone();
                 using var colorMat = grayMat.CvtColor(ColorConversionCodes.GRAY2BGR);
+                // 文件夹取图无条码绑定，清空上次扫码枪帧的条码缓存，避免复用旧帧判向
+                _lastBarcodeCenters = null;
                 UpdateImageForShow(colorMat.ToBitmapSource());
+                PersistSessionImage(colorMat);
 
                 MemoryDiagnostics.LogAllocation("RecipeVM(FolderGetImage)",
                     (long)_originalMat.Width * _originalMat.Height * _originalMat.Channels(),
@@ -297,8 +305,103 @@ namespace MainAPP.ViewModels
                 ShowError($"读取图片失败: {ex.Message}");
             }
         }
-        #endregion
 
+        // ───────── 会话现场：调试图像持久化与恢复 ─────────
+
+        /// <summary>配方名清理为安全文件名片段（会话缓存文件名用）</summary>
+        private string SanitizeRecipeName() =>
+            string.Join("_", _recipe.Name.Split(Path.GetInvalidFileNameChars()));
+
+        /// <summary>
+        /// 最近一次有效调试图像的会话缓存路径。重开窗口时若会话图像已释放（ReleaseCoreResources），
+        /// 从该文件恢复现场，换班/重启后无需重新采图。保存失败仅记日志、不打扰用户。
+        /// </summary>
+        /// <returns>会话缓存文件路径；配方名为空/异常时返回 null。</returns>
+        private string? GetSessionImagePath()
+        {
+            try
+            {
+                return Path.Combine(DataPaths.RecipeSessionDir, $"{SanitizeRecipeName()}.png");
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Warning($"[配方会话] 生成会话缓存路径失败: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// 后台持久化当前调试图（克隆后写入，避免调用方立即释放 Mat 的竞态）。
+        /// 覆盖写入同一配方文件，无版本累积。失败静默（目录不可写等场景不打扰用户）。
+        /// </summary>
+        private void PersistSessionImage(Mat mat)
+        {
+            var path = GetSessionImagePath();
+            if (path is null || mat is null || mat.Empty())
+            {
+                return;
+            }
+
+            var clone = mat.Clone();
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    var dir = Path.GetDirectoryName(path);
+                    if (!string.IsNullOrEmpty(dir))
+                    {
+                        Directory.CreateDirectory(dir);
+                    }
+                    clone.SaveImage(path);
+                }
+                catch (Exception ex)
+                {
+                    LogService.Instance.Warning($"[配方会话] 保存调试图像失败: {ex.Message}");
+                }
+                finally
+                {
+                    clone.Dispose();
+                }
+            });
+        }
+
+        /// <summary>
+        /// 窗口激活时尝试恢复上次调试图像（仅当会话图像已释放时生效）。
+        /// 读取失败/文件缺失静默跳过，不打断正常激活流程。
+        /// </summary>
+        private void TryRestoreSessionImage()
+        {
+            if (_originalMat is not null && !_originalMat.Empty())
+            {
+                return;
+            }
+
+            var path = GetSessionImagePath();
+            if (path is null || !File.Exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                using var gray = Cv2.ImRead(path, ImreadModes.Grayscale);
+                if (gray is null || gray.Empty())
+                {
+                    return;
+                }
+
+                _originalMat?.Dispose();
+                _originalMat = gray.Clone();
+                using var colorMat = gray.CvtColor(ColorConversionCodes.GRAY2BGR);
+                UpdateImageForShow(colorMat.ToBitmapSource());
+                LogService.Instance.Info($"[配方会话] 已恢复上次调试图像: {path}");
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Warning($"[配方会话] 恢复调试图像失败: {ex.Message}");
+            }
+        }
+        #endregion 获取图像
         #region 保存当前显示的图像
         /// <summary>
         /// 保存当前显示的图像

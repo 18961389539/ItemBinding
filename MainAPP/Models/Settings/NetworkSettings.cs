@@ -31,6 +31,15 @@ namespace MainAPP.Models
         public string MessageReceiver { get; set; } = "LL";
 
         /// <summary>
+        /// 无编码器模式（默认关）。
+        /// 仅用于产线无编码器/静态线形态：开启后跳过编码器绑定与新鲜度校验，帧照常
+        /// 推理/显示/落库/发送，Encode 恒为 0、X/Y 按「拍照时刻」直发。
+        /// ⚠️ 机械手侧若使用编码器做抓取外推，Encode=0 无锚点会按错误位置动作——
+        /// 启用前必须与机械手/VGT 侧确认协议语义（关闭外推，或抓取前输送线停住）。
+        /// </summary>
+        public bool EncoderlessMode { get; set; } = false;
+
+        /// <summary>
         /// 最大重试次数
         /// </summary>
         public int MaxRetries { get; set; } = 5;

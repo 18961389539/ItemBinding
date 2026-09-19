@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Extensions;
 using HikScanner;
 using HikScannerType = HikScanner.HikScanner;
@@ -44,10 +44,14 @@ namespace MainAPP.ViewModels
     {
         private readonly object _imageLock = new();
         private ImageSource? _imageForShow;
-        /// <summary>
-        /// 复用的 WriteableBitmap，避免每帧 new 导致 LOH 碎片。
-        /// </summary>
-        private WriteableBitmap? _reusableShowBitmap;
+        // 2026-09-20: 双缓冲替代单缓冲。WPF DependencyProperty 对"同一引用"重新赋值不触发
+        // OnImageSourceChanged，而 ImageViewer 会把源克隆为冻结快照——单缓冲每帧赋同一实例，
+        // DP 短路导致画面永远停在第一帧（文件照常保存，UI 不刷新）。双 buffer 轮流写/轮流赋值，
+        // 引用必然不同，强制每帧触发回调查看新快照；同时保留"尺寸匹配即复用"避免每帧 new 大位图的 LOH 碎片。
+        private readonly WriteableBitmap?[] _reusableShowBitmaps = new WriteableBitmap?[2];
+        private int _showBitmapIndex;
+        /// <summary>取当前显示用的复用位图（双缓冲交替，跨帧引用不同以便 DP 回调触发）。</summary>
+        private WriteableBitmap? GetNextShowBitmap(WriteableBitmap? updated) => _reusableShowBitmaps[_showBitmapIndex] = updated;
         public ImageSource? ImageForShow
         {
             get { return _imageForShow; }

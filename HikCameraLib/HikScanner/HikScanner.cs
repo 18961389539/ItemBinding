@@ -34,6 +34,13 @@ namespace HikScanner
 
         // SDK 回调委托引用（防止 GC 回收）
         private MvCodeReader.cbOutputEx2delegate _imageCallback;
+        // 2026-09-18: 软件对时——硬触发回调同时观测设备时钟(nTriggerTimeHigh/Low, μs)与主机时钟
+        // (nHostTimeStamp, FILETIME)，偏移 = 主机ms − 设备ms；每个硬触发刷新一次。
+        // 换算公式：PC墙钟ms = 设备tick/1000 + 偏移。与设备 epoch 无关（偏移由同一事件对得出）。
+        private MvCodeReader.cbTriggerdelegate _triggerCallback = null;
+        private readonly object _clockOffsetLock = new object();
+        private double _clockOffsetMs;
+        private bool _hasClockOffset;
         private MvCodeReader.cbExceptiondelegate _exceptionCallback;
         internal MvCodeReader.cbMSCOutputdelegate _mscCallback0;
         internal MvCodeReader.cbMSCOutputdelegate _mscCallback1;
@@ -474,6 +481,7 @@ namespace HikScanner
             {
                 if (!_isConnected) throw new InvalidOperationException("设备未连接");
                 if (_isGrabbing) throw new InvalidOperationException("设备已在采集状态，请先调用 StopGrabbing");
+                EnsureTriggerCallbackRegistered();
                 int nRet = _device.MV_CODEREADER_StartGrabbing_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK) throw new HikScannerException("开始采集失败", nRet);
                 _isGrabbing = true;
@@ -634,6 +642,7 @@ namespace HikScanner
                 // #7: 统一行为：已在采集时抛异常，与 StartGrabbing 一致
                 if (_isGrabbing) throw new InvalidOperationException("设备已在采集状态，请先调用 StopGrabbing");
                 // #2: 检查 StartGrabbing 返回值
+                EnsureTriggerCallbackRegistered();
                 int nRet = _device.MV_CODEREADER_StartGrabbing_NET();
                 if (nRet != MvCodeReader.MV_CODEREADER_OK) throw new HikScannerException("开始采集失败", nRet);
                 _isGrabbing = true;
@@ -720,6 +729,8 @@ namespace HikScanner
                 _imageCallback = new MvCodeReader.cbOutputEx2delegate(OnImageCallback);
                 // #7: 检查 _imageCallback null，防止注册 null 回调
                 if (_imageCallback == null) throw new InvalidOperationException("图像回调委托创建失败");
+                // 2026-09-18: 软件对时——硬触发回调注册（幂等，失败仅告警不影响取流）
+                EnsureTriggerCallbackRegistered();
                 int nRet = _device.MV_CODEREADER_RegisterImageCallBackEx2_NET(_imageCallback, IntPtr.Zero);
                 // #2: 回调注册失败时清理回调委托
                 if (nRet != MvCodeReader.MV_CODEREADER_OK)
@@ -778,6 +789,78 @@ namespace HikScanner
             }
         }
 
+        /// <summary>
+        /// 2026-09-18: 注册硬触发回调（软件对时数据源）。幂等；注册失败仅告警，不影响取流。
+        /// 触发回调注册走 SDK 原生实例（经 CodeReaderSdkAdapter.Inner），接口抽象未包含此事件。
+        /// </summary>
+        private void EnsureTriggerCallbackRegistered()
+        {
+            if (_triggerCallback != null) return;
+            try
+            {
+                var inner = (_device as CodeReaderSdkAdapter)?.Inner;
+                if (inner == null)
+                {
+                    Log(LogLevel.Warning, "注册硬触发回调失败：当前 SDK 适配器不支持触发回调（软件对时不可用）");
+                    return;
+                }
+                _triggerCallback = OnHardwareTriggerCallback;
+                var ret = inner.MV_CODEREADER_RegisterTriggerCallBack_NET(_triggerCallback, IntPtr.Zero);
+                if (ret != MvCodeReader.MV_CODEREADER_OK)
+                {
+                    _triggerCallback = null;
+                    Log(LogLevel.Warning, $"注册硬触发回调失败（软件对时不可用），错误码: 0x{ret:X8}");
+                    return;
+                }
+                GC.KeepAlive(_triggerCallback);
+                Log(LogLevel.Information, "硬触发回调已注册：软件对时偏移将随每次硬触发自动刷新");
+            }
+            catch (Exception ex)
+            {
+                _triggerCallback = null;
+                Log(LogLevel.Warning, $"注册硬触发回调异常（软件对时不可用）: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 2026-09-18: 硬触发回调——软件对时数据源。同一触发事件 SDK 同时给出设备时钟
+        /// (nTriggerTimeHigh/Low，μs) 与主机时钟 (nHostTimeStamp，FILETIME)，
+        /// 偏移 = 主机ms − 设备ms；每个硬触发刷新一次（晶体漂移随刷新自动消除）。
+        /// </summary>
+        private void OnHardwareTriggerCallback(IntPtr pstTriggerInfo, IntPtr pUser)
+        {
+            if (_disposed || pstTriggerInfo == IntPtr.Zero) return;
+            try
+            {
+                var stTriggerInfo = (MvCodeReader.MV_CODEREADER_TRIGGER_INFO_DATA)Marshal.PtrToStructure(
+                    pstTriggerInfo, typeof(MvCodeReader.MV_CODEREADER_TRIGGER_INFO_DATA));
+                if (stTriggerInfo.nTriggerFlag != 1) return; // 只取触发开始沿
+
+                var hostTime = DateTime.FromFileTime(stTriggerInfo.nHostTimeStamp);
+                // 2026-09-18 FIX: 主机侧统一到「Unix 毫秒」（1970 起算）——与 FormatDeviceTimestamp 的
+                // FromUnixTimeMilliseconds 基准一致。此前用 DateTime.Ticks（公元 1 年起算），会差出
+                // 约 1970 年的常数，导致偏移生效后 dev-ts 换算出未来年份的错误墙钟。
+                double hostMs = (hostTime.ToUniversalTime() - DateTimeOffset.UnixEpoch).TotalMilliseconds;
+                double devMs = (((ulong)stTriggerInfo.nTriggerTimeHigh << 32) | stTriggerInfo.nTriggerTimeLow) / 1000.0;
+                double offsetMs = hostMs - devMs;
+                bool firstLog;
+                lock (_clockOffsetLock)
+                {
+                    firstLog = !_hasClockOffset;
+                    _clockOffsetMs = offsetMs;
+                    _hasClockOffset = true;
+                }
+                if (firstLog)
+                {
+                    Log(LogLevel.Information, $"[对时] 软件对时生效：设备时钟→PC 偏移 {offsetMs:F1}ms（随每次硬触发自动刷新）");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.Error, "[OnHardwareTriggerCallback] 解析异常", ex);
+            }
+        }
+
         #endregion
 
         #region 参数读写
@@ -816,6 +899,42 @@ namespace HikScanner
         /// <param name="key">参数名</param>
         /// <returns>当前参数值</returns>
         public string GetStringParam(string key) { EnsureConnected(); var p = new MvCodeReader.MV_CODEREADER_STRINGVALUE(); HikScannerException.Check(_device.MV_CODEREADER_GetStringValue_NET(key, ref p), $"获取 {key}"); return p.chCurValue.TrimEnd('\0'); }
+
+        // 2026-09-18: 设备墙钟缓存（DeviceTime 参数，秒级精度；5s 缓存避免每帧 SDK 调用）
+        private readonly object _deviceTimeLock = new object();
+        private string _cachedDeviceTime = string.Empty;
+        private DateTime _deviceTimeReadAt = DateTime.MinValue;
+
+        /// <summary>
+        /// 2026-09-18: 读取设备墙钟（DeviceTime 参数，秒级精度，5s 缓存）。
+        /// 探针实测：MV-ID6200M 固件 V3.2.6.R 的 DeviceTime 与 PC 时间已对齐（秒级）。
+        /// 设备未连接/参数不可用时返回最近缓存或空串，不抛异常。
+        /// </summary>
+        public string GetCachedDeviceTime()
+        {
+            lock (_deviceTimeLock)
+            {
+                if ((DateTime.Now - _deviceTimeReadAt).TotalSeconds < 5)
+                {
+                    return _cachedDeviceTime;
+                }
+            }
+            try
+            {
+                var value = GetStringParam("DeviceTime");
+                lock (_deviceTimeLock)
+                {
+                    _cachedDeviceTime = value ?? string.Empty;
+                    _deviceTimeReadAt = DateTime.Now;
+                }
+                return _cachedDeviceTime;
+            }
+            catch
+            {
+                lock (_deviceTimeLock) { _deviceTimeReadAt = DateTime.Now; }
+                return _cachedDeviceTime;
+            }
+        }
         /// <summary>设置字符串参数值</summary>
         /// <param name="key">参数名</param>
         /// <param name="value">参数值</param>
@@ -1045,6 +1164,13 @@ namespace HikScanner
             };
             result.IsGetCode = stFrameInfo.bIsGetCode;
             result.Status = HikGrabStatus.Success;
+            // 2026-09-18: 帧级设备时间戳（设备时钟原始 tick，未对时），供时间链日志/审计使用
+            result.DeviceTimeStampTick = ((ulong)stFrameInfo.nTimeStampHigh << 32) | stFrameInfo.nTimeStampLow;
+            // 2026-09-18: 软件对时偏移快照（最近一次硬触发观测，null=尚无硬触发/对时不可用）
+            lock (_clockOffsetLock)
+            {
+                result.ClockOffsetMs = _hasClockOffset ? _clockOffsetMs : (double?)null;
+            }
 
             // 条码解析
             try
@@ -1180,7 +1306,17 @@ namespace HikScanner
             for (int i = 0; i < count; i++)
             {
                 var info = bcr.stBcrInfoEx2[i];
-                result.Barcodes.Add(ParseBcrInfo(info.chCode, (int)info.nBarType, (int)info.nID, (short)info.nAngle, (short)info.sPPM, (short)info.sAlgoCost, (short)info.sSharpness, (int)info.nTotalProcCost, info.stCodeQuality.nOverQuality, (int)info.nIDRScore, new PointF[4] { new(info.pt[0].x, info.pt[0].y), new(info.pt[1].x, info.pt[1].y), new(info.pt[2].x, info.pt[2].y), new(info.pt[3].x, info.pt[3].y) }));
+                // 2026-09-18: 解码设备端触发时刻——TvLow=Unix 秒，UtvLow=亚秒（按微秒假设 /1000 取毫秒，
+                // 海康未明示单位，如亚秒偏移异常可在此调整）。解码失败置 null，不影响主流程。
+                DateTime? deviceTriggerTime = null;
+                try
+                {
+                    var utc = DateTimeOffset.FromUnixTimeSeconds(info.nTriggerTimeTvLow);
+                    deviceTriggerTime = utc.LocalDateTime.AddMilliseconds(info.nTriggerTimeUtvLow / 1000.0);
+                }
+                catch (Exception ex) { Log(LogLevel.Warning, $"[ParseBcrListEx2] 设备触发时刻解码失败: {ex.Message}"); }
+
+                result.Barcodes.Add(ParseBcrInfo(info.chCode, (int)info.nBarType, (int)info.nID, (short)info.nAngle, (short)info.sPPM, (short)info.sAlgoCost, (short)info.sSharpness, (int)info.nTotalProcCost, info.stCodeQuality.nOverQuality, (int)info.nIDRScore, new PointF[4] { new(info.pt[0].x, info.pt[0].y), new(info.pt[1].x, info.pt[1].y), new(info.pt[2].x, info.pt[2].y), new(info.pt[3].x, info.pt[3].y) }, deviceTriggerTime));
             }
         }
 
@@ -1196,8 +1332,8 @@ namespace HikScanner
             }
         }
 
-        /// <summary>#10: 解析条码信息（参数精简，4 顶点合并为 PointF[]）</summary>
-        private static HikBarcodeResult ParseBcrInfo(byte[] code, int barType, int id, short angle, short ppm, short algoCost, short sharpness, int totalCost, int overQuality, int idrScore, PointF[] boundingPoints)
+        /// <summary>#10: 解析条码信息（参数精简，4 顶点合并为 PointF[]）。2026-09-18: 增加设备端触发时刻与估算触发时刻。</summary>
+        private static HikBarcodeResult ParseBcrInfo(byte[] code, int barType, int id, short angle, short ppm, short algoCost, short sharpness, int totalCost, int overQuality, int idrScore, PointF[] boundingPoints, DateTime? deviceTriggerTime = null)
         {
             return new HikBarcodeResult
             {
@@ -1212,7 +1348,9 @@ namespace HikScanner
                 TotalProcCost = totalCost,
                 OverQuality = overQuality,
                 IDRScore = idrScore,
-                BoundingPoints = boundingPoints ?? Array.Empty<PointF>()
+                BoundingPoints = boundingPoints ?? Array.Empty<PointF>(),
+                DeviceTriggerTime = deviceTriggerTime,
+                TriggerTime = DateTime.Now - TimeSpan.FromMilliseconds(totalCost)
             };
         }
 

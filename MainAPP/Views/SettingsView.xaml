@@ -404,6 +404,19 @@
                                          ToolTip="发送检测结果 UDP 报文的目标端口（1-65535）" />
                             </Grid>
 
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="LabelCol" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Style="{StaticResource TechMetricLabel}" Margin="5" Text="无编码器模式:" />
+                                <CheckBox Grid.Column="1" Margin="5" VerticalAlignment="Center"
+                                          IsChecked="{Binding EncoderlessMode}"
+                                          ToolTip="无编码器产线/静态线形态：跳过编码器绑定与新鲜度校验，Encode 恒为 0、X/Y 按拍照时刻直发。&#x0a;⚠️ 机械手侧若使用编码器外推，Encode=0 无锚点会按错误位置动作——启用前必须与机械手/VGT 侧确认协议语义！" />
+                            </Grid>
+
                             <!--  测试连接：按钮 + 状态合并区（深色卡片，状态色边框绑定不变）  -->
                             <Border
                                 Margin="5,15,5,0"

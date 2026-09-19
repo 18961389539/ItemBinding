@@ -28,6 +28,17 @@ internal static class OpenVinoSessionConfigurator
     /// </summary>
     public static void Apply(SessionOptions sessionOptions, OpenVinoOptions options)
     {
+        // 2026-09-17: 显式 OpenVINO 路径先查探测缓存。ORT native 不含 OpenVINO EP 的构建
+        // （Microsoft.ML.OnnxRuntime.Gpu 等官方包不带 --use_openvino）在 Append 时会抛
+        // OnnxRuntimeException(InvalidArgument: "OpenVINO execution provider is not supported in this build")，
+        // 此前该异常穿透 TryInvoke 的过滤直接炸到调用方（TargetInvocationException 包裹，Message 不可读）。
+        // 现在：探测缓存命中后直接抛干净的 NotSupportedException——回退链日志显示可读原因，
+        // 且 OpenVINO-GPU 失败后，下一级 OpenVINO-CPU 靠缓存秒级短路，不再重复六次反射尝试。
+        if (!IsAvailable())
+        {
+            throw new NotSupportedException("OpenVINO execution provider is not available. Ensure the current build references Intel.ML.OnnxRuntime.OpenVino and that the OpenVINO runtime can be resolved at runtime.");
+        }
+
         var providerOptions = options.CreateProviderOptions();
 
         if (TryInvoke(sessionOptions, "AppendExecutionProvider", "OpenVINO", providerOptions)
@@ -82,7 +93,10 @@ internal static class OpenVinoSessionConfigurator
                 method.Invoke(target, arguments);
                 return true;
             }
-            catch (TargetInvocationException ex) when (ex.InnerException is EntryPointNotFoundException or DllNotFoundException or NotSupportedException)
+            // 2026-09-17: 补 OnnxRuntimeException——无 OpenVINO EP 的 ORT 构建在 Append 时抛
+            // OnnxRuntimeException(InvalidArgument) 而非 NotSupportedException，此前穿透过滤器
+            // 导致异常带着反射包装炸到回退链上层。视为"该签名/该构建不可用"，继续尝试其它签名。
+            catch (TargetInvocationException ex) when (ex.InnerException is EntryPointNotFoundException or DllNotFoundException or NotSupportedException or OnnxRuntimeException)
             {
                 // 忽略由本机绑定失败导致的异常，继续尝试其它签名
                 continue;

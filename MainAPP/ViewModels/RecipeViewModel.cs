@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using CoordinateSystemMapping;
 using Extensions;
 using HikScanner;
+using ImageViewer.Models;
 using JinlongYolo.YoloSharp;
 using JinlongYolo.YoloSharp.Data;
 using JinlongYolo.YoloSharp.Extensions;
@@ -287,6 +288,7 @@ namespace MainAPP.ViewModels
                 {
                     _recipe.GrabOffsetLongMm = v;
                     OnPropertyChanged();
+                    SyncGrabRoiPosition();
                 }
             }
         }
@@ -305,6 +307,7 @@ namespace MainAPP.ViewModels
                 {
                     _recipe.GrabOffsetShortMm = v;
                     OnPropertyChanged();
+                    SyncGrabRoiPosition();
                 }
             }
         }
@@ -325,15 +328,159 @@ namespace MainAPP.ViewModels
 
         private GrabTeachGeometry? _grabTeachGeometry;
 
+        /// <summary>
+        /// 最近一次扫码枪取帧的条码中心（原图坐标，与 _originalMat 同坐标系）。
+        /// 测试推理复用它参与头尾判向（与生产 BuildAndSaveAsync 同口径），文件夹取图为 null。
+        /// 测试推理=加载同一帧自发判向，避免"示教按无码判、生产按有码判"导致抓取点偏差。
+        /// </summary>
+        private System.Drawing.Point[]? _lastBarcodeCenters;
+
+        /// <summary>
+        /// 示教基图：最近一次测试推理的可视化图（原图尺寸、无抓取点标记）；
+        /// 示教点击后在其克隆上叠加新标记刷新显示，随会话释放。
+        /// </summary>
+        private Mat? _teachBaseMat;
+
         /// <summary>画面示教开关：勾选后点击测试推理图像，会把点击处设为抓取点。</summary>
-        public bool IsGrabTeachMode { get; set; }
+        [ObservableProperty]
+        private bool _isGrabTeachMode;
+
+        /// <summary>
+        /// 2026-09-19: 示教十字准星 ROI——在图像上显示当前抓取点并可拖动微调。
+        /// 由 ImageViewer 控件承载（ViewerState.AddRoi）；拖动 → Position 变化 →
+        /// <see cref="OnGrabRoiPositionChanged"/> 反算长/短轴偏移写回配方。
+        /// 退出示教/会话清理时移除（走 ReleaseCoreResources）。
+        /// </summary>
+        private GrabPointRoi? _grabRoi;
+
+        /// <summary>
+        /// 偏移 → 十字位置同步时的抑制位：数值框修改触发 SyncGrabRoiPosition 更新 ROI，
+        /// 若此时 ROI.PropertyChanged 再回调 OnGrabRoiPositionChanged 会递归重算，故置位跳过。
+        /// </summary>
+        private bool _syncingGrabRoiPosition;
 
         /// <summary>是否具备示教条件（已做过一次带有效掩码的测试推理）。</summary>
         public bool CanTeachGrabPoint => _grabTeachGeometry is not null;
 
+        /// <summary>示教模式下当前抓取点图像位置（供创建 ROI 初始位置；无快照时为空点）。</summary>
+        private (double X, double Y)? ResolveCurrentGrabPointImage()
+        {
+            if (_grabTeachGeometry is not { } g)
+            {
+                return null;
+            }
+
+            var transformer = g.Transformer ?? new CoordinateTransformer();
+            var (px, py) = GrabPointCalculator.ResolveOriginalImagePoint(
+                transformer,
+                g.CenterOriginalX, g.CenterOriginalY,
+                g.RectAngleDeg,
+                g.IsResize, g.ResizeScaleX, g.ResizeScaleY,
+                g.HeadFlipped,
+                GrabOffsetLongMm, GrabOffsetShortMm);
+            return (px, py);
+        }
+
+        /// <summary>创建示教十字 ROI 并加入 ImageViewer（需已具备几何快照）。</summary>
+        private void AttachGrabRoi()
+        {
+            if (_grabRoi is not null || _grabTeachGeometry is not { } g || ImageForShow is null)
+            {
+                return;
+            }
+
+            try
+            {
+                var pos = ResolveCurrentGrabPointImage() ?? (g.CenterOriginalX, g.CenterOriginalY);
+                _grabRoi = new GrabPointRoi
+                {
+                    Position = new System.Windows.Point(pos.X, pos.Y),
+                    StrokeColor = System.Windows.Media.Colors.Magenta,
+                    StrokeThickness = 1.2,
+                    Label = string.Empty
+                };
+                _grabRoi.PropertyChanged += OnGrabRoiPositionChanged;
+                if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+                {
+                    RecipeWindowGrabRoiHost.Attach(_grabRoi);
+                }
+                else
+                {
+                    _ = System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => RecipeWindowGrabRoiHost.Attach(_grabRoi));
+                }
+            }
+            catch (Exception ex)
+            {
+                LogService.Instance.Warning($"示教十字 ROI 创建失败: {ex.Message}");
+                DetachGrabRoi();
+            }
+        }
+
+        /// <summary>从 ImageViewer 移除示教十字 ROI 并解绑事件。</summary>
+        private void DetachGrabRoi()
+        {
+            if (_grabRoi is { } roi)
+            {
+                roi.PropertyChanged -= OnGrabRoiPositionChanged;
+                if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true)
+                {
+                    RecipeWindowGrabRoiHost.Detach(roi);
+                }
+                else
+                {
+                    _ = System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => RecipeWindowGrabRoiHost.Detach(roi));
+                }
+            }
+            _grabRoi = null;
+        }
+
+        /// <summary>ROI 位置被用户拖动后回调：反算长/短轴偏移写回配方（滚动由 SetGrabPoint 统一处理）。</summary>
+        private void OnGrabRoiPositionChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName != nameof(GrabPointRoi.Position) || _syncingGrabRoiPosition || _grabRoi is not { } roi)
+            {
+                return;
+            }
+            _syncingGrabRoiPosition = true;
+            try
+            {
+                SetGrabPointByImagePosition(roi.Position.X, roi.Position.Y);
+            }
+            finally
+            {
+                _syncingGrabRoiPosition = false;
+            }
+        }
+
         /// <summary>
-        /// 画面示教：把图像坐标系上的示教点反算为长/短轴偏移并写入配方。
-        /// 需先执行过一次测试推理（否则无从知道矩形几何），且朝向须可信。
+        /// 数值框修改/推理完成时，把当前偏移对应的抓取点位置同步到十字 ROI
+        /// （抑制 Position 回调避免递归）。
+        /// </summary>
+        private void SyncGrabRoiPosition()
+        {
+            if (_grabRoi is null)
+            {
+                return;
+            }
+            var pos = ResolveCurrentGrabPointImage();
+            if (pos is null)
+            {
+                return;
+            }
+            _syncingGrabRoiPosition = true;
+            try
+            {
+                _grabRoi.Position = new System.Windows.Point(pos.Value.X, pos.Value.Y);
+            }
+            finally
+            {
+                _syncingGrabRoiPosition = false;
+            }
+        }
+
+        /// <summary>
+        /// 画面示教：把图像坐标系上的示教点反算为长/短轴偏移并写入配方；
+        /// 无几何快照或朝向不可信时忽略并提示。
         /// </summary>
         public void SetGrabPointByImagePosition(double imageX, double imageY)
         {
@@ -362,6 +509,89 @@ namespace MainAPP.ViewModels
 
             GrabOffsetLongMm = (float)longMm;
             GrabOffsetShortMm = (float)shortMm;
+
+            // 2026-09-19: 十字 ROI 模式下其 Position 已经过回调反算（无需位图重绘）；
+            // 位图标记仅在不加载十字 ROI 的旧路径（直接数值微调）时冗余刷新，此处统一跳过——
+            // 拖动十字时若强行重绘位图会把 ROI 所依赖的 ImageForShow 替换掉，造成抖动。ROI 自绘标记。
+        }
+
+        /// <summary>
+        /// 一键示教抓取点：无几何快照时先自动执行一次测试推理，成功且朝向可信后进入示教模式；
+        /// 已在示教中则退出。配套 UI 高亮与提示条见 RecipeWindow.xaml。
+        /// </summary>
+        [RelayCommand]
+        private async Task TeachGrabPointAsync()
+        {
+            if (IsGrabTeachMode)
+            {
+                IsGrabTeachMode = false;
+                DetachGrabRoi();
+                // 退出示教后恢复位图抓取点标记（非示教模式仍展示当前抓取点位置）
+                RedrawGrabMarkerOnTeachBase();
+                return;
+            }
+
+            // 无几何快照（本会话首次）：先自动执行一次测试推理建立矩形几何
+            if (_grabTeachGeometry is null)
+            {
+                await Inference().ConfigureAwait(true);
+            }
+
+            if (_grabTeachGeometry is not { HeadTrusted: true })
+            {
+                ShowWarning("暂无法示教：需先成功完成一次测试推理，且产品头尾朝向可信（原因见推理结果备注/日志）。");
+                return;
+            }
+
+            IsGrabTeachMode = true;
+            AttachGrabRoi();
+            ShowInfo("示教模式已开启：拖动十字准星到抓取点位置（或单击图像校准），完成后点「退出示教」。");
+        }
+
+        /// <summary>在示教基图克隆上叠加当前抓取点标记并刷新显示；无基图/几何快照时静默跳过。</summary>
+        private void RedrawGrabMarkerOnTeachBase()
+        {
+            if (_grabTeachGeometry is not { } g || _teachBaseMat is not { } baseMat || baseMat.Empty())
+            {
+                return;
+            }
+
+            try
+            {
+                var transformer = g.Transformer ?? new CoordinateTransformer();
+                var (px, py) = GrabPointCalculator.ResolveOriginalImagePoint(
+                    transformer,
+                    g.CenterOriginalX, g.CenterOriginalY,
+                    g.RectAngleDeg,
+                    g.IsResize, g.ResizeScaleX, g.ResizeScaleY,
+                    g.HeadFlipped,
+                    GrabOffsetLongMm, GrabOffsetShortMm);
+
+                // Clone 后绘制再提交，基图保持干净可复用
+                using var marked = baseMat.Clone();
+                DrawGrabMarker(marked, px, py, suppressed: false);
+                UpdateImageForShow(marked.ToBitmapSource());
+            }
+            catch (Exception ex)
+            {
+                // ObjectDisposedException 防御：示教点击恰逢推理线程替换/释放基图的窄窗口
+                LogService.Instance.Warning($"示教标记重绘失败（基图已失效）: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// 抓取点标记：十字线 + 空心方框，洋红（与主界面生产标记同色）；suppressed 时灰色。
+        /// 坐标为原图像素（与示教基图同尺寸）。
+        /// </summary>
+        private static void DrawGrabMarker(Mat mat, double x, double y, bool suppressed)
+        {
+            var color = suppressed ? new Scalar(128, 128, 128) : new Scalar(255, 0, 255);
+            var ix = (int)Math.Round(x);
+            var iy = (int)Math.Round(y);
+            var center = new Point(ix, iy);
+            Cv2.Line(mat, new Point(ix - 9, iy), new Point(ix + 9, iy), color, 2, LineTypes.AntiAlias);
+            Cv2.Line(mat, new Point(ix, iy - 9), new Point(ix, iy + 9), color, 2, LineTypes.AntiAlias);
+            Cv2.Rectangle(mat, center - new Point(5, 5), center + new Point(5, 5), color, 2, LineTypes.AntiAlias);
         }
 
         public Recipe Recipe => _recipe;
@@ -483,6 +713,8 @@ namespace MainAPP.ViewModels
             _recipe = model ?? throw new ArgumentNullException(nameof(model));
             // 初始化取图可用性（ImageTool 默认可能是文件夹模式且目录已配置）
             RefreshCaptureAvailability();
+            // 初始化保存快照：脏判断以此为准（新实例来自磁盘或新建，两者均代表“已保存态”）
+            _savedSnapshotJson = SnapshotRecipeJson();
         }
 
         /// <summary>
@@ -508,6 +740,10 @@ namespace MainAPP.ViewModels
             {
                 LogService.Instance.Warning($"切换软触发失败: {ex.Message}");
             }
+
+            // 窗口打开期间启动状态周期刷新（脏标记/健康度/保存时间），并尝试恢复上次调试图像
+            StartStatusTimer();
+            TryRestoreSessionImage();
         }
 
         /// <summary>
@@ -556,6 +792,7 @@ namespace MainAPP.ViewModels
             }
 
             await DeactivateAsync().ConfigureAwait(false);
+            StopStatusTimer();
             StopAuxiliaryTasks();
             ReleaseCoreResources();
         }
@@ -608,6 +845,20 @@ namespace MainAPP.ViewModels
                 try { imgDisposable.Dispose(); } catch { /* 尽力清理 */ }
             }
             _imageForShow = null;
+
+            // 画面示教会话状态重置——窗口重开不残留示教模式；几何快照与基图随会话失效
+            IsGrabTeachMode = false;
+            DetachGrabRoi();
+            if (_teachBaseMat is not null)
+            {
+                _teachBaseMat.Dispose();
+                _teachBaseMat = null;
+            }
+            _grabTeachGeometry = null;
+            OnPropertyChanged(nameof(CanTeachGrabPoint));
+
+            // 会话清理时同时丢弃最近帧条码缓存，避免与下一会话的 _originalMat 错配
+            _lastBarcodeCenters = null;
 
             _edgeModelPool?.Dispose();
             _edgeModelPool = null;
@@ -694,6 +945,9 @@ namespace MainAPP.ViewModels
 
                 YoloTool.EdgeDetection.ModelPath = dialog.FileName;
                 OnPropertyChanged(nameof(YoloTool));
+                OnPropertyChanged(nameof(EdgeModelPath));
+                OnPropertyChanged(nameof(EdgeModelPathExists));
+                RefreshHealth();
             }
         }
 
@@ -724,6 +978,9 @@ namespace MainAPP.ViewModels
 
                 YoloTool.AngleDetection.ModelPath = dialog.FileName;
                 OnPropertyChanged(nameof(YoloTool));
+                OnPropertyChanged(nameof(AngleModelPath));
+                OnPropertyChanged(nameof(AngleModelPathExists));
+                RefreshHealth();
             }
         }
 
@@ -737,6 +994,7 @@ namespace MainAPP.ViewModels
         private void SaveToFile()
         {
             RecipesManage.Instance.SaveRecipe(_recipe);
+            MarkSaved();
             ShowInfo("保存成功");
         }
 
@@ -771,6 +1029,7 @@ namespace MainAPP.ViewModels
         public void SaveSilently()
         {
             RecipesManage.Instance.SaveRecipe(_recipe);
+            MarkSaved();
         }
 
         /// <summary>
@@ -813,6 +1072,7 @@ namespace MainAPP.ViewModels
                 // 触发切换：正常关闭路径已由 DeactivateAndClearSessionAsync 中的 DeactivateAsync 完成；
                 // 若直接 Dispose（删除配方/列表卸载/退出），fire-and-forget 恢复硬触发
                 _ = DeactivateAsync();
+                StopStatusTimer();
 
                 // 1) 停止实时显示与参数优化（二者不使用推理预测池，可先行清理）
                 StopAuxiliaryTasks();

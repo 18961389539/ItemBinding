@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using CoordinateSystemMapping;
 using Extensions;
@@ -42,6 +42,15 @@ namespace MainAPP.ViewModels
 #pragma warning disable VSTHRD103
             _liveDisplayCts?.Cancel();
 #pragma warning restore VSTHRD103
+
+            // 与测试推理互斥：推理正占用软触发取帧通道，此时开启实时显示会互相抢帧
+            if (_inferenceTask is { IsCompleted: false })
+            {
+                SetProperty(ref _isLiveDisplayEnabled, false);
+                ShowWarning("推理进行中，请等待推理结束再开启实时显示。");
+                return;
+            }
+
             _liveDisplayCts = new CancellationTokenSource();
             var token = _liveDisplayCts.Token;
             // M67: 捕获 token 后使用前检查是否已取消（StopLiveDisplay 可能在 await 期间被调用）
@@ -224,6 +233,63 @@ namespace MainAPP.ViewModels
                 Cv2.Circle(mat, new OpenCvSharp.Point((int)circle.X, (int)circle.Y), 10, Scalar.Gray, 2);
             }
             coordinateSystem.DrawOnMat(mat);
+        }
+        #endregion
+        #region 标定量化验证
+        /// <summary>
+        /// 标定结果数值汇总文本（三点像素坐标 + X/Y 方向每格像素当量），供「坐标系创建」页展示。
+        /// 未标定时显示引导文案；由状态周期刷新与标定完成路径共同更新。
+        /// </summary>
+        public string CalibrationSummaryText
+        {
+            get
+            {
+                var calib = CoordinateTool;
+                if (calib is null || !IsCalibrated)
+                {
+                    return "尚未完成标定 — 先采图并执行「查找基准点」。";
+                }
+
+                double pixelDistX = Math.Sqrt(Math.Pow(calib.XPoint.X - calib.Origin.X, 2) + Math.Pow(calib.XPoint.Y - calib.Origin.Y, 2));
+                double pixelDistY = Math.Sqrt(Math.Pow(calib.YPoint.X - calib.Origin.X, 2) + Math.Pow(calib.YPoint.Y - calib.Origin.Y, 2));
+
+                return $"原点: ({calib.Origin.X:F1}, {calib.Origin.Y:F1}) px\n"
+                     + $"X轴点: ({calib.XPoint.X:F1}, {calib.XPoint.Y:F1}) px\n"
+                     + $"Y轴点: ({calib.YPoint.X:F1}, {calib.YPoint.Y:F1}) px\n"
+                     + $"方格尺寸: {calib.SquareSize:F2} mm/格\n"
+                     + $"X方向每格: {pixelDistX / 2d:F2} px（= {calib.SquareSize} mm）\n"
+                     + $"Y方向每格: {pixelDistY:F2} px（= {calib.SquareSize} mm）";
+            }
+        }
+
+        /// <summary>
+        /// 在当前图像上叠加标定三点标记（洋红=原点/青=X轴/橙=Y轴）并刷新显示。
+        /// 纯显示辅助，不修改配方数据；无图或无标定时提示。
+        /// </summary>
+        [RelayCommand]
+        private void OverlayCalibrationPoints()
+        {
+            if (CoordinateTool is null)
+            {
+                ShowWarning("坐标工具未初始化");
+                return;
+            }
+            if (_originalMat is null || _originalMat.Empty())
+            {
+                ShowWarning("尚未获取图像");
+                return;
+            }
+
+            using var colorMat = _originalMat.Channels() == 1
+                ? _originalMat.CvtColor(ColorConversionCodes.GRAY2BGR)
+                : _originalMat.Clone();
+
+            Cv2.Circle(colorMat, new OpenCvSharp.Point((int)CoordinateTool.Origin.X, (int)CoordinateTool.Origin.Y), 12, new Scalar(255, 0, 255), 2, LineTypes.AntiAlias);
+            Cv2.Circle(colorMat, new OpenCvSharp.Point((int)CoordinateTool.XPoint.X, (int)CoordinateTool.XPoint.Y), 12, new Scalar(255, 255, 0), 2, LineTypes.AntiAlias);
+            Cv2.Circle(colorMat, new OpenCvSharp.Point((int)CoordinateTool.YPoint.X, (int)CoordinateTool.YPoint.Y), 12, new Scalar(0, 165, 255), 2, LineTypes.AntiAlias);
+
+            UpdateImageForShow(colorMat.ToBitmapSource());
+            OnPropertyChanged(nameof(CalibrationSummaryText));
         }
         #endregion
         #endregion

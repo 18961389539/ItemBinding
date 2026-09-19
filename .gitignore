@@ -138,3 +138,7 @@ BenchmarkDotNet.Artifacts/
 
 # 2026-09-11: 发布输出目录。dll/exe 已被 *.dll 等规则忽略，但 .xml 文档文件会漏进来一并提交。
 [Pp]ublish/
+
+# 本地 IDE / 构建验证产物（不入库）
+.trae/
+obj-verify/

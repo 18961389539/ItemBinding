@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Extensions;
 using HikScanner;
 using HikScannerType = HikScanner.HikScanner;
@@ -139,6 +139,11 @@ namespace MainAPP.ViewModels
                     var maskRect = edgeResult.GetMaskMinAreaRect();
                     x.DrawPolygon(drawColor, DrawPolygonLineWidth, maskRect.Points);
 
+                    // 目标是否有效（通过边界/面积过滤 → 入 UI 列表/落库/发送）：
+                    // 越界/被过滤目标不画抓取点标记，避免"画了灰标却从未发出"的误导
+                    bool isRecorded = indexedRecords is null
+                        || (edgeIdx < indexedRecords.Count && indexedRecords[edgeIdx] is not null);
+
                     // ── 抓取点标记（2026-09-15）──
                     // 抓取点即实际发送给机器人的 X/Y。画出来现场才能核对与标定偏移量 ——
                     // 没有画面反馈时只能靠"发过去抓一下看结果"试错，效率极低。
@@ -147,7 +152,7 @@ namespace MainAPP.ViewModels
                     var grabRecipe = MainAPP.Services.RecipesManage.Instance.CurrentRecipe;
                     var grabLongMm = grabRecipe?.GrabOffsetLongMm ?? 0f;
                     var grabShortMm = grabRecipe?.GrabOffsetShortMm ?? 0f;
-                    if ((grabLongMm != 0 || grabShortMm != 0) && maskRect.MaskArea > 0)
+                    if (isRecorded && (grabLongMm != 0 || grabShortMm != 0) && maskRect.MaskArea > 0)
                     {
                         bool? flipForGrab = headFlips is not null && edgeIdx < headFlips.Count
                             ? headFlips[edgeIdx]
@@ -199,10 +204,7 @@ namespace MainAPP.ViewModels
                         }
                     }
 
-                    // 目标是否有效（通过边界/面积过滤 → 入 UI 列表/落库/发送）。仅有效目标画方向参考线，
-                    // 被过滤目标（半个产品/面积异常误检）不强调方向，避免误导现场人员。
-                    bool isRecorded = indexedRecords is null
-                        || (edgeIdx < indexedRecords.Count && indexedRecords[edgeIdx] is not null);
+                    // 仅有效目标画方向参考线，被过滤目标（半个产品/面积异常误检）不强调方向，避免误导现场人员。
 
                     // 角度模型结果绘制：产品质心 → 特征质心连线 + 两点 + 角度文本（与 edgeResults 同序）
                     AngleDrawInfo? angleInfo = angleDrawInfos is not null && edgeIdx < angleDrawInfos.Count
@@ -303,8 +305,10 @@ namespace MainAPP.ViewModels
 
             });
             timings.Split("MutateDraw");
-            _reusableShowBitmap = Tools.UpdateShow(drawImg, _reusableShowBitmap);
-            ImageForShow = _reusableShowBitmap;
+            // 双缓冲交替赋值，确保 ImageViewer 的 DP 回调每帧触发（同一 WriteableBitmap 引用会短路，画面停帧）
+            _showBitmapIndex ^= 1;
+            _reusableShowBitmaps[_showBitmapIndex] = Tools.UpdateShow(drawImg, _reusableShowBitmaps[_showBitmapIndex]);
+            ImageForShow = _reusableShowBitmaps[_showBitmapIndex];
             timings.Split("UpdateShow");
             if (Settings.Instance.IsSaveDraw && (scanerResult.HasBarcodeResults || edgeResults?.Count > 0))
             {

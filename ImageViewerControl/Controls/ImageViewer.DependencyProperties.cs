@@ -58,6 +58,38 @@ namespace ImageViewer.Controls
             DependencyProperty.Register(nameof(ShowRoiList), typeof(bool), typeof(ImageViewer),
                 new PropertyMetadata(false, OnShowRoiListChanged));
 
+        /// <summary>
+        /// 2026-09-18: 是否启用右键上下文菜单（默认 <c>true</c>，右键可用）。
+        /// 需要禁用右键菜单的宿主显式置 <c>false</c>。
+        /// </summary>
+        public static readonly DependencyProperty EnableContextMenuProperty =
+            DependencyProperty.Register(nameof(EnableContextMenu), typeof(bool), typeof(ImageViewer),
+                new PropertyMetadata(true, OnEnableContextMenuChanged));
+
+        /// <summary>
+        /// 2026-09-19: 示教选点模式——供配方页「抓取点画面示教」使用。
+        /// 开启后：左键按下不再启动画布平移（点击只取点，图像不跟随鼠标）、双击放大被禁用，
+        /// 光标显示十字准星；中键平移与滚轮缩放仍保留。宿主通过 PreviewMouseLeftButtonUp 取点。
+        /// </summary>
+        public static readonly DependencyProperty IsGrabTeachPointModeProperty =
+            DependencyProperty.Register(nameof(IsGrabTeachPointMode), typeof(bool), typeof(ImageViewer),
+                new PropertyMetadata(false));
+
+        /// <summary>示教选点模式开关（含 CLR 包装，便于 XAML 双向绑定）。</summary>
+        public bool IsGrabTeachPointMode
+        {
+            get => (bool)GetValue(IsGrabTeachPointModeProperty);
+            set => SetValue(IsGrabTeachPointModeProperty, value);
+        }
+
+        /// <summary>
+        /// 2026-09-18: 浮动工具面板（toolbarPanel，文件/视图/显示设置快捷区）是否显示。
+        /// 默认 <c>false</c>——面板不显示，由左上角 ⚙ 切换按钮按需开合；右键菜单不受影响。
+        /// </summary>
+        public static readonly DependencyProperty ShowToolbarPanelProperty =
+            DependencyProperty.Register(nameof(ShowToolbarPanel), typeof(bool), typeof(ImageViewer),
+                new PropertyMetadata(false));
+
         public static readonly DependencyProperty ShowSnapGridProperty =
             DependencyProperty.Register(nameof(ShowSnapGrid), typeof(bool), typeof(ImageViewer),
                 new PropertyMetadata(false, OnShowSnapGridChanged));
@@ -170,6 +202,20 @@ namespace ImageViewer.Controls
         {
             get => (bool)GetValue(ShowRoiListProperty);
             set => SetValue(ShowRoiListProperty, value);
+        }
+
+        /// <summary>是否启用右键上下文菜单（默认 true，右键可用）。</summary>
+        public bool EnableContextMenu
+        {
+            get => (bool)GetValue(EnableContextMenuProperty);
+            set => SetValue(EnableContextMenuProperty, value);
+        }
+
+        /// <summary>浮动工具面板是否显示（默认 false，由左上角 ⚙ 按钮切换）。</summary>
+        public bool ShowToolbarPanel
+        {
+            get => (bool)GetValue(ShowToolbarPanelProperty);
+            set => SetValue(ShowToolbarPanelProperty, value);
         }
 
         public bool ShowSnapGrid

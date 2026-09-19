@@ -75,6 +75,7 @@ namespace MainAPP.Models
         public string ConnectivityCheckIP { get => Network.ConnectivityCheckIP; set => Network.ConnectivityCheckIP = value; }
         public string DetectionResultSendIP { get => Network.DetectionResultSendIP; set => Network.DetectionResultSendIP = value; }
         public int EncoderReceiverPort { get => Network.EncoderReceiverPort; set => Network.EncoderReceiverPort = value; }
+        public bool EncoderlessMode { get => Network.EncoderlessMode; set => Network.EncoderlessMode = value; }
         public int DetectionResultSendPort { get => Network.DetectionResultSendPort; set => Network.DetectionResultSendPort = value; }
         public string MessageReceiver { get => Network.MessageReceiver; set => Network.MessageReceiver = value; }
         public int MaxRetries { get => Network.MaxRetries; set => Network.MaxRetries = value; }

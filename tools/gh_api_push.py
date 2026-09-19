@@ -54,7 +54,11 @@ def hash_object(data, write=False):
 
 
 def get_token():
-    """读 GCM 凭据。显式使用 manager helper——系统配置的 helper-selector 在非交互下会挂起。"""
+    """读 GCM 凭据。显式使用 manager helper——系统配置的 helper-selector 在非交互下会挂起。
+    若已通过环境变量 GITHUB_TOKEN 注入，则优先使用（避免 GCM 偶发挂起阻塞推送）。"""
+    env_token = os.environ.get("GITHUB_TOKEN")
+    if env_token:
+        return env_token
     env = dict(os.environ)
     env["GIT_TERMINAL_PROMPT"] = "0"
     env["GCM_INTERACTIVE"] = "never"

@@ -834,12 +834,10 @@ namespace HikScanner
             {
                 var stTriggerInfo = (MvCodeReader.MV_CODEREADER_TRIGGER_INFO_DATA)Marshal.PtrToStructure(
                     pstTriggerInfo, typeof(MvCodeReader.MV_CODEREADER_TRIGGER_INFO_DATA));
-                if (stTriggerInfo.nTriggerFlag != 1) return; // 只取触发开始沿
+                if (stTriggerInfo.nTriggerFlag != 1) return; 
 
                 var hostTime = DateTime.FromFileTime(stTriggerInfo.nHostTimeStamp);
-                // 2026-09-18 FIX: 主机侧统一到「Unix 毫秒」（1970 起算）——与 FormatDeviceTimestamp 的
-                // FromUnixTimeMilliseconds 基准一致。此前用 DateTime.Ticks（公元 1 年起算），会差出
-                // 约 1970 年的常数，导致偏移生效后 dev-ts 换算出未来年份的错误墙钟。
+
                 double hostMs = (hostTime.ToUniversalTime() - DateTimeOffset.UnixEpoch).TotalMilliseconds;
                 double devMs = (((ulong)stTriggerInfo.nTriggerTimeHigh << 32) | stTriggerInfo.nTriggerTimeLow) / 1000.0;
                 double offsetMs = hostMs - devMs;

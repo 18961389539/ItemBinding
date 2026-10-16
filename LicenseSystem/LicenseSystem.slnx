@@ -1,6 +1,5 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/DemoApp/DemoApp.csproj" />
     <Project Path="src/LicenseCore/LicenseCore.csproj" />
     <Project Path="src/LicenseManager/LicenseManager.csproj" />
     <Project Path="src/LicenseTool/LicenseTool.csproj" />

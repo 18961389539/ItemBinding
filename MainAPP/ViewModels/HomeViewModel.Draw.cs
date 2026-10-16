@@ -76,6 +76,12 @@ namespace MainAPP.ViewModels
         /// </summary>
         private readonly Font _font = CreateDefaultFont();
 
+        /// <summary>
+        /// 画面条码标签截取的尾部字符数（2026-09-30 由硬编码 2 提取为常量）。
+        /// 一物一码 URL 溯源条码较长，取尾 6 位即可唯一定位且不遮挡画面。
+        /// </summary>
+        private const int BarcodeLabelLength = 6;
+
         private static Font CreateDefaultFont()
         {
             try { return SixLabors.Fonts.SystemFonts.CreateFont("Arial", 18); }
@@ -288,18 +294,18 @@ namespace MainAPP.ViewModels
                 foreach (var barcode in scanerResult.BarcodeResults)
                 {
                     var codeStr = barcode.CodeString();
-                    if (codeStr.Contains("http", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+                    // 2026-09-30: 移除 "含 http 则跳过" 的规则——一物一码 URL 溯源条码
+                    // （如 https://iot.doujiang.com/e/...）此前在画面上完全不显示，
+                    // 现场无法凭画面核对"这帧到底读没读到码"。现统一走下方"尾 2 位"短标签绘制。
                     // H10: IsResize=false 时不做缩放转换，避免文本位置偏移到左上角
                     var center = barcode.Center();
                     var textPos = edge.IsResize
                         ? new PointF(center.X / edge.ResizeScale, center.Y / edge.ResizeScaleY)
                         : new PointF(center.X, center.Y);
-                    // 2026-09-09: 画面二维码标签 = 条码末尾 2 个字符（如 0123456789 → 89），
-                    // 缩短画面文字避免遮挡；条码不足 2 位时显示完整码（避免 Range 异常）。
-                    var label = codeStr.Length >= 2 ? codeStr[^2..] : codeStr;
+                    // 2026-09-30: 画面二维码标签位数由 2 提升为 8（如 https://iot.doujiang.com/e/01342634500000878154
+                    // → 00087815）。原 2 位太短，同批 URL 溯源码尾数易重复、现场无法凭画面区分产品；
+                    // 8 位在 18 号字下宽度仍可控，且足以唯一定位一物一码。条码不足 8 位时显示完整码。
+                    var label = codeStr.Length >= BarcodeLabelLength ? codeStr[^BarcodeLabelLength..] : codeStr;
                     x.DrawText(label, _font, SixLabors.ImageSharp.Color.Red, textPos);
                 }
 

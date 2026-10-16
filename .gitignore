@@ -142,3 +142,7 @@ BenchmarkDotNet.Artifacts/
 # 本地 IDE / 构建验证产物（不入库）
 .trae/
 obj-verify/
+
+# 2026-10-16: 幻灯片工具的生成缓存与运行日志（.slide 源文件、assets 与成品 pptx 照常入库）
+docs/ppt/*/.cache/
+docs/ppt/*/.slidep/

@@ -1,0 +1,34 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', position: 'relative', overflow: 'hidden', padding: 0 }}>
+    <Box style={{ position: 'absolute', left: 0, top: 268, width: 1280, height: 184, background: 'linear-gradient(90deg, rgba(46,127,224,0) 0%, rgba(46,127,224,0.16) 50%, rgba(46,127,224,0) 100%)' }} />
+    <Box style={{ position: 'absolute', left: 440, top: 160, opacity: 0.10 }}>
+        <svg width='400' height='400' viewBox='0 0 400 400'>
+            <circle cx='200' cy='200' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='200' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='200' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ position: 'relative', zIndex: 1, width: 1280, height: 720, justifyContent: 'center', alignItems: 'center' }}>
+        <Text style={{ fontSize: 16, color: '#48C9B0', letterSpacing: 4, fontWeight: 'bold' }}>CAV · 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 64, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.25, letterSpacing: 3, textAlign: 'center', marginTop: 30 }}>
+            让产线自己读懂
+            <br />
+            每一件产品
+        </Text>
+        <Box style={{ width: 64, height: 4, background: '#F2B33D', marginTop: 34, marginBottom: 26 }} />
+        <Text style={{ fontSize: 22, color: '#8FA9C4', letterSpacing: 1 }}>欢迎到产线实地验证</Text>
+    </Box>
+
+    <Box style={{ position: 'absolute', left: 0, bottom: 62, width: 1280, alignItems: 'center' }}>
+        <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <Text style={{ fontSize: 15, color: '#7B94AD' }}>AI 视觉检测</Text>
+            <Box style={{ width: 3, height: 3, borderRadius: 2, background: '#4A6480' }} />
+            <Text style={{ fontSize: 15, color: '#7B94AD' }}>九点标定</Text>
+            <Box style={{ width: 3, height: 3, borderRadius: 2, background: '#4A6480' }} />
+            <Text style={{ fontSize: 15, color: '#7B94AD' }}>物码绑定</Text>
+            <Box style={{ width: 3, height: 3, borderRadius: 2, background: '#4A6480' }} />
+            <Text style={{ fontSize: 15, color: '#7B94AD' }}>机器人打码通讯</Text>
+        </Box>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 2, marginTop: 16 }}>2026 · 对外项目推介</Text>
+    </Box>
+</Slide>

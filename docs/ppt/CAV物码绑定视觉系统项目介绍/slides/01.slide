@@ -1,0 +1,30 @@
+<Slide style={{ width: 1280, height: 720, position: 'relative', background: '#0B1B2B', padding: 0, overflow: 'hidden' }}>
+    <Image src='assets/cover_industry.png' style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 720, objectFit: 'cover' }} />
+    <Box style={{ position: 'absolute', top: 0, left: 0, width: 1280, height: 720, background: 'linear-gradient(90deg, rgba(6,17,29,0.97) 0%, rgba(6,17,29,0.94) 40%, rgba(6,17,29,0.62) 62%, rgba(6,17,29,0.20) 85%, rgba(6,17,29,0.06) 100%)' }} />
+    <Box style={{ position: 'absolute', left: 0, top: 0, width: 4, height: 720, background: 'linear-gradient(180deg, #2E7FE0 0%, #48C9B0 100%)' }} />
+
+    <Box style={{ position: 'relative', zIndex: 1, width: 1280, height: 720, padding: '96px 96px 68px', justifyContent: 'space-between' }}>
+        <Box>
+            <Text style={{ fontSize: 16, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>CAV · 视觉检测与物码绑定</Text>
+            <Text style={{ fontSize: 76, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.12, letterSpacing: 2, marginTop: 30 }}>物码绑定视觉系统</Text>
+            <Box style={{ width: 64, height: 4, background: '#F2B33D', marginTop: 30, marginBottom: 26 }} />
+            <Text style={{ fontSize: 24, color: '#8FA9C4', letterSpacing: 1.5 }}>AI 视觉检测 · 九点标定 · 机器人打码通讯</Text>
+            <Text style={{ fontSize: 19, color: '#7B94AD', lineHeight: 1.7, width: 680, marginTop: 22 }}>
+                让每一件产品的位置、姿态与身份，
+                <br />
+                在进入工位之前就已被机器读懂。
+            </Text>
+        </Box>
+
+        <Box style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', width: 1088 }}>
+            <Box style={{ flexDirection: 'row', gap: 12 }}>
+                {['离线可运行', '配方化换型', '亚秒级节拍'].map((t, i) => (
+                    <Box key={i} style={{ padding: '8px 18px', borderRadius: 999, border: '1px solid rgba(46,127,224,0.55)', background: 'rgba(46,127,224,0.12)' }}>
+                        <Text style={{ fontSize: 16, color: '#9EC4EE' }}>{t}</Text>
+                    </Box>
+                ))}
+            </Box>
+            <Text style={{ fontSize: 14, color: '#5B7590', letterSpacing: 2 }}>2026 · 对外项目推介</Text>
+        </Box>
+    </Box>
+</Slide>

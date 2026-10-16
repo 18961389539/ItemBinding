@@ -1,0 +1,132 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>三个断点，让物码绑定无法标准化</Text>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 36 }}>
+
+        <Box style={{ flex: 1, gap: 12 }}>
+            <Box style={{ padding: '16px 20px', background: 'rgba(18,41,63,0.88)', borderRadius: 10, border: '1px solid rgba(232,238,246,0.10)' }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Box style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(242,179,61,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F2B33D', fontFamily: 'Consolas' }}>1</Text>
+                    </Box>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E8EEF6' }}>头尾靠人眼判</Text>
+                </Box>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>产品到位</Text>
+                    </Box>
+                    <FAIcon name='arrow-right' style={{ fill: '#4A6480', width: 12, height: 12 }} />
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>人眼判方向</Text>
+                    </Box>
+                    <Box style={{ width: 22, height: 22, borderRadius: 11, background: 'rgba(226,75,74,0.22)', justifyContent: 'center', alignItems: 'center' }}>
+                        <FAIcon name='times' style={{ fill: '#E2645A', width: 10, height: 10 }} />
+                    </Box>
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>决定打码角度</Text>
+                    </Box>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 10 }}>
+                    同向摆放尚可，混向投放时判错概率陡升；打码角度一旦错，整件报废且只能事后发现。
+                </Text>
+            </Box>
+
+            <Box style={{ padding: '16px 20px', background: 'rgba(18,41,63,0.88)', borderRadius: 10, border: '1px solid rgba(232,238,246,0.10)' }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Box style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(242,179,61,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F2B33D', fontFamily: 'Consolas' }}>2</Text>
+                    </Box>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E8EEF6' }}>条码与图像不同帧</Text>
+                </Box>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>相机取图</Text>
+                    </Box>
+                    <FAIcon name='arrow-right' style={{ fill: '#4A6480', width: 12, height: 12 }} />
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>条码读出</Text>
+                    </Box>
+                    <Box style={{ width: 22, height: 22, borderRadius: 11, background: 'rgba(226,75,74,0.22)', justifyContent: 'center', alignItems: 'center' }}>
+                        <FAIcon name='times' style={{ fill: '#E2645A', width: 10, height: 10 }} />
+                    </Box>
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>按时间戳配对</Text>
+                    </Box>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 10 }}>
+                    两者分别到达，只能事后按时间戳凑对；高速线上必然错配，追溯链从源头就是假的。
+                </Text>
+            </Box>
+
+            <Box style={{ padding: '16px 20px', background: 'rgba(18,41,63,0.88)', borderRadius: 10, border: '1px solid rgba(232,238,246,0.10)' }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <Box style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(242,179,61,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F2B33D', fontFamily: 'Consolas' }}>3</Text>
+                    </Box>
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E8EEF6' }}>换产品等于停工</Text>
+                </Box>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 }}>
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>切换产品</Text>
+                    </Box>
+                    <FAIcon name='arrow-right' style={{ fill: '#4A6480', width: 12, height: 12 }} />
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>设备侧改参数</Text>
+                    </Box>
+                    <Box style={{ width: 22, height: 22, borderRadius: 11, background: 'rgba(226,75,74,0.22)', justifyContent: 'center', alignItems: 'center' }}>
+                        <FAIcon name='times' style={{ fill: '#E2645A', width: 10, height: 10 }} />
+                    </Box>
+                    <Box style={{ padding: '4px 10px', borderRadius: 4, background: 'rgba(46,127,224,0.16)' }}>
+                        <Text style={{ fontSize: 14, color: '#9EC4EE' }}>试凑到合格</Text>
+                    </Box>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 10 }}>
+                    检测阈值与标定参数散落在设备侧，换型靠老师傅试凑，耗时不可控也无法复制。
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ width: 372, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 16, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>WHY IT MATTERS</Text>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.45, marginTop: 18 }}>
+                    三个断点
+                    <br />
+                    一个共同后果
+                </Text>
+                <Box style={{ width: 48, height: 3, background: '#2E7FE0', marginTop: 20, marginBottom: 20 }} />
+                <Text style={{ fontSize: 17, color: '#8FA9C4', lineHeight: 1.9 }}>
+                    错判不可回退——打码之后才发现；
+                    <br />
+                    错配不可追溯——配对依据本身不可靠；
+                    <br />
+                    换型不可复制——经验留在人身上。
+                    <br />
+                    三者叠加，质量数据就无法作为证据使用。
+                </Text>
+            </Box>
+            <Box style={{ padding: '16px 20px', borderRadius: 10, background: 'rgba(46,127,224,0.12)', borderLeft: '3px solid #F2B33D' }}>
+                <Text style={{ fontSize: 16, color: '#C6D6E6', lineHeight: 1.75 }}>
+                    缺的不是人手，而是一条把取图、判向、标定、通讯串在同一时间轴上的系统。
+                </Text>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>04 / 16</Text>
+    </Box>
+</Slide>

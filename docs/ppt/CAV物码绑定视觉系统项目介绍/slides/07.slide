@@ -1,0 +1,82 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Box style={{ flex: 1 }}>
+            <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>四件事，全部由系统自己完成</Text>
+            <Text style={{ fontSize: 17, color: '#8FA9C4', marginTop: 8 }}>从产品进入视野到机器人落笔，中间不需要人做判断</Text>
+        </Box>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 20, alignItems: 'stretch' }}>
+
+        <Box style={{ flex: 1, padding: 22, background: 'rgba(18,41,63,0.88)', borderRadius: 12, border: '1px solid rgba(232,238,246,0.10)' }}>
+            <Box style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(46,127,224,0.20)', justifyContent: 'center', alignItems: 'center' }}>
+                <FAIcon name='camera' style={{ fill: '#7FB4EE', width: 24, height: 24 }} />
+            </Box>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E8EEF6', marginTop: 20 }}>智能取图</Text>
+            <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.68, marginTop: 12 }}>
+                取图有两条路径：扫码枪驱动采集，或相机硬触发取帧。每次取图失败都会自动重试，重试仍失败则记为丢帧并单独计数；主页状态条实时显示丢帧率、编码器绑定延迟与相机连接状态。换句话说，取图环节是否健康不需要翻日志来判断，异常会在画面上被立刻察觉，而不是等到追溯时才发现数据缺了一段、却又说不清缺在哪里。
+            </Text>
+            <Box style={{ marginTop: 'auto', paddingTop: 11, borderTop: '1px solid rgba(232,238,246,0.10)', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FAIcon name='check-circle' style={{ fill: '#48C9B0', width: 14, height: 14 }} />
+                <Text style={{ fontSize: 14, color: '#7FDDC7' }}>自动重试 · 丢帧计数</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flex: 1, padding: 22, background: 'rgba(18,41,63,0.88)', borderRadius: 12, border: '1px solid rgba(232,238,246,0.10)' }}>
+            <Box style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(46,127,224,0.20)', justifyContent: 'center', alignItems: 'center' }}>
+                <FAIcon name='eye' style={{ fill: '#7FB4EE', width: 24, height: 24 }} />
+            </Box>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E8EEF6', marginTop: 20 }}>AI 定位</Text>
+            <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.68, marginTop: 12 }}>
+                检测基于 ONNX 目标检测模型，输出目标框与实例掩码，供后续的方向判定与位置计算使用。推理默认走 GPU 加速；当显卡或运行时缺失时，按 CUDA、OpenVINO GPU、OpenVINO CPU、纯 CPU 四级逐级自动回退，保证任何一台机器上都能出结果，不会因为环境差异直接罢工。模型文件随安装包一起分发，路径固定，加载失败会明确提示，不需要现场排查依赖。
+            </Text>
+            <Box style={{ marginTop: 'auto', paddingTop: 11, borderTop: '1px solid rgba(232,238,246,0.10)', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FAIcon name='check-circle' style={{ fill: '#48C9B0', width: 14, height: 14 }} />
+                <Text style={{ fontSize: 14, color: '#7FDDC7' }}>四级自动回退 · 保证出结果</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flex: 1, padding: 22, background: 'rgba(18,41,63,0.88)', borderRadius: 12, border: '1px solid rgba(232,238,246,0.10)' }}>
+            <Box style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(72,201,176,0.20)', justifyContent: 'center', alignItems: 'center' }}>
+                <FAIcon name='crosshairs' style={{ fill: '#7FDDC7', width: 24, height: 24 }} />
+            </Box>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E8EEF6', marginTop: 20 }}>坐标标定</Text>
+            <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.68, marginTop: 12 }}>
+                九点标定用棋盘或圆点靶标确定原点与 X、Y 方向，建立像素到毫米的换算关系，检测结果因此带的是真实空间坐标而不是图像坐标。标定的原点、方向点与靶标参数全部按配方保存，切换产品时随配方一次性生效，不需要重新标一次。机器人拿到的 X、Y 就是这个换算后的世界坐标，与产线坐标系对齐，落库记录里同样保存，便于事后还原每一件产品当时的位置。
+            </Text>
+            <Box style={{ marginTop: 'auto', paddingTop: 11, borderTop: '1px solid rgba(232,238,246,0.10)', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FAIcon name='check-circle' style={{ fill: '#48C9B0', width: 14, height: 14 }} />
+                <Text style={{ fontSize: 14, color: '#7FDDC7' }}>像素换算毫米 · 随配方保存</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flex: 1, padding: 22, background: 'rgba(18,41,63,0.88)', borderRadius: 12, border: '1px solid rgba(232,238,246,0.10)' }}>
+            <Box style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(242,179,61,0.20)', justifyContent: 'center', alignItems: 'center' }}>
+                <FAIcon name='paper-plane' style={{ fill: '#F2B33D', width: 22, height: 22 }} />
+            </Box>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E8EEF6', marginTop: 20 }}>通讯下发</Text>
+            <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.68, marginTop: 12 }}>
+                按接收方配置分链路用 UDP 直连发送，一条报文包含坐标、旋转角、条码与当帧编码器值。协议内置保护逻辑：角度为未知哨兵值的产品整条不发送，避免机器人按错误角度旋转；相机丢帧或处理过载时发空报文，明确告知这一帧没有产品，而不是让下游去猜。每次发送同时写入审计记录，便于事后核对到底是哪一帧、哪一条报文出了问题。
+            </Text>
+            <Box style={{ marginTop: 'auto', paddingTop: 11, borderTop: '1px solid rgba(232,238,246,0.10)', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <FAIcon name='check-circle' style={{ fill: '#48C9B0', width: 14, height: 14 }} />
+                <Text style={{ fontSize: 14, color: '#7FDDC7' }}>UDP 直连 · 发送保护逻辑</Text>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>07 / 16</Text>
+    </Box>
+</Slide>

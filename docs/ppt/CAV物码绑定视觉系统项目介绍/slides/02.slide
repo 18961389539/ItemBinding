@@ -1,0 +1,80 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>目录</Text>
+        <Box style={{ flex: 1, height: 1, background: 'rgba(232,238,246,0.10)', marginLeft: 16 }} />
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 44 }}>
+        <Box style={{ width: 348, paddingTop: 18, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 16, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>CONTENTS</Text>
+                <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.4, marginTop: 18 }}>
+                    四个问题
+                    <br />
+                    一次讲清
+                </Text>
+                <Box style={{ width: 48, height: 3, background: '#2E7FE0', marginTop: 22, marginBottom: 22 }} />
+                <Text style={{ fontSize: 17, color: '#8FA9C4', lineHeight: 1.85 }}>
+                    这份材料按产线上的真实顺序组织：先看现状断点，再看系统如何把它闭环，然后拿数据验证，最后落到装机与售后。
+                </Text>
+            </Box>
+            <Box style={{ padding: '14px 18px', borderRadius: 10, background: 'rgba(46,127,224,0.12)', border: '1px solid rgba(46,127,224,0.28)' }}>
+                <Text style={{ fontSize: 15, color: '#9EC4EE', lineHeight: 1.6 }}>四个章节均配有产线实测记录与工程实证</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flex: 1, justifyContent: 'space-between' }}>
+
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 20, paddingBottom: 14, borderBottom: '1px solid rgba(232,238,246,0.10)' }}>
+                <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#2E7FE0', fontFamily: 'Consolas' }}>01</Text>
+                <Box style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#E8EEF6' }}>产线现状与痛点</Text>
+                    <Text style={{ fontSize: 16, color: '#8FA9C4', lineHeight: 1.6, marginTop: 6 }}>人工判向、事后配对、换型停工——三个断点各自吃掉一段节拍</Text>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#4A6480', fontFamily: 'Consolas' }}>P03-04</Text>
+            </Box>
+
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 20, paddingBottom: 14, borderBottom: '1px solid rgba(232,238,246,0.10)' }}>
+                <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#2E7FE0', fontFamily: 'Consolas' }}>02</Text>
+                <Box style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#E8EEF6' }}>系统方案与核心能力</Text>
+                    <Text style={{ fontSize: 16, color: '#8FA9C4', lineHeight: 1.6, marginTop: 6 }}>取图、判向、标定、通讯收在一条时间轴上，人只需要换配方</Text>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#4A6480', fontFamily: 'Consolas' }}>P05-10</Text>
+            </Box>
+
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 20, paddingBottom: 14, borderBottom: '1px solid rgba(232,238,246,0.10)' }}>
+                <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#2E7FE0', fontFamily: 'Consolas' }}>03</Text>
+                <Box style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#E8EEF6' }}>关键指标与工程实证</Text>
+                    <Text style={{ fontSize: 16, color: '#8FA9C4', lineHeight: 1.6, marginTop: 6 }}>耗时、提速幅度、测试覆盖，全部来自可核对的落库记录</Text>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#4A6480', fontFamily: 'Consolas' }}>P11-12</Text>
+            </Box>
+
+            <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
+                <Text style={{ fontSize: 30, fontWeight: 'bold', color: '#2E7FE0', fontFamily: 'Consolas' }}>04</Text>
+                <Box style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#E8EEF6' }}>部署形态与服务保障</Text>
+                    <Text style={{ fontSize: 16, color: '#8FA9C4', lineHeight: 1.6, marginTop: 6 }}>一台工控机、一套离线包，外加三个随时可看的远程页面</Text>
+                </Box>
+                <Text style={{ fontSize: 15, color: '#4A6480', fontFamily: 'Consolas' }}>P13-15</Text>
+            </Box>
+
+        </Box>
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>02 / 16</Text>
+    </Box>
+</Slide>

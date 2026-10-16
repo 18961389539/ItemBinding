@@ -1,0 +1,86 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>运维与服务保障：把现场排查变成远程确认</Text>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 36 }}>
+
+        <Box style={{ width: 380, borderLeft: '1px solid rgba(232,238,246,0.14)', paddingLeft: 26, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 15, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>REMOTE OPS</Text>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.35, marginTop: 16 }}>
+                    人不在现场
+                    <br />
+                    也能看到它在正常工作
+                </Text>
+                <Box style={{ width: 48, height: 3, background: '#2E7FE0', marginTop: 18, marginBottom: 18 }} />
+
+                <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+                    <Box style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <FAIcon name='globe' style={{ fill: '#7FB4EE', width: 14, height: 14 }} />
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>三个远程页面</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 5 }}>相机远程看图、AI 助手对话、统一运维门户，手机浏览器直接打开</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start', marginBottom: 14 }}>
+                    <Box style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <FAIcon name='bell' style={{ fill: '#7FB4EE', width: 14, height: 14 }} />
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>告警分级与审计</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 5 }}>四级日志分级与发送审计，异常可直接定位到具体帧与具体报文</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 12, alignItems: 'flex-start' }}>
+                    <Box style={{ width: 28, height: 28, borderRadius: 8, background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <FAIcon name='database' style={{ fill: '#7FB4EE', width: 14, height: 14 }} />
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>数据自动保留</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 5 }}>图片按保留天数自动清理，数据库与日志独立留存，不会占满磁盘</Text>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box style={{ padding: '12px 16px', borderRadius: 8, background: 'rgba(46,127,224,0.12)', borderLeft: '3px solid #2E7FE0' }}>
+                <Text style={{ fontSize: 15, color: '#C6D6E6', lineHeight: 1.7 }}>
+                    把"凭经验判断"变成"看告警与趋势"，把"去现场"变成"开网页"。
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flex: 1, justifyContent: 'space-between' }}>
+            <Box>
+                <Image src='assets/settings-page.png' style={{ width: 690, height: 418, objectFit: 'contain', borderRadius: 10, border: '1px solid rgba(232,238,246,0.14)' }} />
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                    <FAIcon name='info-circle' style={{ fill: '#4A6480', width: 14, height: 14 }} />
+                    <Text style={{ fontSize: 15, color: '#7B94AD' }}>系统设置界面：通用、目录、窗口与安全四组参数集中管理，保存即生效</Text>
+                </Box>
+            </Box>
+            <Box style={{ padding: '14px 18px', borderRadius: 10, background: 'rgba(242,179,61,0.10)', borderLeft: '3px solid #F2B33D' }}>
+                <Text style={{ fontSize: 16, color: '#C6D6E6', lineHeight: 1.7 }}>
+                    运行状态与告警可在手机上看，异常不必等人到现场才被发现。
+                </Text>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>15 / 16</Text>
+    </Box>
+</Slide>

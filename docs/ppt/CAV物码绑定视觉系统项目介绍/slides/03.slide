@@ -1,0 +1,32 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', position: 'relative', overflow: 'hidden', padding: 0 }}>
+    <Box style={{ position: 'absolute', right: 0, top: 0, width: 520, height: 720 }}>
+        <svg width='520' height='720' viewBox='0 0 520 720'>
+            <path d='M150 0 L520 0 L520 720 L20 720 Z' fill='#12293F' />
+            <path d='M248 0 L286 0 L116 720 L78 720 Z' fill='rgba(46,127,224,0.45)' />
+            <path d='M336 0 L350 0 L180 720 L166 720 Z' fill='rgba(72,201,176,0.35)' />
+            <path d='M406 0 L414 0 L244 720 L236 720 Z' fill='rgba(242,179,61,0.30)' />
+            <circle cx='470' cy='300' r='210' fill='none' stroke='rgba(46,127,224,0.30)' strokeWidth='1.5' />
+            <circle cx='470' cy='300' r='150' fill='none' stroke='rgba(46,127,224,0.22)' strokeWidth='1.5' />
+            <circle cx='470' cy='300' r='92' fill='none' stroke='rgba(72,201,176,0.22)' strokeWidth='1.5' />
+        </svg>
+    </Box>
+    <Box style={{ position: 'absolute', left: 0, top: 0, width: 640, height: 720, background: 'linear-gradient(90deg, rgba(11,27,43,1) 0%, rgba(11,27,43,0.92) 60%, rgba(11,27,43,0) 100%)' }} />
+
+    <Box style={{ position: 'relative', zIndex: 1, height: 720, padding: '150px 96px 0' }}>
+        <Text style={{ fontSize: 118, fontWeight: 'bold', fontFamily: 'Consolas', lineHeight: 1, color: '#2E7FE0' }}>01</Text>
+        <Text style={{ fontSize: 16, color: '#48C9B0', letterSpacing: 4, fontWeight: 'bold', marginTop: 34 }}>SECTION 01</Text>
+        <Text style={{ fontSize: 66, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.1, letterSpacing: 3, marginTop: 16 }}>产线现状与痛点</Text>
+        <Box style={{ width: 56, height: 4, background: '#F2B33D', marginTop: 30, marginBottom: 28 }} />
+        <Text style={{ fontSize: 22, color: '#8FA9C4', lineHeight: 1.7, width: 620 }}>
+            人工判向与事后绑定，是这条产线上最难标准化的一环。
+        </Text>
+    </Box>
+
+    <Box style={{ position: 'absolute', left: 96, bottom: 88, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Box style={{ width: 56, height: 4, borderRadius: 2, background: '#2E7FE0' }} />
+        <Box style={{ width: 20, height: 4, borderRadius: 2, background: 'rgba(232,238,246,0.18)' }} />
+        <Box style={{ width: 20, height: 4, borderRadius: 2, background: 'rgba(232,238,246,0.18)' }} />
+        <Box style={{ width: 20, height: 4, borderRadius: 2, background: 'rgba(232,238,246,0.18)' }} />
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 2, marginLeft: 12 }}>1 / 4</Text>
+    </Box>
+</Slide>

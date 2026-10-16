@@ -1,0 +1,82 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>跑得动、算得准、查得到</Text>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 34 }}>
+
+        <Box style={{ flex: 1, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 15, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>MEASURED ON LINE</Text>
+                <Text style={{ fontSize: 20, fontWeight: 'bold', color: '#E8EEF6', marginTop: 12 }}>单帧端到端检测耗时 · 实测样本</Text>
+            </Box>
+            <Chart
+                style={{ width: '100%', height: 372 }}
+                chartType='barChart'
+                barDirection='column'
+                title='单位：毫秒（ms）'
+                titleColor='#8FA9C4'
+                showLegend={false}
+                showDataLabels={true}
+                dataLabelColor='#F2B33D'
+                axisColor='#5B7590'
+                colors={['#2E7FE0']}
+                background='#12293F'
+                data={[
+                    ['样本', '检测耗时'],
+                    ['S1', 307],
+                    ['S2', 320],
+                    ['S3', 325],
+                    ['S4', 332],
+                    ['S5', 337],
+                    ['S6', 379],
+                    ['S7', 394],
+                    ['S8', 436],
+                    ['S9', 501],
+                ]}
+            />
+            <Box style={{ padding: '12px 18px', borderRadius: 8, background: 'rgba(242,179,61,0.10)', borderLeft: '3px solid #F2B33D' }}>
+                <Text style={{ fontSize: 15, color: '#C6D6E6', lineHeight: 1.7 }}>
+                    样本全部落在亚秒级区间，节拍上限由机械动作决定，视觉不再是瓶颈。
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ width: 400, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 15, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>EVIDENCE</Text>
+                <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#E8EEF6', marginTop: 12 }}>三个可核对的事实</Text>
+                <Box style={{ marginTop: 18 }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid rgba(232,238,246,0.10)' }}>
+                        <Text style={{ fontSize: 36, fontFamily: 'Consolas', fontWeight: 'bold', color: '#F2B33D', lineHeight: 1, width: 116 }}>46%</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.55, flex: 1 }}>头尾判定两轮优化后的累计提速</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid rgba(232,238,246,0.10)' }}>
+                        <Text style={{ fontSize: 36, fontFamily: 'Consolas', fontWeight: 'bold', color: '#F2B33D', lineHeight: 1, width: 116 }}>1257</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.55, flex: 1 }}>条自动化测试用例，覆盖授权、检测、相机与标定</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 14, paddingBottom: 10 }}>
+                        <Text style={{ fontSize: 36, fontFamily: 'Consolas', fontWeight: 'bold', color: '#F2B33D', lineHeight: 1, width: 116 }}>15</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.55, flex: 1 }}>个工程模块，授权与坐标标定均为独立可复用库</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Image src='assets/data-page.png' style={{ width: 400, height: 228, objectFit: 'contain', borderRadius: 8, border: '1px solid rgba(232,238,246,0.12)' }} />
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>12 / 16</Text>
+    </Box>
+</Slide>

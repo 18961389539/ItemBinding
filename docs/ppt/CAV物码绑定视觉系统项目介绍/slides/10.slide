@@ -1,0 +1,88 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>头尾判定：五级级联与弱信号让位</Text>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 34 }}>
+
+        <Box style={{ flex: 1, justifyContent: 'space-between' }}>
+            <Box style={{ gap: 13 }}>
+                <Box style={{ width: '100%', height: 46, borderRadius: 8, background: 'rgba(242,179,61,0.16)', borderLeft: '3px solid #F2B33D', flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 16, gap: 14 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#F2B33D', width: 24 }}>L1</Text>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6', width: 92 }}>二维码</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', flex: 1 }}>读到码就直接用真值，最可靠的一级</Text>
+                </Box>
+
+                <Box style={{ width: '93%', height: 46, borderRadius: 8, background: 'rgba(46,127,224,0.20)', borderLeft: '3px solid #2E7FE0', flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 16, gap: 14 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#7FB4EE', width: 24 }}>L2</Text>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6', width: 92 }}>角度模型</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', flex: 1 }}>只输出翻转信号，角度数值仍由掩码主轴决定</Text>
+                </Box>
+
+                <Box style={{ width: '86%', height: 46, borderRadius: 8, background: 'rgba(46,127,224,0.16)', borderLeft: '3px solid #2E7FE0', flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 16, gap: 14 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#7FB4EE', width: 24 }}>L3</Text>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6', width: 92 }}>几何特征</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', flex: 1 }}>用品与特征质心连线的方向做头尾消歧</Text>
+                </Box>
+
+                <Box style={{ width: '79%', height: 46, borderRadius: 8, background: 'rgba(72,201,176,0.16)', borderLeft: '3px solid #48C9B0', flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 16, gap: 14 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#7FDDC7', width: 24 }}>L4</Text>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6', width: 92 }}>亮度判向</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', flex: 1 }}>几何特征落进死区时，用明暗分布补位</Text>
+                </Box>
+
+                <Box style={{ width: '72%', height: 46, borderRadius: 8, background: 'rgba(72,201,176,0.10)', borderLeft: '3px solid rgba(72,201,176,0.6)', flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 16, gap: 14 }}>
+                    <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#7FDDC7', width: 24 }}>L5</Text>
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6', width: 92 }}>特征池兜底</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', flex: 1 }}>前面全部沉默时，由综合特征池给结论</Text>
+                </Box>
+            </Box>
+
+            <Box style={{ padding: '12px 18px', borderRadius: 8, background: 'rgba(242,179,61,0.10)', borderLeft: '3px solid #F2B33D' }}>
+                <Text style={{ fontSize: 15, color: '#C6D6E6', lineHeight: 1.7 }}>
+                    弱信号让位：刚过死区的弱特征不再压住后面信号更强的特征；但让位只做确认，不做翻案。
+                </Text>
+            </Box>
+        </Box>
+
+        <Box style={{ width: 440, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 15, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>TRACEABILITY</Text>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.45, marginTop: 16 }}>
+                    头尾判不准
+                    <br />
+                    前面全白做
+                </Text>
+                <Box style={{ width: 48, height: 3, background: '#2E7FE0', marginTop: 20, marginBottom: 18 }} />
+                <Text style={{ fontSize: 17, color: '#8FA9C4', lineHeight: 1.85 }}>
+                    没有任何单一特征在所有产品上都成立。系统因此按固定优先级级联，先出死区者发言，并用两组指标把判定质量暴露出来。
+                </Text>
+            </Box>
+            <Box>
+                <Box style={{ padding: '14px 16px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#F2B33D' }}>QR 一致率 —— 判得对不对</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 6 }}>对照二维码真值衡量每个特征的准确度，样本不足会明确标注</Text>
+                </Box>
+                <Box style={{ padding: '14px 16px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: '#7FDDC7' }}>特征分歧度 —— 判得稳不稳</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 6 }}>完全不依赖真值，无码产品同样可评估，把不可见的错误变成可诊断的数据</Text>
+                </Box>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>10 / 16</Text>
+    </Box>
+</Slide>

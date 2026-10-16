@@ -1,0 +1,67 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>配方化 AI 检测：换产品不改代码</Text>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 36 }}>
+
+        <Box style={{ width: 380, padding: '30px 26px', background: 'rgba(18,41,63,0.78)', borderRadius: 12, border: '1px solid rgba(232,238,246,0.10)', justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 15, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>RECIPE DRIVEN</Text>
+                <Text style={{ fontSize: 28, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.45, marginTop: 16 }}>
+                    把产品差异
+                    <br />
+                    收敛成配方差异
+                </Text>
+                <Box style={{ width: 48, height: 3, background: '#2E7FE0', marginTop: 20, marginBottom: 20 }} />
+                <Text style={{ fontSize: 17, color: '#8FA9C4', lineHeight: 1.9 }}>
+                    一个配方由五组参数构成，切换时跟踪器清空、预测器异步重载，重载期间跳帧属正常，完成后自动恢复。
+                </Text>
+                <Box style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(232,238,246,0.10)' }}>
+                    <Box style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', marginBottom: 9 }}>
+                        <Box style={{ width: 4, height: 4, borderRadius: 2, background: '#2E7FE0', marginTop: 9 }} />
+                        <Text style={{ fontSize: 15, color: '#9FB4C9', lineHeight: 1.6 }}>位置补偿即时生效，检测参数重载后生效</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                        <Box style={{ width: 4, height: 4, borderRadius: 2, background: '#2E7FE0', marginTop: 9 }} />
+                        <Text style={{ fontSize: 15, color: '#9FB4C9', lineHeight: 1.6 }}>九点标定参数随配方一起切换</Text>
+                    </Box>
+                </Box>
+            </Box>
+            <Box style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 12 }}>
+                <Text style={{ fontSize: 52, fontWeight: 'bold', fontFamily: 'Consolas', color: '#F2B33D', lineHeight: 1 }}>5</Text>
+                <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.5, marginBottom: 6 }}>组参数，一次切换全部生效</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ flex: 1, justifyContent: 'space-between' }}>
+            <Box>
+                <Image src='assets/recipe-page.png' style={{ width: 720, height: 425, objectFit: 'cover', borderRadius: 10, border: '1px solid rgba(232,238,246,0.14)' }} />
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
+                    <FAIcon name='info-circle' style={{ fill: '#4A6480', width: 14, height: 14 }} />
+                    <Text style={{ fontSize: 15, color: '#7B94AD' }}>配方管理界面：创建、复制、搜索、保存、设为当前与删除都在同一页完成</Text>
+                </Box>
+            </Box>
+            <Box style={{ padding: '14px 18px', borderRadius: 10, background: 'rgba(242,179,61,0.10)', borderLeft: '3px solid #F2B33D' }}>
+                <Text style={{ fontSize: 16, color: '#C6D6E6', lineHeight: 1.7 }}>
+                    对现场的意义：换型从"改工程"变成"选一条配方"，不需要停线重做开发。
+                </Text>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>08 / 16</Text>
+    </Box>
+</Slide>

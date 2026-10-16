@@ -1,0 +1,121 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>一套离线可运行的完整交付</Text>
+    </Box>
+
+    <Box style={{ height: 524 }}>
+
+        <Box style={{ height: 288, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+            <Box style={{ gap: 16 }}>
+                <Box style={{ width: 200, height: 98, padding: '14px 16px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <FAIcon name='camera' style={{ fill: '#7FB4EE', width: 20, height: 20 }} />
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>工业相机</Text>
+                    </Box>
+                    <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.5, marginTop: 10 }}>硬触发取帧，失败自动重试</Text>
+                </Box>
+                <Box style={{ width: 200, height: 98, padding: '14px 16px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <FAIcon name='barcode' style={{ fill: '#7FB4EE', width: 20, height: 20 }} />
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>扫码枪</Text>
+                    </Box>
+                    <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.5, marginTop: 10 }}>与图像同帧给出条码结果</Text>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 78, alignItems: 'center' }}>
+                <FAIcon name='arrow-right' style={{ fill: '#4A6480', width: 22, height: 22 }} />
+                <Text style={{ fontSize: 12, color: '#5B7590', marginTop: 8, textAlign: 'center' }}>本机直连</Text>
+            </Box>
+
+            <Box style={{ width: 320, height: 212, padding: '20px 22px', borderRadius: 12, background: 'rgba(46,127,224,0.14)', border: '1px solid rgba(46,127,224,0.60)', justifyContent: 'space-between' }}>
+                <Box>
+                    <Text style={{ fontSize: 13, color: '#48C9B0', letterSpacing: 2, fontWeight: 'bold' }}>ON-PREMISE</Text>
+                    <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#E8EEF6', marginTop: 10 }}>产线工控机</Text>
+                    <Text style={{ fontSize: 15, color: '#8FA9C4', lineHeight: 1.6, marginTop: 8 }}>系统全部在本机运行，不依赖外网</Text>
+                </Box>
+                <Box>
+                    <Box style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 7 }}>
+                        <Box style={{ width: 4, height: 4, borderRadius: 2, background: '#2E7FE0', marginTop: 8 }} />
+                        <Text style={{ fontSize: 14, color: '#9FB4C9', lineHeight: 1.55 }}>GPU 加速可选，缺失时自动逐级回退</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start', marginBottom: 7 }}>
+                        <Box style={{ width: 4, height: 4, borderRadius: 2, background: '#2E7FE0', marginTop: 8 }} />
+                        <Text style={{ fontSize: 14, color: '#9FB4C9', lineHeight: 1.55 }}>授权与检测数据全部本地存放</Text>
+                    </Box>
+                    <Box style={{ flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+                        <Box style={{ width: 4, height: 4, borderRadius: 2, background: '#2E7FE0', marginTop: 8 }} />
+                        <Text style={{ fontSize: 14, color: '#9FB4C9', lineHeight: 1.55 }}>模型文件随包分发，路径固定</Text>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box style={{ width: 78, alignItems: 'center' }}>
+                <FAIcon name='arrow-right' style={{ fill: '#4A6480', width: 22, height: 22 }} />
+                <Text style={{ fontSize: 12, color: '#5B7590', marginTop: 8, textAlign: 'center' }}>UDP 报文</Text>
+            </Box>
+
+            <Box style={{ gap: 16 }}>
+                <Box style={{ width: 200, height: 98, padding: '14px 16px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(242,179,61,0.45)' }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <FAIcon name='robot' style={{ fill: '#F2B33D', width: 20, height: 20 }} />
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>机器人</Text>
+                    </Box>
+                    <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.5, marginTop: 10 }}>按报文外推位置并打码</Text>
+                </Box>
+                <Box style={{ width: 200, height: 98, padding: '14px 16px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                    <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <FAIcon name='mobile' style={{ fill: '#7FDDC7', width: 20, height: 20 }} />
+                        <Text style={{ fontSize: 17, fontWeight: 'bold', color: '#E8EEF6' }}>手机 / 平板</Text>
+                    </Box>
+                    <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.5, marginTop: 10 }}>浏览器即可查看运行状态</Text>
+                </Box>
+            </Box>
+        </Box>
+
+        <Box style={{ height: 216, marginTop: 20, flexDirection: 'row', gap: 20 }}>
+            <Box style={{ flex: 1, padding: '16px 18px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='cog' style={{ fill: '#F2B33D', width: 18, height: 18 }} />
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6' }}>安装与部署规范</Text>
+                </Box>
+                <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.65, marginTop: 10 }}>
+                    安装包与数据目录规范、本地端口占用说明、浏览器远程访问所需的地址与端口授权步骤、防火墙放行清单，逐条写明，现场按单执行即可。
+                </Text>
+            </Box>
+            <Box style={{ flex: 1, padding: '16px 18px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='file-text' style={{ fill: '#F2B33D', width: 18, height: 18 }} />
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6' }}>操作与维护文档</Text>
+                </Box>
+                <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.65, marginTop: 10 }}>
+                    系统操作手册、配方调试与参数维护说明、换配方作业的标准步骤模板，含前置条件、操作步骤与风险提示，换型不靠个人经验。
+                </Text>
+            </Box>
+            <Box style={{ flex: 1, padding: '16px 18px', borderRadius: 10, background: 'rgba(18,41,63,0.85)', border: '1px solid rgba(232,238,246,0.10)' }}>
+                <Box style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <FAIcon name='shield' style={{ fill: '#F2B33D', width: 18, height: 18 }} />
+                    <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#E8EEF6' }}>授权与数据安全</Text>
+                </Box>
+                <Text style={{ fontSize: 14, color: '#8FA9C4', lineHeight: 1.65, marginTop: 10 }}>
+                    授权与设备指纹绑定，支持限时授权；账号权限分级，切换配方与修改设置仅管理员可操作；检测记录与操作日志本地留存，便于审计核对。
+                </Text>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>14 / 16</Text>
+    </Box>
+</Slide>

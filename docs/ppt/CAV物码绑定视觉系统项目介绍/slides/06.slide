@@ -1,0 +1,111 @@
+<Slide style={{ width: 1280, height: 720, background: '#0B1B2B', padding: '28px 72px', position: 'relative', overflow: 'hidden' }}>
+    <Box style={{ position: 'absolute', right: 0, bottom: 0, opacity: 0.09 }}>
+        <svg width='200' height='200' viewBox='0 0 200 200'>
+            <circle cx='200' cy='0' r='196' fill='none' stroke='#2E7FE0' strokeWidth='2' />
+            <circle cx='200' cy='0' r='150' fill='none' stroke='#2E7FE0' strokeWidth='1.5' />
+            <circle cx='200' cy='0' r='104' fill='none' stroke='#48C9B0' strokeWidth='1.5' />
+        </svg>
+    </Box>
+
+    <Box style={{ height: 100, flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <Box style={{ width: 4, height: 38, background: '#2E7FE0' }} />
+        <Text style={{ fontSize: 38, fontWeight: 'bold', color: '#E8EEF6', letterSpacing: 1 }}>系统闭环：从硬触发到机器人打码</Text>
+    </Box>
+
+    <Box style={{ height: 524, flexDirection: 'row', gap: 36 }}>
+
+        <Box style={{ flex: 1, justifyContent: 'space-between' }}>
+            <Box style={{ gap: 13 }}>
+                <Box style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                    <Box style={{ width: 34, height: 34, borderRadius: 17, border: '1px solid rgba(46,127,224,0.75)', background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#9EC4EE' }}>01</Text>
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E8EEF6' }}>PLC 硬触发</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', marginTop: 3 }}>每 200 mm 一次硬触发，并同步上报当前编码器值</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                    <Box style={{ width: 34, height: 34, borderRadius: 17, border: '1px solid rgba(46,127,224,0.75)', background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#9EC4EE' }}>02</Text>
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E8EEF6' }}>相机取图</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', marginTop: 3 }}>硬触发取帧，失败自动重试，丢帧单独计数并呈现</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                    <Box style={{ width: 34, height: 34, borderRadius: 17, border: '1px solid rgba(46,127,224,0.75)', background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#9EC4EE' }}>03</Text>
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E8EEF6' }}>读码</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', marginTop: 3 }}>扫码枪同步给出条码结果，与图像绑定在同一帧上</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                    <Box style={{ width: 34, height: 34, borderRadius: 17, border: '1px solid rgba(46,127,224,0.75)', background: 'rgba(46,127,224,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#9EC4EE' }}>04</Text>
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E8EEF6' }}>AI 定位推理</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', marginTop: 3 }}>ONNX 模型输出目标框与掩码，GPU 加速且可自动回退</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                    <Box style={{ width: 34, height: 34, borderRadius: 17, border: '1px solid rgba(72,201,176,0.75)', background: 'rgba(72,201,176,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#7FDDC7' }}>05</Text>
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E8EEF6' }}>标定与物码绑定</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', marginTop: 3 }}>九点标定换算世界坐标，条码与检测结果绑成一条记录</Text>
+                    </Box>
+                </Box>
+
+                <Box style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
+                    <Box style={{ width: 34, height: 34, borderRadius: 17, border: '1px solid rgba(242,179,61,0.75)', background: 'rgba(242,179,61,0.18)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 14, fontFamily: 'Consolas', fontWeight: 'bold', color: '#F2B33D' }}>06</Text>
+                    </Box>
+                    <Box style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 19, fontWeight: 'bold', color: '#E8EEF6' }}>报文下发打码</Text>
+                        <Text style={{ fontSize: 15, color: '#8FA9C4', marginTop: 3 }}>UDP 直连机器人，坐标、角度、条码连同编码器值一条发出</Text>
+                    </Box>
+                </Box>
+            </Box>
+
+            <Box style={{ padding: '12px 18px', borderRadius: 8, background: 'rgba(242,179,61,0.10)', borderLeft: '3px solid #F2B33D' }}>
+                <Text style={{ fontSize: 16, color: '#C6D6E6' }}>编码器值随帧绑定：报文里的编码器值与图像严格同帧</Text>
+            </Box>
+        </Box>
+
+        <Box style={{ width: 372, justifyContent: 'space-between' }}>
+            <Box>
+                <Text style={{ fontSize: 16, color: '#48C9B0', letterSpacing: 3, fontWeight: 'bold' }}>WHY IT WORKS</Text>
+                <Text style={{ fontSize: 26, fontWeight: 'bold', color: '#E8EEF6', lineHeight: 1.45, marginTop: 18 }}>
+                    精度来自同帧
+                    <br />
+                    而不是事后对齐
+                </Text>
+                <Box style={{ width: 48, height: 3, background: '#2E7FE0', marginTop: 20, marginBottom: 20 }} />
+                <Text style={{ fontSize: 17, color: '#8FA9C4', lineHeight: 1.9 }}>
+                    下发的坐标是"编码器值为 E 时刻"的位置快照。机器人拿报文里的 E 与自己的实时编码器值做差，乘输送线系数，外推产品此刻的真实位置再打码。
+                </Text>
+            </Box>
+            <Box style={{ padding: '16px 20px', borderRadius: 10, background: 'rgba(46,127,224,0.12)', borderLeft: '3px solid #2E7FE0' }}>
+                <Text style={{ fontSize: 16, color: '#C6D6E6', lineHeight: 1.75 }}>
+                    所以"同帧"不是可选的优化项，而是打码精度的前提条件。
+                </Text>
+            </Box>
+        </Box>
+
+    </Box>
+
+    <Box style={{ height: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text style={{ fontSize: 14, color: '#4A6480', letterSpacing: 1 }}>CAV 物码绑定视觉系统</Text>
+        <Text style={{ fontSize: 14, color: '#4A6480' }}>06 / 16</Text>
+    </Box>
+</Slide>
